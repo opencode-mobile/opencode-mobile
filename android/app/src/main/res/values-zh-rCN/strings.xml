@@ -87,7 +87,7 @@
     <string name="onboarding_unofficial_body">OpenCode Mobile 是 opencode 会话的原生客户端，仍在开发中。它不是 OpenCode 官方产品。</string>
     <string name="onboarding_unofficial_badge">非官方</string>
     <string name="onboarding_connect_page_title">连接到\n你的服务器</string>
-    <string name="onboarding_connect_page_body">让应用指向你电脑上的 opencode 服务器。推荐使用 Tailscale，这样手机可以随时随地安全访问。</string>
+    <string name="onboarding_connect_page_body">将应用连接到你电脑上的 opencode 服务器。推荐使用 Tailscale，这样手机可以随时随地安全访问。</string>
     <string name="onboarding_connect_page_setup_link">还没有服务器？</string>
     <string name="onboarding_features_title">你可以在这里\n做什么</string>
     <string name="onboarding_features_sessions_title">会话</string>
@@ -132,7 +132,7 @@
     <string name="server_health_uptime">运行时间</string>
     <string name="server_health_uptime_detail">共测得 %1$s</string>
     <string name="server_health_reconnects">重新连接</string>
-    <string name="server_health_reconnects_detail">中位 %1$s 恢复</string>
+    <string name="server_health_reconnects_detail">恢复耗时中位数 %1$s</string>
     <string name="server_health_no_drops">无掉线</string>
     <string name="server_health_error_rate">错误率</string>
     <string name="server_health_error_rate_detail">%2$d 次检查中有 %1$d 次失败</string>
@@ -238,7 +238,7 @@
     <plurals name="home_project_count">
         <item quantity="other">%1$d 个项目</item>
     </plurals>
-    <string name="home_main_checkout">主检出</string>
+    <string name="home_main_checkout">主工作区</string>
     <plurals name="home_worktree_count">
         <item quantity="other">%1$d 个 worktree</item>
     </plurals>
@@ -251,7 +251,7 @@
     <plurals name="home_show_all">
         <item quantity="other">显示全部 %1$d 个</item>
     </plurals>
-    <string name="home_show_fewer">显示更少</string>
+    <string name="home_show_fewer">收起</string>
     <string name="home_show_worktrees">显示 %1$s 的 worktree</string>
     <string name="home_hide_worktrees">隐藏 %1$s 的 worktree</string>
     <string name="home_reorder_note">拖动以重新排序。worktree 会跟随所属项目。</string>
@@ -326,8 +326,8 @@
     <string name="add_project_root_home">主目录</string>
     <string name="add_project_error_add_failed">无法添加此目录</string>
     <string name="worktree_new_row">新建 worktree…</string>
-    <string name="worktree_run_in_subtitle">创建检出并在其中开始</string>
-    <string name="worktree_move_subtitle">创建检出并移到其中</string>
+    <string name="worktree_run_in_subtitle">创建 worktree 并在其中开始</string>
+    <string name="worktree_move_subtitle">创建 worktree 并移到其中</string>
     <string name="worktree_needs_v2">需要 opencode v2 服务器</string>
     <string name="worktree_turn_on">请在设置中开启 Worktree</string>
     <string name="worktree_not_git">需要 git 仓库</string>
@@ -336,12 +336,12 @@
     <string name="worktree_form_title">新建 worktree</string>
     <string name="worktree_name">名称</string>
     <string name="worktree_branch">分支</string>
-    <string name="worktree_base">创建自</string>
+    <string name="worktree_base">基于</string>
     <string name="worktree_v1_branch_note">opencode v1 会以 worktree 名称命名分支</string>
     <string name="worktree_v2_no_branch">无分支（分离 HEAD）</string>
-    <string name="worktree_v2_branch_note">opencode v2 的检出没有分支</string>
-    <string name="worktree_current_checkout">当前检出</string>
-    <string name="worktree_v1_base_note">opencode v1 使用当前检出</string>
+    <string name="worktree_v2_branch_note">opencode v2 的 worktree 没有分支</string>
+    <string name="worktree_current_checkout">当前工作区</string>
+    <string name="worktree_v1_base_note">opencode v1 使用当前工作区</string>
     <string name="worktree_base_pick_hint">点按以选择分支</string>
     <string name="worktree_current_branch">%1$s（当前）</string>
     <string name="worktree_base_loading">正在加载分支…</string>
@@ -415,7 +415,7 @@
     <string name="terminal_catalog_title">终端</string>
     <string name="terminal_catalog_loading">正在加载终端</string>
     <string name="terminal_catalog_empty_title">没有运行中的 shell</string>
-    <string name="terminal_catalog_empty_message">为某个项目启动一个。它与聊天会话无关。</string>
+    <string name="terminal_catalog_empty_message">为某个项目启动一个 shell。它与聊天会话无关。</string>
     <string name="terminal_select_title">选择 shell</string>
     <string name="terminal_select_message">从列表中选择一个 shell。</string>
     <string name="terminal_new_shell">新建 shell</string>
@@ -435,10 +435,10 @@
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
     <string name="terminal_key_tab">Tab</string>
-    <string name="terminal_key_up">上</string>
-    <string name="terminal_key_down">下</string>
-    <string name="terminal_key_left">左</string>
-    <string name="terminal_key_right">右</string>
+    <string name="terminal_key_up">向上</string>
+    <string name="terminal_key_down">向下</string>
+    <string name="terminal_key_left">向左</string>
+    <string name="terminal_key_right">向右</string>
     <string name="session_chat_loading">正在加载会话</string>
     <string name="session_chat_more_options">更多选项</string>
     <string name="session_chat_menu_rename">重命名会话</string>
@@ -592,10 +592,10 @@
     <string name="new_session_title">新建会话</string>
     <string name="new_session_draft_subtitle">草稿 · 发送时创建</string>
     <string name="new_session_discard_draft">放弃草稿</string>
-    <string name="new_session_run_in_caption">运行会话于</string>
+    <string name="new_session_run_in_caption">会话运行位置</string>
     <string name="new_session_project">项目</string>
     <string name="new_session_worktree">Worktree</string>
-    <string name="new_session_starts_from">起始于</string>
+    <string name="new_session_starts_from">基于</string>
     <string name="new_session_local">本地</string>
     <string name="new_session_new_worktree">新建 Worktree</string>
     <string name="new_session_not_git">无 · 不是 Git 仓库</string>
@@ -604,7 +604,7 @@
     <string name="new_session_no_project_matches">没有匹配的项目</string>
     <string name="new_session_add_project">添加项目…</string>
     <string name="new_session_run_in_project">在 %1$s 中运行</string>
-    <string name="new_session_current_checkout">%1$s · 当前检出</string>
+    <string name="new_session_current_checkout">%1$s · 当前工作区</string>
     <string name="new_session_new_worktree_subtitle">独立副本，发送时创建</string>
     <string name="new_session_worktrees_section">Worktree</string>
     <string name="timeline_state_loading_title">正在加载消息</string>
@@ -612,7 +612,7 @@
     <string name="timeline_state_error_title">无法加载消息</string>
     <string name="timeline_state_error_fallback">时间线未能加载。</string>
     <string name="timeline_state_retry">重试</string>
-    <string name="timeline_state_empty">还没有消息。发送提示即可开始。</string>
+    <string name="timeline_state_empty">还没有消息。发送提示词即可开始。</string>
     <string name="timeline_state_refreshing">正在刷新消息</string>
     <string name="timeline_message_assistant">助手消息</string>
     <string name="timeline_message_actions_hint_long_press">长按可显示消息操作</string>
@@ -622,7 +622,7 @@
     <string name="timeline_retry_retrying_in">%1$d 秒后重试</string>
     <string name="timeline_retry_attempt_retrying_in">第 %1$d 次尝试，%2$d 秒后重试</string>
     <plurals name="timeline_background_work_subagent_count">
-        <item quantity="other">%1$d 个子代理</item>
+        <item quantity="other">%1$d 个子智能体</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
         <item quantity="other">%1$d 个 shell</item>
@@ -632,7 +632,7 @@
     <string name="timeline_background_work_running_spoken">%1$s运行中</string>
     <string name="timeline_background_work_agent_needs_input">%1$s 需要输入</string>
     <plurals name="timeline_background_work_subagents_need_input">
-        <item quantity="other">%1$d 个子代理需要输入</item>
+        <item quantity="other">%1$d 个子智能体需要输入</item>
     </plurals>
     <string name="timeline_background_work_needs_input_running">%1$s · %2$d运行中</string>
     <string name="timeline_background_work_needs_input_running_spoken">%1$s，%2$s运行中</string>
@@ -728,7 +728,7 @@
     </plurals>
     <string name="tool_error_malformed">未运行：工具调用格式错误</string>
     <string name="tool_error_failed">失败</string>
-    <string name="tool_error_exit_code">已退出，代码 %1$d</string>
+    <string name="tool_error_exit_code">已退出，退出码 %1$d</string>
     <string name="tool_status_declined">已拒绝</string>
     <string name="tool_user_note">你的备注：%1$s</string>
     <string name="tool_status_stopped">已停止</string>
@@ -767,7 +767,7 @@
     <string name="timeline_step_skill_named">技能 %1$s</string>
     <string name="timeline_step_thought_duration">思考 · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
-    <string name="timeline_explore_title">已探索 — %1$s</string>
+    <string name="timeline_explore_title">已探索：%1$s</string>
     <string name="timeline_list_separator">%1$s · %2$s</string>
     <string name="timeline_role_you">你</string>
     <string name="timeline_role_assistant">助手</string>
@@ -818,8 +818,8 @@
     <string name="session_chat_revert_redo_failed">无法重做。</string>
     <string name="session_chat_revert_cancel_failed">无法取消回退。</string>
     <string name="session_chat_revert_commit_failed">无法提交回退。</string>
-    <string name="session_chat_fork_rename_failed">分支已创建，但无法重命名。</string>
-    <string name="session_chat_pending_prompt_update_failed">无法更新待发送的提示</string>
+    <string name="session_chat_fork_rename_failed">已分叉会话，但无法重命名。</string>
+    <string name="session_chat_pending_prompt_update_failed">无法更新待发送的提示词</string>
     <string name="session_chat_shell_stop_failed">无法停止 shell，请重试。</string>
     <string name="session_chat_shell_status_running">运行中</string>
     <string name="session_chat_shell_status_exited">已退出</string>
@@ -834,7 +834,7 @@
     <string name="session_chat_sheet_copy_output">复制输出</string>
     <string name="session_chat_sheet_message_actions_title">消息</string>
     <string name="session_chat_sheet_message_actions_revert">回退消息</string>
-    <string name="session_chat_sheet_message_actions_fork">从此处创建分支</string>
+    <string name="session_chat_sheet_message_actions_fork">从此处分叉</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">复制代码块</string>
     <string name="session_chat_sheet_message_actions_copy_message">复制消息</string>
     <string name="session_chat_sheet_message_actions_select_text">选择文本</string>
@@ -873,7 +873,7 @@
     <string name="session_chat_goal_pill">目标</string>
     <string name="session_chat_goal_pill_paused">目标已暂停</string>
     <string name="session_chat_goal_pill_met">目标已达成</string>
-    <string name="session_chat_goal_pill_accessibility_active">目标进行中，第 %1$d/%2$d 轮</string>
+    <string name="session_chat_goal_pill_accessibility_active">目标进行中，第 %1$d 轮，共 %2$d 轮</string>
     <string name="session_chat_goal_pill_accessibility_paused">目标已暂停。%1$s</string>
     <string name="session_chat_goal_sheet_title">目标</string>
     <string name="session_chat_goal_tag_working">进行中</string>
@@ -883,8 +883,8 @@
     <string name="session_chat_goal_show_all">显示全部</string>
     <string name="session_chat_goal_show_less">收起</string>
     <string name="session_chat_goal_first_turn">第一轮 · 第 0/%1$d 轮</string>
-    <string name="session_chat_goal_round">第 %1$d/%2$d 轮</string>
-    <string name="session_chat_goal_paused_in_round">在第 %1$d/%2$d 轮暂停</string>
+    <string name="session_chat_goal_round">第 %1$d 轮，共 %2$d 轮</string>
+    <string name="session_chat_goal_paused_in_round">在第 %1$d 轮暂停，共 %2$d 轮</string>
     <string name="session_chat_goal_met_in_round">在第 %1$d 轮达成</string>
     <string name="session_chat_goal_reviewer_last_round">审查员，上一轮</string>
     <string name="session_chat_goal_not_met_yet">尚未达成：%1$s</string>
@@ -895,7 +895,7 @@
     </plurals>
     <string name="session_chat_goal_waiting">等待中</string>
     <string name="session_chat_goal_waiting_shell">等待后台 shell 完成：%1$s。如果 %2$d 分钟内没有任何运行，将暂停。</string>
-    <string name="session_chat_goal_waiting_subagent">等待子代理完成。如果 %1$d 分钟内没有任何运行，将暂停。</string>
+    <string name="session_chat_goal_waiting_subagent">等待子智能体完成。如果 %1$d 分钟内没有任何运行，将暂停。</string>
     <string name="session_chat_goal_waiting_on_you">等你处理</string>
     <string name="session_chat_goal_waiting_permission">有一个权限请求待处理。你回复后，目标会继续。</string>
     <string name="session_chat_goal_waiting_question">有一个问题待回答。你回复后，目标会继续。</string>
@@ -1008,7 +1008,7 @@
         <item quantity="other">%1$d 行</item>
     </plurals>
     <string name="session_chat_sheet_tool_result_copy_link">复制 %1$s</string>
-    <string name="session_chat_sheet_tool_result_copies_link_hint">复制链接</string>
+    <string name="session_chat_sheet_tool_result_copies_link_hint">会复制该链接</string>
     <string name="session_chat_sheet_tool_result_line_accessibility">第 %1$d 行，%2$s</string>
     <string name="session_chat_sheet_shell_title">Shell</string>
     <string name="session_chat_sheet_shell_command_accessibility">命令，%1$s</string>
@@ -1017,7 +1017,7 @@
     <string name="session_chat_sheet_shell_stop">停止 shell</string>
     <string name="session_chat_sheet_shell_stopping">正在停止…</string>
     <string name="session_chat_sheet_background_work_title">后台任务</string>
-    <string name="session_chat_sheet_background_work_subagents">子代理</string>
+    <string name="session_chat_sheet_background_work_subagents">子智能体</string>
     <string name="session_chat_sheet_background_work_shells">Shell</string>
     <string name="session_chat_sheet_background_work_tab_running">运行中</string>
     <string name="session_chat_sheet_background_work_tab_done">已完成</string>
@@ -1232,7 +1232,7 @@
     <string name="appearance_sample_assistant_message">测试在 `login()` 完成后立即读取会话 Cookie，但 Cookie 晚了一个时钟周期才写入。</string>
     <string name="appearance_sample_tool_title">已编辑</string>
     <string name="feature_flags_title">功能开关</string>
-    <string name="feature_flags_clear_overrides">清除覆盖</string>
+    <string name="feature_flags_clear_overrides">清除覆盖值</string>
     <string name="feature_flags_more_options">更多选项</string>
     <string name="feature_flags_intro">切换开关会在此设备上设置一个覆盖值，优先于远程值。远程值在启动时获取，并在下次启动时生效。</string>
     <string name="feature_flags_section_flags">开关</string>
@@ -1347,7 +1347,7 @@
         <item quantity="other">上一轮更改了 %1$d 个文件。</item>
     </plurals>
     <string name="changes_other_source_show">显示%1$s</string>
-    <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
+    <string name="changes_empty_detail_with_hint">%1$s%2$s</string>
     <string name="changes_source_last_turn_empty_title">没有更改</string>
     <string name="changes_source_last_turn_empty_message">最近完成的一轮没有更改任何文件。</string>
     <string name="changes_loading_title">正在加载更改</string>
@@ -1427,7 +1427,7 @@
     <string name="component_subagent_state_done">已完成</string>
     <string name="component_subagent_state_failed">失败</string>
     <string name="component_subagent_state_stopped">已停止</string>
-    <string name="component_filter_tabs_unseen">新</string>
+    <string name="component_filter_tabs_unseen">有新内容</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">昨天</string>
     <string name="component_composer_reverting_title">正在撤销此消息</string>
@@ -1466,10 +1466,10 @@
     <string name="component_attachment_uploading">正在上传…</string>
     <string name="component_composer_deny">拒绝</string>
     <string name="component_composer_deny_options">更多拒绝选项</string>
-    <string name="component_composer_deny_with_note_menu">拒绝并附说明…</string>
+    <string name="component_composer_deny_with_note_menu">拒绝并附言…</string>
     <string name="component_composer_deny_with_note_menu_subtitle">告诉智能体改为做什么</string>
-    <string name="component_composer_deny_with_note_title">拒绝并附说明</string>
-    <string name="component_composer_deny_note_placeholder">告诉 OpenCode 该如何改做</string>
+    <string name="component_composer_deny_with_note_title">拒绝并附言</string>
+    <string name="component_composer_deny_note_placeholder">告诉 OpenCode 换一种做法</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="other">同时拒绝另外 %1$d 个等待中的请求。</item>
     </plurals>
@@ -1550,7 +1550,7 @@
     <string name="component_attachment_uploading_percent">正在上传 %1$d%%</string>
     <string name="component_composer_custom_answer_hint">输入自定义答案</string>
     <string name="component_composer_cancel_revert">取消撤销</string>
-    <string name="session_list_scope_load_slow_caption">仍在加载 — 大型项目可能需要一些时间</string>
+    <string name="session_list_scope_load_slow_caption">仍在加载，大型项目可能需要一些时间</string>
     <string name="component_outgoing_message_label_with_actions">发出的消息。显示消息操作</string>
     <string name="session_list_scope_load_failed_subtitle">无法加载会话</string>
     <plurals name="component_activity_card_more_running">
@@ -1650,7 +1650,7 @@
     <string name="session_list_dock_project_filter">项目筛选</string>
     <string name="component_split_pane_resize_hint">双击以隐藏侧边栏</string>
     <string name="component_branch_pill_shows_details_hint">显示分支详情</string>
-    <string name="component_composer_permission_requested">请求权限</string>
+    <string name="component_composer_permission_requested">权限请求</string>
     <string name="component_thinking">思考</string>
     <string name="dictation_model_downloading_title">%1$s 正在下载%2$s</string>
     <string name="component_hunk_navigation_expand_context">展开上下文</string>
@@ -1676,7 +1676,7 @@
     <plurals name="worktrees_count">
         <item quantity="other">%1$d 个 worktree</item>
     </plurals>
-    <string name="worktrees_main_checkout">主检出</string>
+    <string name="worktrees_main_checkout">主 worktree</string>
     <string name="worktrees_cannot_remove">无法移除</string>
     <plurals name="worktrees_changed">
         <item quantity="other">%1$d 处更改</item>
@@ -1685,7 +1685,7 @@
     <string name="worktrees_footer">移除 worktree 会删除其在服务器上的文件夹。其会话会保留，但无法再在其中运行。</string>
     <string name="worktrees_more">%1$s的更多操作</string>
     <string name="worktrees_removing">正在移除…</string>
-    <string name="worktrees_actions_show_on_home">在首页显示会话</string>
+    <string name="worktrees_actions_show_on_home">在主页显示会话</string>
     <string name="worktrees_actions_new_session">在此新建会话</string>
     <string name="worktrees_actions_remove">移除 worktree…</string>
     <string name="worktrees_remove_title">移除 worktree“%1$s”？</string>
@@ -1695,7 +1695,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">未提交的更改将丢失。</string>
     <string name="worktrees_remove_changes_unchecked">无法检查未提交的更改。其中的更改都将丢失。</string>
-    <string name="worktrees_remove_sessions_stay">使用此 worktree 的会话会保留在首页，但无法再在这里运行。</string>
+    <string name="worktrees_remove_sessions_stay">使用此 worktree 的会话会保留在主页，但无法再在这里运行。</string>
     <string name="worktrees_remove_confirm_anyway">仍然移除</string>
     <string name="worktrees_blocked_title">暂时无法移除“%1$s”</string>
     <string name="worktrees_blocked_message">此 worktree 中有会话正在运行。请先停止它，再移除 worktree。</string>

@@ -20,7 +20,7 @@
     <string name="connection_setup_action_saving">Saklanýar…</string>
     <string name="connection_setup_action_scan_qr">QR skanerle</string>
     <string name="connection_setup_action_scan_new_qr">Täze QR skanerle</string>
-    <string name="connection_setup_action_enter_pairing_code">Jübütleme koduny giriz</string>
+    <string name="connection_setup_action_enter_pairing_code">Jübütleme koduny giriziň</string>
     <string name="connection_setup_action_use_host_password">Host we parol ulan</string>
     <string name="connection_setup_action_scan_qr_instead">Onuň ýerine QR skanerle</string>
     <string name="connection_setup_scan_qr_instead_hint">opencode pair-dan</string>
@@ -56,7 +56,7 @@
     <string name="connection_cleartext_message_one_host">%1$s ýerli ulgamyňyzdan ýa-da Tailscale-den daşynda ýönekeý http ulanýar. Serwer parolyňyz we sessiýalaryňyzdaky hemme zat şifrlenmän geçer. https, VPN ýa-da tunnel ulanmak has ýagşy.</string>
     <string name="connection_cleartext_message_hosts">%1$s ýerli ulgamyňyzdan ýa-da Tailscale-den daşynda ýönekeý http ulanýar. Serwer parolyňyz we sessiýalaryňyzdaky hemme zat şifrlenmän geçer. https, VPN ýa-da tunnel ulanmak has ýagşy.</string>
     <string name="connection_cleartext_message_this_address">Bu salgy ýerli ulgamyňyzdan ýa-da Tailscale-den daşynda ýönekeý http ulanýar. Serwer parolyňyz we sessiýalaryňyzdaky hemme zat şifrlenmän geçer. https, VPN ýa-da tunnel ulanmak has ýagşy.</string>
-    <string name="connection_cleartext_connect_anyway">Şonda-da birikdir</string>
+    <string name="connection_cleartext_connect_anyway">Şonda-da birikdiriň</string>
     <string name="connection_error_invalid_qr">Bu OpenCode 2 jübütleme QR-i däl</string>
     <string name="connection_error_localhost_qr">Bu QR-de diňe localhost salgysy bar</string>
     <string name="connection_error_camera_denied">Jübütleme QR-ini skanerlemek üçin kamera girişine rugsat beriň</string>
@@ -99,7 +99,7 @@
     <string name="onboarding_features_changes_title">Üýtgeşmeler</string>
     <string name="onboarding_features_changes_detail">Sessiýanyň diff-lerini gözden geçiriň</string>
     <string name="onboarding_features_live_title">Açykka janly</string>
-    <string name="onboarding_features_live_detail">Öňdäki wakalar akymy; täzeden birikenden soň täzeläň</string>
+    <string name="onboarding_features_live_detail">Açyk wagty wakalar akymy; täzeden birikenden soň täzeläň</string>
     <string name="onboarding_setup_title">opencode serve guruň</string>
     <string name="onboarding_setup_intro">Programma siziň işledýän opencode serweriňiz bilen gürleşýär. Gysga ýol aşakda — doly maglumat resmi resminamalarda.</string>
     <string name="onboarding_setup_step_number">%1$d-nji ädim</string>
@@ -108,9 +108,9 @@
     <string name="onboarding_setup_step2_title">Parol talap ediň</string>
     <string name="onboarding_setup_step2_body">OPENCODE_SERVER_PASSWORD-y belläň. OPENCODE_SERVER_USERNAME bellemeseňiz, ulanyjy ady opencode bolýar.</string>
     <string name="onboarding_setup_step3_title">Oňa telefonyňyzdan ýetiň</string>
-    <string name="onboarding_setup_step3_body">Maslahat berilýär: Tailscale — kompýuteriňize we telefonyňyza Tailscale guruň, soňra serwer URL-i hökmünde kompýuteriň Tailscale IP-sini ýa-da MagicDNS adyny ulanyň.\n\nHaýsydyr bir ýerli ulgam, VPN, HTTPS ýa-da özüňiz dolandyrýan başga tunnel hem bolar. Programma siziň üçin relay döretmeýär.</string>
+    <string name="onboarding_setup_step3_body">Maslahat berilýär: Tailscale — kompýuteriňize we telefonyňyza Tailscale guruň, soňra serwer URL-i hökmünde kompýuteriň Tailscale IP-sini ýa-da MagicDNS adyny ulanyň.\n\nŞol bir ýerli tor (LAN), VPN, HTTPS ýa-da özüňiz dolandyrýan başga tunnel hem bolar. Programma siziň üçin relay döretmeýär.</string>
     <string name="onboarding_setup_step4_title">Programmada birikiň</string>
-    <string name="onboarding_setup_step4_body">Esasy URL-i we paroly giriziň. Programma GET /global/health-i barlaýar, soňra bu enjamda saklanan serwer birikmesini ýatda saklaýar.</string>
+    <string name="onboarding_setup_step4_body">Esasy URL-i we paroly giriziň. Programma GET /global/health-i barlaýar, soňra serwer birikmesini bu enjamda saklaýar.</string>
     <string name="onboarding_setup_open_docs">Serwer resminamalaryny aç</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile gulplanan</string>
@@ -136,7 +136,7 @@
     <string name="server_health_reconnects_detail">ortaça %1$s içinde dikeldi</string>
     <string name="server_health_no_drops">üzülme ýok</string>
     <string name="server_health_error_rate">Ýalňyşlyk derejesi</string>
-    <string name="server_health_error_rate_detail">%2$d barlagyň %1$d-i şowsuz boldy</string>
+    <string name="server_health_error_rate_detail">%2$d barlagdan %1$d şowsuz boldy</string>
     <string name="server_health_between_drops">Üzülmeleriň arasy</string>
     <string name="server_health_between_drops_detail">ortaça birikme wagty</string>
     <string name="server_health_latency">Gijikme</string>
@@ -160,10 +160,10 @@
     <string name="server_health_error_log">Ýalňyşlyk žurnaly</string>
     <string name="server_health_error_log_check">Ýagdaý barlagy</string>
     <string name="server_health_error_log_stream">Janly birikme</string>
-    <string name="server_health_error_log_repeated">%2$s aralykda yzly-yzyna %1$d</string>
+    <string name="server_health_error_log_repeated">%2$s aralykda yzly-yzyna %1$d gezek</string>
     <string name="server_health_error_log_show_all">Hemmesini görkez (%1$d)</string>
     <string name="server_health_error_log_show_less">Azrak görkez</string>
-    <string name="server_health_error_log_capped">%2$d-den soňky %1$d</string>
+    <string name="server_health_error_log_capped">Soňky %1$d / %2$d</string>
     <string name="server_health_category_network">Ulgam</string>
     <string name="server_health_category_timeout">Wagt gutardy</string>
     <string name="server_health_category_heartbeat">Heartbeat togtady</string>
@@ -181,7 +181,7 @@
     <string name="server_health_restarts_seen">Görlen täzeden başlatmalar</string>
     <string name="server_health_restarts_seen_value">%1$d</string>
     <string name="server_health_event_streams">Wakalar akymlary</string>
-    <string name="server_health_event_streams_value">%2$d akymyň %1$d-i janly</string>
+    <string name="server_health_event_streams_value">%2$d akymdan %1$d janly</string>
     <string name="server_health_footnote">Diňe programma açykka ölçelýär. Bu enjamda 7 gün saklanýar.</string>
     <string name="server_health_empty_title">Heniz ölçeg ýok</string>
     <string name="server_health_empty_message">Ýagdaý programma açyk we bu serwere birigen wagty ölçelýär.</string>
@@ -200,7 +200,7 @@
     <string name="server_health_open_details">Serweriň ýagdaýyny aç</string>
     <string name="server_health_unknown_value">—</string>
     <string name="server_health_axis_ago">%1$s öň</string>
-    <string name="server_health_hero_streams">%2$d wakalar akymynyň %1$d-i janly</string>
+    <string name="server_health_hero_streams">%2$d wakalar akymyndan %1$d janly</string>
     <string name="servers_status_active">Işjeň</string>
     <string name="servers_add">Serwer goş</string>
     <string name="servers_edit_profile">%1$s üýtget</string>
@@ -210,7 +210,7 @@
     <string name="common_save">Sakla</string>
     <string name="common_delete">Poz</string>
     <string name="common_edit">Üýtget</string>
-    <string name="common_done">Taýýar</string>
+    <string name="common_done">Boldy</string>
     <string name="common_new">Täze</string>
     <string name="common_open">Aç</string>
     <string name="common_settings">Sazlamalar</string>
@@ -220,7 +220,7 @@
     <string name="home_servers_sheet_using_now">Häzir ulanylýar</string>
     <string name="home_servers_sheet_switch_to">Geçmek</string>
     <string name="home_servers_sheet_manage">Sazlamalarda dolandyr</string>
-    <string name="home_more_options">Has köp opsiýa</string>
+    <string name="home_more_options">Başga opsiýalar</string>
     <string name="home_filter_sheet_title">Taslama boýunça süz</string>
     <string name="home_empty_title">Heniz taslama ýok</string>
     <string name="home_empty_message">Serweriňizde bukja saýlamak üçin aşakdaky Taslama goş nyşanyna basyň.</string>
@@ -235,7 +235,7 @@
     <string name="home_remove_project_message">\"%1$s\" baş sahypadan aýyrylsynmy? Onuň sessiýalary serwerde galýar.</string>
     <string name="home_snackbar_removed">\"%1$s\" baş sahypadan aýryldy</string>
     <string name="home_snackbar_already_on_home">\"%1$s\" eýýäm baş sahypada</string>
-    <string name="home_snackbar_joined_project">%1$s bilen deň repo. Ol ýerde worktree hökmünde görkezilýär.</string>
+    <string name="home_snackbar_joined_project">%1$s bilen şol bir repo. Ol ýerde worktree hökmünde görkezilýär.</string>
     <string name="home_all">Hemmesi</string>
     <string name="home_all_projects">Ähli taslamalar</string>
     <plurals name="home_project_count">
@@ -286,7 +286,7 @@
     <string name="archived_sessions_title">Arhiwlenen sessiýalar</string>
     <string name="home_menu_archived_count">%2$s içinde %1$d</string>
     <string name="archived_sessions_section_this_week">Şu hepde</string>
-    <string name="archived_sessions_section_earlier">Has öň</string>
+    <string name="archived_sessions_section_earlier">Ozalky</string>
     <string name="archived_sessions_unarchive">Arhiwden çykar</string>
     <string name="archived_sessions_delete">Poz…</string>
     <string name="archived_sessions_delete_dialog_message">“%1$s” serwerden pozulýar. Muny yzyna gaýtaryp bolmaz.</string>
@@ -296,7 +296,7 @@
     <string name="archived_sessions_empty_title">Arhiwlenen sessiýa ýok</string>
     <string name="archived_sessions_empty_message">%1$s içinde arhiwleýän sessiýalaryňyz şu ýerde görünýär.</string>
     <string name="archived_sessions_show_all_projects">Ähli taslamalary görkez</string>
-    <string name="archived_sessions_footer">Has köp üçin sessiýa basyň. Arhiwden çykarmak ony Baş sahypa gaýtarýar.</string>
+    <string name="archived_sessions_footer">Goşmaça amallar üçin sessiýa basyň. Arhiwden çykarmak ony Baş sahypa gaýtarýar.</string>
     <string name="archived_sessions_load_failed">Arhiwlenen sessiýalary ýükläp bolmady.</string>
     <string name="archived_sessions_unarchive_failed">Sessiýany arhiwden çykaryp bolmady.</string>
     <string name="session_chat_archived_banner">Arhiwlenen: %1$s</string>
@@ -326,7 +326,7 @@
         <item quantity="one">%1$d bukja</item>
         <item quantity="other">%1$d bukja</item>
     </plurals>
-    <string name="add_project_no_subfolders">Aşaky bukja ýok</string>
+    <string name="add_project_no_subfolders">Içinde bukja ýok</string>
     <string name="add_project_nothing_starts_with">%1$s içinde “%2$s” bilen başlaýan zat ýok</string>
     <plurals name="add_project_truncation_hint">
         <item quantity="one">Ilkinji %1$d bukja görkezilýär. Sanawy daraltmak üçin adyň has köp bölegini ýazyň.</item>
@@ -369,7 +369,7 @@
     <string name="worktree_unknown_error">Näbelli ýalňyşlyk</string>
     <string name="worktree_request_failed_http">Haýyş şowsuz boldy (HTTP %1$d)</string>
     <string name="files_title">Faýllar</string>
-    <string name="files_more_options">Has köp opsiýa</string>
+    <string name="files_more_options">Başga opsiýalar</string>
     <string name="files_show_hidden">Gizlin faýllary görkez</string>
     <string name="files_show_hidden_on">Gizlin faýllary görkez, açyk</string>
     <string name="files_show_hidden_off">Gizlin faýllary görkez, öçük</string>
@@ -435,7 +435,7 @@
     <string name="terminal_close">Ýap</string>
     <string name="terminal_close_dialog_title">Bu shell ýapylsynmy?</string>
     <string name="terminal_close_dialog_title_named">“%1$s” ýapylsynmy?</string>
-    <string name="terminal_close_dialog_message">Bu serwerdäki shell-i tamamlaýar.</string>
+    <string name="terminal_close_dialog_message">Bu serwerdäki shell-i bes edýär.</string>
     <string name="terminal_projects_empty_title">Heniz taslama ýok</string>
     <string name="terminal_projects_empty_message">Baş sahypada taslama goşuň, soňra bu ýerde shell başlaň.</string>
     <string name="terminal_error_create">Shell başladyp bolmady.</string>
@@ -443,7 +443,7 @@
     <string name="terminal_connecting_subtitle">Shell başladylýar…</string>
     <string name="terminal_connect_failed_title">Birikme şowsuz boldy</string>
     <string name="terminal_connect_failed_message">Bu taslama üçin shell başladyp bolmady.</string>
-    <string name="terminal_exited">Shell tamamlandy</string>
+    <string name="terminal_exited">Shell gutardy</string>
     <string name="terminal_retry">Täzeden synanyş</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
@@ -453,7 +453,7 @@
     <string name="terminal_key_left">Çepe</string>
     <string name="terminal_key_right">Saga</string>
     <string name="session_chat_loading">Sessiýa ýüklenýär</string>
-    <string name="session_chat_more_options">Has köp opsiýa</string>
+    <string name="session_chat_more_options">Başga opsiýalar</string>
     <string name="session_chat_menu_rename">Sessiýanyň adyny üýtget</string>
     <string name="session_chat_menu_review_changes">Üýtgeşmeleri gözden geçir</string>
     <string name="session_chat_menu_fork">Sessiýany çatmak</string>
@@ -461,7 +461,7 @@
     <string name="session_chat_menu_session_context">Sessiýa konteksti</string>
     <string name="session_chat_menu_copy_session_id">Sessiýa ID-sini göçür</string>
     <string name="session_chat_menu_archive">Arhiw</string>
-    <string name="session_chat_menu_report_problem">Meseläni habar ber</string>
+    <string name="session_chat_menu_report_problem">Mesele barada habar ber</string>
     <string name="session_chat_menu_delete">Poz</string>
     <string name="session_chat_delete_dialog_title">Sessiýany poz</string>
     <string name="session_chat_delete_dialog_message">“%1$s” sessiýasy pozulsynmy?</string>
@@ -630,11 +630,11 @@
     <string name="new_session_add_project">Taslama goş…</string>
     <string name="new_session_run_in_project">%1$s içinde işlet</string>
     <string name="new_session_current_checkout">%1$s · häzirki checkout</string>
-    <string name="new_session_new_worktree_subtitle">Aýrybaşga nusga, iberenden soň döredilýär</string>
+    <string name="new_session_new_worktree_subtitle">Aýratyn nusga, iberenden soň döredilýär</string>
     <string name="new_session_worktrees_section">Worktree-ler</string>
     <string name="timeline_state_loading_title">Habarlar ýüklenýär</string>
     <string name="timeline_state_loading_subtitle">Wagt çyzygy alynýar…</string>
-    <string name="timeline_state_error_title">Habarlary ýüklemek başartmady</string>
+    <string name="timeline_state_error_title">Habarlary ýükläp bolmady</string>
     <string name="timeline_state_error_fallback">Wagt çyzygy ýüklenmedi.</string>
     <string name="timeline_state_retry">Täzeden synanyş</string>
     <string name="timeline_state_empty">Entek habar ýok. Başlamak üçin prompt iberiň.</string>
@@ -779,10 +779,10 @@
         <item quantity="other">%1$d %2$s</item>
     </plurals>
     <string name="tool_error_malformed">Işledilmedi: nädogry gural çagyryşy</string>
-    <string name="tool_error_failed">Başartmady</string>
-    <string name="tool_error_exit_code">%1$d kody bilen çykdy</string>
+    <string name="tool_error_failed">Şowsuz boldy</string>
+    <string name="tool_error_exit_code">Kod %1$d bilen çykdy</string>
     <string name="tool_status_declined">Ret edildi</string>
-    <string name="tool_user_note">Siziň bellik: %1$s</string>
+    <string name="tool_user_note">Siziň belligiňiz: %1$s</string>
     <string name="tool_status_stopped">Duruzyldy</string>
     <string name="tool_placeholder_writing_command">Buýruk ýazylýar…</string>
     <string name="tool_placeholder_preparing_read">Okamak taýýarlanýar…</string>
@@ -794,7 +794,7 @@
     <string name="tool_unknown_detail">Gural elýeterli däl</string>
     <string name="tool_result_pull_request_opened">Pull request açyldy</string>
     <string name="tool_result_file">Faýl</string>
-    <string name="tool_result_lines_range">%1$d–%2$d-nji setirler</string>
+    <string name="tool_result_lines_range">Setirler %1$d–%2$d</string>
     <plurals name="tool_result_first_lines">
         <item quantity="one">ilkinji %1$d setir</item>
         <item quantity="other">ilkinji %1$d setir</item>
@@ -848,19 +848,19 @@
     <string name="timeline_activity_thinking">Pikir ýöredilýär…</string>
     <string name="timeline_activity_waiting_for_agents">Agentler garaşylýar</string>
     <string name="timeline_activity_waiting_for_you">Sizi garaşýar</string>
-    <string name="timeline_notice_moved_to">Göçürildi:</string>
+    <string name="timeline_notice_moved_to">Geçirildi:</string>
     <string name="timeline_notice_agent_changed">Agent çalşyldy</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
     <string name="timeline_notice_switched_to">Çalşyldy:</string>
-    <string name="timeline_notice_variant_switched">Warianty çalşyldy:</string>
-    <string name="timeline_notice_variant_default">Warianty Default-a çalşyldy</string>
+    <string name="timeline_notice_variant_switched">Wariant çalşyldy:</string>
+    <string name="timeline_notice_variant_default">Wariant «Adaty» edilip çalşyldy</string>
     <string name="timeline_notice_instructions_updated">Görkezmeler täzelendi</string>
     <string name="timeline_notice_restart">Gaýtadan işe girizilenden soň dowam edilýär</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
     <string name="timeline_compaction_title">Kontekst ykjamlandy</string>
     <string name="timeline_compaction_automatic">Awtomatik</string>
     <string name="timeline_syncing">Sinhronlaşdyrylýar…</string>
-    <string name="timeline_failure_session_work_failed">Sessiýa işi başartmady</string>
+    <string name="timeline_failure_session_work_failed">Sessiýa işi şowsuz boldy</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Model saýla</string>
     <string name="timeline_failure_compact">Ykjam</string>
@@ -902,7 +902,7 @@
     <string name="session_chat_sheet_message_actions_clip_label_code">Kod</string>
     <string name="session_chat_sheet_mcp_loading_title">MCP serwerleri barlanýar</string>
     <string name="session_chat_sheet_mcp_loading_subtitle">Ýagdaý opencode serwerinden okalýar</string>
-    <string name="session_chat_sheet_mcp_error_title">MCP serwerlerini ýüklemek başartmady</string>
+    <string name="session_chat_sheet_mcp_error_title">MCP serwerlerini ýükläp bolmady</string>
     <string name="session_chat_sheet_mcp_error_message">MCP serwer sanawy ýüklenmedi.</string>
     <string name="session_chat_sheet_mcp_empty_title">MCP serwer ýok</string>
     <string name="session_chat_sheet_mcp_empty_message">Bu opencode serwerinde hiç biri sazlanmandyr.</string>
@@ -913,7 +913,7 @@
     <string name="session_chat_sheet_mcp_status_connected">Birikdi</string>
     <string name="session_chat_sheet_mcp_status_connecting">Birigýär</string>
     <string name="session_chat_sheet_mcp_status_disabled">Öçürilen</string>
-    <string name="session_chat_sheet_mcp_status_failed">Başartmady</string>
+    <string name="session_chat_sheet_mcp_status_failed">Şowsuz</string>
     <string name="session_chat_sheet_mcp_status_needs_sign_in">Girmek gerek</string>
     <string name="session_chat_sheet_pending_prompts_title">Indiki</string>
     <plurals name="session_chat_sheet_pending_prompts_waiting">
@@ -925,7 +925,7 @@
     <string name="session_chat_sheet_pending_prompts_move_to_queue">Nobata geçir</string>
     <string name="session_chat_sheet_pending_prompts_steer_now">Indi ugrukdyr</string>
     <string name="session_chat_sheet_pending_prompts_delete">Poz</string>
-    <string name="session_chat_sheet_side_question_done">Taýýar</string>
+    <string name="session_chat_sheet_side_question_done">Boldy</string>
     <string name="session_chat_sheet_side_question_not_added">Söhbetdeşlige goşulmady</string>
     <string name="session_chat_sheet_todos_title">Sessiýa todo-lary</string>
     <string name="session_chat_sheet_todos_progress">%1$d/%2$d tamamlandy</string>
@@ -944,7 +944,7 @@
     <string name="session_chat_goal_first_turn">Ilkinji ädim · tapgyr 0/%1$d</string>
     <string name="session_chat_goal_round">Tapgyr %1$d/%2$d</string>
     <string name="session_chat_goal_paused_in_round">%1$d/%2$d tapgyrda duruzyldy</string>
-    <string name="session_chat_goal_met_in_round">%1$d-nji tapgyrda ýerine ýetdi</string>
+    <string name="session_chat_goal_met_in_round">Ýerine ýetdi, tapgyr: %1$d</string>
     <string name="session_chat_goal_reviewer_last_round">Gözden geçiriji, soňky tapgyr</string>
     <string name="session_chat_goal_not_met_yet">Entek ýerine ýetmedi: %1$s</string>
     <string name="session_chat_goal_reviewer">Gözden geçiriji</string>
@@ -960,7 +960,7 @@
     <string name="session_chat_goal_waiting_permission">Rugsat haýyşy açyk. Siz jogap berenden soň maksat dowam eder.</string>
     <string name="session_chat_goal_waiting_question">Sorag açyk. Siz jogap berenden soň maksat dowam eder.</string>
     <string name="session_chat_goal_evidence">Subutnama</string>
-    <string name="session_chat_goal_reconnecting">Täzeden birigýär. Soňky belli maksat görkezilýär.</string>
+    <string name="session_chat_goal_reconnecting">Täzeden birikdirilýär. Soňky belli maksat görkezilýär.</string>
     <string name="session_chat_goal_pause">Duruz</string>
     <string name="session_chat_goal_pausing">Duruzylýar…</string>
     <string name="session_chat_goal_resume">Dowam et</string>
@@ -985,10 +985,10 @@
     <string name="session_chat_goal_ended">gutardy</string>
     <string name="session_chat_goal_set_earlier">Öňki maksat. Ol arassalandy ýa-da çalşyldy.</string>
     <string name="session_chat_goal_bubble_label">Maksat</string>
-    <string name="session_chat_goal_objective_hint">“Taýýar” nähili görünýändigini düşündiriň…</string>
+    <string name="session_chat_goal_objective_hint">“Boldy” nähili görünýändigini düşündiriň…</string>
     <string name="session_chat_goal_resume_placeholder">Jogap ber, soň maksady dowam et…</string>
-    <string name="session_chat_goal_count">%1$s / %2$s nyşan</string>
-    <string name="session_chat_goal_count_over">%1$s / %2$s nyşan · ibermek üçin maksady gysgaldyň</string>
+    <string name="session_chat_goal_count">%1$s / %2$s belgi</string>
+    <string name="session_chat_goal_count_over">%1$s / %2$s belgi · ibermek üçin maksady gysgaldyň</string>
     <string name="session_chat_goal_command_replaces">Häzirki maksadyňyzy çalyşýar</string>
     <string name="session_chat_goal_command_replaces_paused">Häzirki maksadyňyzy çalyşýar (duruzylan)</string>
     <string name="session_chat_goal_command_replaces_met">Häzirki maksadyňyzy çalyşýar (ýerine ýeten)</string>
@@ -1005,7 +1005,7 @@
     <string name="session_chat_failure_retry_after_seconds">%1$d sek soň täzeden synanyşyň</string>
     <string name="session_chat_failure_retry_after_minutes">%1$d min soň täzeden synanyşyň</string>
     <string name="component_outgoing_message_pending_caption">Garaşylýar · indiki ädimde iberilýär</string>
-    <string name="component_keyboard_hint_prompt">Klawiatura bilen jogap bermek üçin Tab basyň</string>
+    <string name="component_keyboard_hint_prompt">Klawiatura bilen jogap bermek üçin Tab düwmesine basyň</string>
     <string name="component_session_status_bar_context_usage">Kontekst ulanylyşy %1$d göterim</string>
     <string name="component_session_status_bar_context_usage_unavailable">Kontekst ulanylyşy elýeterli däl</string>
     <string name="app_lock_prompt_title">OpenCode Mobile-i aç</string>
@@ -1088,7 +1088,7 @@
     <string name="session_chat_sheet_background_work_tab_done">Tamamlandy</string>
     <string name="session_chat_sheet_background_work_running_empty">Hiç zat işlemeýär. Tamamlanan işler Tamamlandy bölüminde.</string>
     <string name="session_chat_sheet_background_work_done_empty">Entek hiç zat tamamlanmady.</string>
-    <string name="session_chat_sheet_background_work_waiting_for_input">Giriş garaşylýar</string>
+    <string name="session_chat_sheet_background_work_waiting_for_input">Girizme garaşylýar</string>
     <string name="session_chat_sheet_background_work_stopped">Duruzyldy</string>
     <plurals name="session_chat_sheet_background_work_tool_count">
         <item quantity="one">%1$d gural</item>
@@ -1206,7 +1206,7 @@
     <string name="settings_privacy_policy_title">Gizlinlik syýasaty</string>
     <string name="settings_privacy_policy_subtitle">Programmalar maglumatlary nähili işleýär</string>
     <string name="settings_analytics_title">Analitika we çökme hasabatlary</string>
-    <string name="settings_analytics_subtitle">Hasaba alynmaýan ulanyş wakalaryna we çökme hasabatlaryna rugsat ber. Öçük bolsa Firebase-e hiç zat ibermeýär.</string>
+    <string name="settings_analytics_subtitle">Hökmany bolmadyk önüm ulanyş wakalaryna we çökme hasabatlaryna rugsat ber. Öçük bolsa Firebase-e hiç zat ibermeýär.</string>
     <string name="settings_analytics_label">Önüm analitikasy</string>
     <string name="settings_diagnostic_logs_subtitle">Gizlenen aýlanýan işleýiş žurnalynyň penjiresini paýlaş</string>
     <string name="settings_clear_all_data_title">Ähli maglumaty arassala</string>
@@ -1279,7 +1279,7 @@
     <string name="appearance_more_options">Başga opsiýalar</string>
     <string name="appearance_reset_text_sizes">Tekst ölçeglerini täzeden gur</string>
     <string name="appearance_reset_all">Bütin daş görnüşini täzeden gur</string>
-    <string name="appearance_mode_title">Reim</string>
+    <string name="appearance_mode_title">Rejim</string>
     <string name="appearance_mode_system">Ulgam</string>
     <string name="appearance_mode_light">Ýagty</string>
     <string name="appearance_mode_dark">Garaňky</string>
@@ -1332,7 +1332,7 @@
     <string name="feedback_undo">Yza gaýtar</string>
     <string name="feedback_done">Taýýar</string>
     <string name="feedback_add_attachment">Goşundy goş</string>
-    <string name="feedback_dictate">Diktowka</string>
+    <string name="feedback_dictate">Sesli ýazmak</string>
     <string name="feedback_send">Hasabaty iber</string>
     <string name="feedback_sending">Hasabat iberilýär</string>
     <string name="feedback_attachment_screenshot">Ekran suraty</string>
@@ -1373,7 +1373,7 @@
     <string name="feedback_sent_title">Sag boluň — hasabat iberildi</string>
     <string name="feedback_sent_bug">Topar muňa seretjek.</string>
     <string name="feedback_sent_idea">Pikir üçin sag boluň.</string>
-    <string name="feedback_sent_reference">Salgy %1$s</string>
+    <string name="feedback_sent_reference">Salgylanma %1$s</string>
     <string name="feedback_share_chooser_title">Hasabaty paýlaş</string>
     <string name="feedback_dictation_microphone_off">Mikrofon girişi öçük</string>
     <string name="feedback_dictation_listening">Diňlenýär · %1$s</string>
@@ -1397,7 +1397,7 @@
     <string name="session_search_scope_selected">%1$s, saýlanan</string>
     <string name="keyboard_shortcuts_group_session">Sessiýa</string>
     <string name="keyboard_shortcuts_group_prompt">Prompt</string>
-    <string name="keyboard_shortcuts_group_go">Git</string>
+    <string name="keyboard_shortcuts_group_go">Geç</string>
     <string name="keyboard_shortcuts_new_session">Täze sessiýa</string>
     <string name="keyboard_shortcuts_command_palette">Buýruk paneli</string>
     <string name="keyboard_shortcuts_choose_model">Model saýla</string>
@@ -1429,8 +1429,8 @@
         <item quantity="other">Git üýtgeşmelerinde %1$d üýtgän faýl bar.</item>
     </plurals>
     <plurals name="changes_other_source_last_turn">
-        <item quantity="one">Soňky tertip %1$d faýly üýtgetdi.</item>
-        <item quantity="other">Soňky tertip %1$d faýly üýtgetdi.</item>
+        <item quantity="one">Soňky tertip %1$d faýl üýtgetdi.</item>
+        <item quantity="other">Soňky tertip %1$d faýl üýtgetdi.</item>
     </plurals>
     <string name="changes_other_source_show">%1$s görkez</string>
     <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
@@ -1471,7 +1471,7 @@
     <string name="changes_file_status_deleted">Pozuldy</string>
     <string name="changes_file_status_modified">Üýtgedildi</string>
     <string name="changes_accessibility_summary">%1$s, %2$s, %3$s</string>
-    <string name="changes_accessibility_file">%1$s, %2$s, %4$d faýldan %3$d-njisi, %5$s, %6$s</string>
+    <string name="changes_accessibility_file">%1$s, %2$s, faýl %3$d/%4$d, %5$s, %6$s</string>
     <plurals name="component_review_changes_pill_files">
         <item quantity="one">%1$d faýl</item>
         <item quantity="other">%1$d faýl</item>
@@ -1491,7 +1491,7 @@
     <string name="component_reasoning_row_duration_seconds">%1$s s</string>
     <string name="component_reasoning_row_duration_ms">%1$d ms</string>
     <string name="component_reasoning_row_duration_minutes_seconds">%1$d min %2$d s</string>
-    <string name="component_reasoning_row_duration_hours_minutes">%1$d sag %2$d min</string>
+    <string name="component_reasoning_row_duration_hours_minutes">%1$d sagat %2$d min</string>
     <string name="component_reasoning_row_shows_thought_hint">Doly pikiri görkezýär</string>
     <string name="component_unified_diff_row_kind_hunk">hunk</string>
     <string name="component_unified_diff_row_kind_metadata">metamaglumat</string>
@@ -1513,10 +1513,10 @@
     <string name="component_timeline_notice_shows_one_line_hint">Bir setiri görkezýär</string>
     <string name="component_timeline_notice_shows_full_value_hint">Doly bahany görkezýär</string>
     <string name="component_attachment_accessibility_label">%1$s, %2$s</string>
-    <string name="component_subagent_state_waiting_for_input">giriş garaşylýar</string>
+    <string name="component_subagent_state_waiting_for_input">girizme garaşylýar</string>
     <string name="component_subagent_state_done">tamamlandy</string>
     <string name="component_subagent_state_failed">şowsuz boldy</string>
-    <string name="component_subagent_state_stopped">saklandy</string>
+    <string name="component_subagent_state_stopped">duruzyldy</string>
     <string name="component_filter_tabs_unseen">täze</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Düýn</string>
@@ -1530,7 +1530,7 @@
     <string name="component_hunk_navigation_collapse_context">Kontekst ýygna</string>
     <string name="component_top_bar_project_subtitle">Taslama %1$s %2$s</string>
     <string name="component_composer_dismiss">Ýap</string>
-    <string name="dictation_model_downloading_detail">Bu ulgam ýüklemesi. Bu kartany ýapsaň-da dowam eder.</string>
+    <string name="dictation_model_downloading_detail">Bu ulgam ýüklemesi. Bu kartany ýapsaňyz-da dowam eder.</string>
     <string name="session_list_scope_load_loading">Sessiýalar ýüklenýär…</string>
     <string name="dictation_insert">Goş</string>
     <string name="dictation_action_check_again">Ýene barla</string>
@@ -1540,18 +1540,18 @@
     <string name="component_attachment_kind_image">Surat</string>
     <string name="component_composer_hide_question">Soragy gizle</string>
     <string name="live_updates_status_connecting">birikdirilýär</string>
-    <string name="dictation_model_queued_detail">%1$s ýüklemäni nobata goýdy. Ol Wi-Fi, zarýadlamak ýa-da boş ýer üçin garaşyp biler. Birnäçe minutdan soň ýene barla.</string>
-    <string name="dictation_model_not_installed_detail">Diktowka şu enjamda işleýär, şonuň üçin sesiň hiç haçan ýüklenmeýär. %1$s modeli bir gezek ýükleýär we ony ähli programmalar üçin saklaýar.</string>
+    <string name="dictation_model_queued_detail">%1$s ýüklemäni nobata goýdy. Ol Wi-Fi, zarýadlamak ýa-da boş ýer üçin garaşyp biler. Birnäçe minutdan soň ýene barlaň.</string>
+    <string name="dictation_model_not_installed_detail">Sesli ýazmak şu enjamda işleýär, şonuň üçin sesiňiz hiç haçan ýüklenmeýär. %1$s modeli bir gezek ýükleýär we ony ähli programmalar üçin saklaýar.</string>
     <string name="component_outgoing_message_shows_actions_hint">Habar hereketlerini görkezýär</string>
-    <string name="component_activity_status_stopped">saklandy</string>
-    <string name="dictation_action_try_again">Ýene synanyş</string>
-    <string name="component_composer_model_effort">Model %1$s, ukyp %2$s</string>
+    <string name="component_activity_status_stopped">duruzyldy</string>
+    <string name="dictation_action_try_again">Täzeden synanyş</string>
+    <string name="component_composer_model_effort">Model %1$s, tagalla %2$s</string>
     <string name="component_activity_card_working">Işleýär</string>
     <string name="component_activity_card_opens_activity">%1$s, işjeňligi açýar</string>
     <string name="component_image_loading_label">%1$s, ýüklenýär</string>
     <string name="session_list_dock_new_session">Täze sessiýa</string>
     <string name="component_composer_always_allows">Hemişe rugsat berýär: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">Gapdal sorag tertibinden çyk</string>
+    <string name="component_composer_leave_side_question_mode">Gapdal sorag rejiminden çyk</string>
     <string name="session_list_worktree_empty_other_projects">Başga taslamalardaky sessiýalary görmek üçin süzgüji arassala.</string>
     <string name="component_attachment_uploading">Ýüklenýär…</string>
     <string name="component_composer_deny">Inkär et</string>
@@ -1561,12 +1561,12 @@
     <string name="component_composer_deny_with_note_title">Bellik bilen inkär et</string>
     <string name="component_composer_deny_note_placeholder">OpenCode-a nämäni başgaça etmelidigini aýt</string>
     <plurals name="component_composer_deny_note_also_denies">
-        <item quantity="one">Başga %1$d garaşylýan haýyşy hem inkär edýär.</item>
-        <item quantity="other">Başga %1$d garaşylýan haýyşy hem inkär edýär.</item>
+        <item quantity="one">Garaşylýan başga %1$d haýyş hem inkär edilýär.</item>
+        <item quantity="other">Garaşylýan başga %1$d haýyş hem inkär edilýär.</item>
     </plurals>
-    <string name="dictation_stopped">Diktowka saklandy</string>
+    <string name="dictation_stopped">Sesli ýazmak duruzyldy</string>
     <string name="dictation_microphone_failed">Mikrofony ulanyp bolmady</string>
-    <string name="dictation_busy">Diktowka meşgul</string>
+    <string name="dictation_busy">Sesli ýazmak meşgul</string>
     <string name="component_composer_question_position">%2$d içinden %1$d</string>
     <string name="session_list_status_ready">Taýýar</string>
     <string name="session_list_dock_hint_swipe">Taslama süzgüjini açýar. Taslamalary çalşmak üçin süýşüriň.</string>
@@ -1576,7 +1576,7 @@
     <string name="session_list_section_recent">Soňky</string>
     <string name="session_list_section_recent_hint">Seretmeli</string>
     <string name="component_activity_status_completed">tamamlandy</string>
-    <string name="share_diagnostics_chooser_title">Diagnostika loglaryny paýlaş</string>
+    <string name="share_diagnostics_chooser_title">Diagnostika žurnallaryny paýlaş</string>
     <string name="dictation_model_queued_title">%1$s %2$s modelini soňrak ýüklär</string>
     <string name="session_list_dock_choose_project_or_worktree">Taslama ýa-da worktree saýla</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
@@ -1584,11 +1584,11 @@
     <string name="component_composer_question">Sorag</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">Başga worktree-lerdäki sessiýalary görmek üçin süzgüji arassala.</string>
-    <string name="component_composer_side_question_mode">Gapdal sorag tertibi</string>
+    <string name="component_composer_side_question_mode">Gapdal sorag rejimi</string>
     <string name="component_page_indicator_label">Sahypa %1$d / %2$d</string>
     <string name="component_composer_next">Indiki</string>
     <string name="component_message_image_label">Surat %1$s</string>
-    <string name="component_composer_leave_shell_mode">Shell tertibinden çyk</string>
+    <string name="component_composer_leave_shell_mode">Shell rejiminden çyk</string>
     <string name="dictation_action_downloading">Ýüklenýär…</string>
     <string name="component_image_viewer_share">Paýlaş</string>
     <string name="session_list_status_failed">Şowsuz</string>
@@ -1604,13 +1604,13 @@
         <item quantity="other">%1$d gün öň</item>
     </plurals>
     <string name="component_server_address_scheme_button_description">Protokol %1$s. Protokol saýlaýjyny açýar</string>
-    <string name="share_diagnostics_subject">OpenCode diagnostika loglary</string>
+    <string name="share_diagnostics_subject">OpenCode diagnostika žurnallary</string>
     <string name="component_reorderable_list_move_up">Ýokary süýşür</string>
     <string name="session_list_scope_load_failed_title">%1$s ýüklenmedi</string>
-    <string name="dictation_status_listening">Diňleýär</string>
+    <string name="dictation_status_listening">Diňlenýär</string>
     <string name="dictation_downloading_model">Söz tanamak modeli ýüklenýär</string>
     <string name="session_list_worktree_empty_every_worktree">Ähli worktree-leri görmek üçin süzgüji arassala.</string>
-    <string name="component_overflow_menu_more_options">Has köp opsiýa</string>
+    <string name="component_overflow_menu_more_options">Başga opsiýalar</string>
     <string name="session_list_status_retrying_attempt">Gaýtadan synanyşýar · %1$d</string>
     <string name="live_updates_status_offline">oflaýn</string>
     <string name="component_attachment_kind_text">Tekst</string>
@@ -1619,8 +1619,8 @@
     <string name="component_composer_placeholder">Islän zadyňy sora...</string>
     <string name="component_server_address_host">Host</string>
     <plurals name="relative_time_hours_ago">
-        <item quantity="one">%1$d sag öň</item>
-        <item quantity="other">%1$d sag öň</item>
+        <item quantity="one">%1$d sagat öň</item>
+        <item quantity="other">%1$d sagat öň</item>
     </plurals>
     <plurals name="component_activity_card_step_count">
         <item quantity="one">%1$d ädim</item>
@@ -1694,7 +1694,7 @@
     <string name="component_code_file_line_label">Setir %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">OpenCode Mobile pikir habary</string>
     <string name="component_hunk_navigation_previous">Öňki hunk</string>
-    <string name="session_list_section_week_of">Hepdesi %1$s – %2$s</string>
+    <string name="session_list_section_week_of">%1$s – %2$s hepdesi</string>
     <string name="dictation_model_download_failed_title">%1$s %2$s modelini ýükläp bilmedi</string>
     <string name="component_activity_status_pending">garaşylýar</string>
     <string name="component_composer_revert_tag">Yzyna gaýtar</string>
@@ -1703,7 +1703,7 @@
         <item quantity="one">%1$d öňki ädim</item>
         <item quantity="other">%1$d öňki ädim</item>
     </plurals>
-    <string name="component_outgoing_message_long_press_hint">Habar hereketlerini görkezmek üçin uzak bas</string>
+    <string name="component_outgoing_message_long_press_hint">Habar hereketlerini görkezmek üçin uzak basyň</string>
     <string name="component_composer_hide_permission">Rugsat haýyşyny gizle</string>
     <string name="dictation_downloading_model_progress">Söz tanamak modeli ýüklenýär, %1$s</string>
     <string name="component_branch_pill_copy_branch_name">Şahanyň adyny göçür</string>
@@ -1711,13 +1711,13 @@
     <string name="component_truncation_row_full_message_caption">%2$s belgiden %1$s görkezilýär</string>
     <string name="component_truncation_row_full_message_hint">Doly habary açýar</string>
     <string name="component_outgoing_message_label">Iberilýän habar</string>
-    <string name="session_list_status_stopped">Saklandy</string>
+    <string name="session_list_status_stopped">Duruzyldy</string>
     <string name="component_attachment_cancel_upload">%1$s ýüklemesini elatyr</string>
-    <string name="dictation_cancel_description">Diktowkany elatyr</string>
-    <string name="component_composer_shell_mode">Shell tertibi</string>
+    <string name="dictation_cancel_description">Sesli ýazmagy elatyr</string>
+    <string name="component_composer_shell_mode">Shell rejimi</string>
     <string name="component_skeleton_illustration_connect">Birikdiriň</string>
     <string name="component_composer_not_selected">Saýlanmadyk</string>
-    <string name="component_composer_shell_mode_description">Shell tertibi. Shell tertibinden çyk</string>
+    <string name="component_composer_shell_mode_description">Shell rejimi. Shell rejiminden çyk</string>
     <string name="component_branch_pill_based_on">%1$s esasynda</string>
     <string name="component_composer_add_attachment">Goşundy goş</string>
     <string name="dictation_microphone_off">Mikrofon girişi öçük</string>
@@ -1729,8 +1729,8 @@
     <string name="component_close">Ýap</string>
     <string name="relative_time_now">häzir</string>
     <string name="component_composer_previous_permission">Öňki rugsat haýyşy</string>
-    <string name="component_composer_dictate">Diktowka</string>
-    <string name="component_composer_side_question_mode_description">Gapdal sorag tertibi. Gapdal sorag tertibinden çyk</string>
+    <string name="component_composer_dictate">Sesli ýazmak</string>
+    <string name="component_composer_side_question_mode_description">Gapdal sorag rejimi. Gapdal sorag rejiminden çyk</string>
     <string name="component_composer_abort">Işjeň işi bes et</string>
     <string name="component_server_address_scheme_button">Protokol %1$s</string>
     <string name="component_composer_open_subagent_session">Subagent sessiýasyny aç</string>
@@ -1746,13 +1746,13 @@
     <string name="component_composer_send_steer">Ugrukdyryp iber</string>
     <string name="component_composer_next_permission">Indiki rugsat haýyşy</string>
     <string name="session_list_dock_project_filter">Taslama süzgüji</string>
-    <string name="component_split_pane_resize_hint">Gapdal paneli gizlemek üçin iki gezek ýokla</string>
+    <string name="component_split_pane_resize_hint">Gapdal paneli gizlemek üçin iki gezek basyň</string>
     <string name="component_branch_pill_shows_details_hint">Şahanyň jikme-jikliklerini görkezýär</string>
     <string name="component_composer_permission_requested">Rugsat soraldy</string>
     <string name="component_thinking">Pikir ýöredýär</string>
     <string name="dictation_model_downloading_title">%1$s %2$s modelini ýükleýär</string>
     <string name="component_hunk_navigation_expand_context">Kontekst aç</string>
-    <string name="dictation_listening_placeholder">Diňleýär…</string>
+    <string name="dictation_listening_placeholder">Diňlenýär…</string>
     <string name="component_skeleton_illustration_unofficial">Resmi däl</string>
     <string name="dictation_status_ready">Goşmaga taýýar</string>
     <string name="dictation_starting">Başlanýar…</string>
@@ -1779,8 +1779,8 @@
     <string name="worktrees_main_checkout">Esasy checkout</string>
     <string name="worktrees_cannot_remove">Aýryp bolmaýar</string>
     <plurals name="worktrees_changed">
-        <item quantity="one">%1$d üýtgedi</item>
-        <item quantity="other">%1$d üýtgedi</item>
+        <item quantity="one">%1$d üýtgedilen</item>
+        <item quantity="other">%1$d üýtgedilen</item>
     </plurals>
     <string name="worktrees_none_in_project">Worktree ýok. Täze sessiýa → Taslama ýa-da worktree saýla arkaly ýasap bolýar.</string>
     <string name="worktrees_footer">Worktree aýyrmak onuň serwerdäki bukjasyny pozýar. Sessiýalary galýar, ýöne ol ýerde ýene işläp bilmeýär.</string>
@@ -1792,11 +1792,11 @@
     <string name="worktrees_remove_title">“%1$s” worktree aýyrylsynmy?</string>
     <string name="worktrees_remove_message">Serwerdäki %1$s pozulýar.</string>
     <plurals name="worktrees_remove_changes">
-        <item quantity="one">%1$d commit edilmedik üýtgeşme ýitirler.</item>
-        <item quantity="other">%1$d commit edilmedik üýtgeşme ýitirler.</item>
+        <item quantity="one">%1$d commit edilmedik üýtgeşme ýitiriler.</item>
+        <item quantity="other">%1$d commit edilmedik üýtgeşme ýitiriler.</item>
     </plurals>
-    <string name="worktrees_remove_changes_unknown">Commit edilmedik üýtgeşmeler ýitirler.</string>
-    <string name="worktrees_remove_changes_unchecked">Commit edilmedik üýtgeşmeler barlanmady. Bar bolsa, ýitirler.</string>
+    <string name="worktrees_remove_changes_unknown">Commit edilmedik üýtgeşmeler ýitiriler.</string>
+    <string name="worktrees_remove_changes_unchecked">Commit edilmedik üýtgeşmeler barlanmady. Bar bolsa, ýitiriler.</string>
     <string name="worktrees_remove_sessions_stay">Bu worktree-ni ulanýan sessiýalar Baş sahypada galýar, ýöne bu ýerde ýene işläp bilmeýär.</string>
     <string name="worktrees_remove_confirm_anyway">Ýene-de aýyr</string>
     <string name="worktrees_blocked_title">“%1$s” entek aýryp bolmaýar</string>
@@ -1811,13 +1811,13 @@
     <string name="session_list_worktree_removed">worktree aýryldy</string>
     <string name="whats_new_title">Täzelikler</string>
     <string name="whats_new_version">Wersiýa %1$s</string>
-    <string name="whats_new_skipped_one">Bir täzelenmäni geçirdiň, şonuň üçin ol aşakda goşuldy.</string>
-    <string name="whats_new_skipped_many">%1$d täzelenmäni geçirdiň, şonuň üçin olar aşakda goşuldy.</string>
+    <string name="whats_new_skipped_one">Bir täzelenmäni geçirdiňiz, şonuň üçin ol aşakda goşuldy.</string>
+    <string name="whats_new_skipped_many">%1$d täzelenmäni geçirdiňiz, şonuň üçin olar aşakda goşuldy.</string>
     <string name="whats_new_in_version">%1$s wersiýada</string>
-    <string name="whats_new_also_since">Soňky täzelenmäňden bäri ýene täzelikler · %1$s</string>
+    <string name="whats_new_also_since">Soňky täzelenmäňizden bäri ýene täzelikler · %1$s</string>
     <string name="whats_new_fixes">Düzedişler</string>
     <string name="whats_new_done">Tamam</string>
-    <string name="whats_new_find_again">Muny ýene Sazlamalar → Täzelikler bölüminde tap</string>
+    <string name="whats_new_find_again">Muny ýene Sazlamalar → Täzelikler bölüminde tapyp bilersiňiz</string>
     <string name="whats_new_installed">Guruldy</string>
     <string name="whats_new_settings_subtitle">Her wersiýanyň çykaryş bellikleri</string>
 </resources>

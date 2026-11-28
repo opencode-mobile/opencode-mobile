@@ -27,7 +27,7 @@
     <string name="connection_setup_remove_server">Hiq serverin</string>
     <string name="connection_setup_remove_dialog_title_unnamed">Të hiqet “serveri”?</string>
     <string name="connection_setup_instructions_run">Në kompjuterin tënd, ekzekuto këtë, pastaj skano QR-në.</string>
-    <string name="connection_setup_instructions_first_run">Herën e parë zgjat rreth një minutë. Kërkon OpenCode 2.0.25 ose më të ri. Shërbimi niset nëse nuk është duke punuar.</string>
+    <string name="connection_setup_instructions_first_run">Herën e parë zgjat rreth një minutë. Kërkon OpenCode 2.0.25 ose më të ri. Shërbimi niset nëse nuk po funksionon tashmë.</string>
     <string name="connection_setup_instructions_same_wifi_title">Me të njëjtin Wi-Fi</string>
     <string name="connection_setup_instructions_same_wifi_body">Komanda pair e thjeshtë shfaq QR vetëm kur serveri arrihet përtej localhost.</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
@@ -51,11 +51,11 @@
     <string name="connection_setup_address_using_now">Në përdorim</string>
     <string name="connection_setup_address_saved">E ruajtur</string>
     <string name="connection_setup_pair_again_unreachable">Adresa e ruajtur nuk arrihet. Çifto sërish.</string>
-    <string name="connection_setup_pair_again_unauthorized">Ky server e refuzoi hyrjen e ruajtur. Çifto sërish. Një fjalëkalim i ri nxjerr nga llogaria çdo pajisje.</string>
+    <string name="connection_setup_pair_again_unauthorized">Ky server e refuzoi hyrjen e ruajtur. Çifto sërish. Një fjalëkalim i ri i shkëput të gjitha pajisjet.</string>
     <string name="connection_cleartext_title">Lidhja nuk është e enkriptuar</string>
-    <string name="connection_cleartext_message_one_host">%1$s përdor http të thjeshtë jashtë rrjetit tënd lokal ose Tailscale. Fjalëkalimi i serverit dhe gjithçka në sesionet e tua do të udhëtonin pa enkriptim. Preferoni https, një VPN ose një tunel.</string>
-    <string name="connection_cleartext_message_hosts">%1$s përdorin http të thjeshtë jashtë rrjetit tënd lokal ose Tailscale. Fjalëkalimi i serverit dhe gjithçka në sesionet e tua do të udhëtonin pa enkriptim. Preferoni https, një VPN ose një tunel.</string>
-    <string name="connection_cleartext_message_this_address">Kjo adresë përdor http të thjeshtë jashtë rrjetit tënd lokal ose Tailscale. Fjalëkalimi i serverit dhe gjithçka në sesionet e tua do të udhëtonin pa enkriptim. Preferoni https, një VPN ose një tunel.</string>
+    <string name="connection_cleartext_message_one_host">%1$s përdor http të thjeshtë jashtë rrjetit tënd lokal ose Tailscale. Fjalëkalimi i serverit dhe gjithçka në sesionet e tua do të dërgoheshin pa enkriptim. Parapëlqe https, një VPN ose një tunel.</string>
+    <string name="connection_cleartext_message_hosts">%1$s përdorin http të thjeshtë jashtë rrjetit tënd lokal ose Tailscale. Fjalëkalimi i serverit dhe gjithçka në sesionet e tua do të dërgoheshin pa enkriptim. Parapëlqe https, një VPN ose një tunel.</string>
+    <string name="connection_cleartext_message_this_address">Kjo adresë përdor http të thjeshtë jashtë rrjetit tënd lokal ose Tailscale. Fjalëkalimi i serverit dhe gjithçka në sesionet e tua do të dërgoheshin pa enkriptim. Parapëlqe https, një VPN ose një tunel.</string>
     <string name="connection_cleartext_connect_anyway">Lidhu gjithsesi</string>
     <string name="connection_error_invalid_qr">Ky nuk është QR çiftimi i OpenCode 2</string>
     <string name="connection_error_localhost_qr">Ai QR ka vetëm një adresë localhost</string>
@@ -68,8 +68,8 @@
     <string name="connection_error_qr_scan_failed">QR nuk u lidh. API-ja e çiftimit të OpenCode 2 ende po ndryshon, kështu që skanimi mund të dështojë ndërsa aplikacioni funksionon. Fut hostin dhe lidhu. Fjalëkalimi është opsional. Funksionon edhe një kod çiftimi.</string>
     <string name="connection_error_unreachable">Serveri nuk arrihet</string>
     <string name="server_error_pairing_expired">Çiftimi skadoi, çifto sërish</string>
-    <string name="server_error_not_found">Dosja ose skedari nuk u gjet</string>
-    <string name="server_error_not_found_path">Dosja ose skedari nuk u gjet · %1$s</string>
+    <string name="server_error_not_found">Dosja ose skedari nuk u gjetën</string>
+    <string name="server_error_not_found_path">Dosja ose skedari nuk u gjetën · %1$s</string>
     <string name="server_error_session_busy">Sesioni është i zënë</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Vërtetimi dështoi</string>
@@ -101,14 +101,14 @@
     <string name="onboarding_features_live_title">Drejtpërdrejt kur është hapur</string>
     <string name="onboarding_features_live_detail">Rrjedhë ngjarjesh në plan të parë; rifresko pas rilidhjes</string>
     <string name="onboarding_setup_title">Konfiguro opencode serve</string>
-    <string name="onboarding_setup_intro">Aplikacioni flet me një server opencode që e ekzekuton ti. Rruga e shkurtër më poshtë — detajet e plota në dokumentacionin zyrtar.</string>
+    <string name="onboarding_setup_intro">Aplikacioni komunikon me një server opencode që e ekzekuton ti. Rruga e shkurtër më poshtë — detajet e plota në dokumentacionin zyrtar.</string>
     <string name="onboarding_setup_step_number">Hapi %1$d</string>
     <string name="onboarding_setup_step1_title">Nise serverin në kompjuterin tënd</string>
-    <string name="onboarding_setup_step1_body">Në projektin tënd, ekzekuto serverin opencode (headless). Mbaje të hapur ndërsa përdor telefonin.</string>
+    <string name="onboarding_setup_step1_body">Në projektin tënd, ekzekuto serverin opencode (headless). Mbaje në punë ndërsa përdor telefonin.</string>
     <string name="onboarding_setup_step2_title">Kërko fjalëkalim</string>
     <string name="onboarding_setup_step2_body">Cakto OPENCODE_SERVER_PASSWORD. Përdoruesi është opencode si parazgjedhje, përveç nëse cakton OPENCODE_SERVER_USERNAME.</string>
     <string name="onboarding_setup_step3_title">Arrije nga telefoni</string>
-    <string name="onboarding_setup_step3_body">E rekomanduar: Tailscale — instalo Tailscale në kompjuter dhe në telefon, pastaj përdor IP-në Tailscale ose emrin MagicDNS të kompjuterit si URL të serverit.\n\nShkon mirë edhe: i njëjti LAN, VPN, HTTPS ose një tunel tjetër që e menaxhon ti. Aplikacioni nuk krijon relay për ty.</string>
+    <string name="onboarding_setup_step3_body">E rekomanduar: Tailscale — instalo Tailscale në kompjuter dhe në telefon, pastaj përdor IP-në Tailscale ose emrin MagicDNS të kompjuterit si URL të serverit.\n\nFunksionon edhe: i njëjti LAN, VPN, HTTPS ose një tunel tjetër që e menaxhon ti. Aplikacioni nuk krijon relay për ty.</string>
     <string name="onboarding_setup_step4_title">Lidhu në aplikacion</string>
     <string name="onboarding_setup_step4_body">Fut URL-në bazë + fjalëkalimin. Aplikacioni kontrollon GET /global/health, pastaj ruan një lidhje serveri në këtë pajisje.</string>
     <string name="onboarding_setup_open_docs">Hap dokumentacionin e serverit</string>
@@ -130,7 +130,7 @@
     <string name="server_health_range_hour">1 orë</string>
     <string name="server_health_range_day">24 orë</string>
     <string name="server_health_range_week">7 ditë</string>
-    <string name="server_health_uptime">Kohëzgjatja aktive</string>
+    <string name="server_health_uptime">Disponueshmëria</string>
     <string name="server_health_uptime_detail">nga %1$s e matur</string>
     <string name="server_health_reconnects">Rilidhjet</string>
     <string name="server_health_reconnects_detail">kthehet brenda %1$s mesatarisht</string>
@@ -165,7 +165,7 @@
     <string name="server_health_error_log_show_less">Shfaq më pak</string>
     <string name="server_health_error_log_capped">%1$d të fundit nga %2$d</string>
     <string name="server_health_category_network">Rrjeti</string>
-    <string name="server_health_category_timeout">Skadim kohe</string>
+    <string name="server_health_category_timeout">Skadim i kohës</string>
     <string name="server_health_category_heartbeat">Ndalim i heartbeat</string>
     <string name="server_health_category_server">Gabim serveri</string>
     <string name="server_health_category_auth">Vërtetimi</string>
@@ -192,8 +192,8 @@
     <string name="server_health_status_auth_failed">Vërtetimi dështoi</string>
     <string name="server_health_status_stopped">Nuk po matet</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Aktiv %1$s · %2$d rilidhje sot</item>
-        <item quantity="other">Aktiv %1$s · %2$d rilidhje sot</item>
+        <item quantity="one">Disponueshmëria %1$s · %2$d rilidhje sot</item>
+        <item quantity="other">Disponueshmëria %1$s · %2$d rilidhje sot</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Po matet…</string>
     <string name="server_health_details">Detaje</string>
@@ -205,7 +205,7 @@
     <string name="servers_add">Shto server</string>
     <string name="servers_edit_profile">Ndrysho %1$s</string>
     <string name="servers_remove_dialog_title_named">Të hiqet “%1$s”?</string>
-    <string name="servers_remove_dialog_message">Kjo pajisje e harron lidhjen e serverit. Sesionet mbeten në atë server. Nëse është serveri aktiv, do të zgjedhësh një tjetër — ose do të shkosh te Lidhu nëse nuk mbetet asnjë.</string>
+    <string name="servers_remove_dialog_message">Kjo pajisje e harron lidhjen e serverit. Sesionet mbeten në atë server. Nëse është serveri aktiv, do të zgjedhësh një tjetër — ose do të shkosh te ekrani Lidhu nëse nuk mbetet asnjë.</string>
     <string name="common_retry">Provo sërish</string>
     <string name="common_save">Ruaj</string>
     <string name="common_delete">Fshi</string>
@@ -223,7 +223,7 @@
     <string name="home_more_options">Më shumë opsione</string>
     <string name="home_filter_sheet_title">Filtro sipas projektit</string>
     <string name="home_empty_title">Ende pa projekte</string>
-    <string name="home_empty_message">Trokit ikonën Shto projekt më poshtë për të zgjedhur një dosje në serverin tënd.</string>
+    <string name="home_empty_message">Prek ikonën Shto projekt më poshtë për të zgjedhur një dosje në serverin tënd.</string>
     <string name="home_no_session_selected_title">Nuk është zgjedhur sesion</string>
     <string name="home_no_session_selected_message">Zgjidh një sesion nga lista</string>
     <string name="home_probe_failed_title">Lidhja nuk u realizua</string>
@@ -235,7 +235,7 @@
     <string name="home_remove_project_message">Të hiqet “%1$s” nga ballina? Sesionet e tij mbeten në server.</string>
     <string name="home_snackbar_removed">“%1$s” u hoq nga ballina</string>
     <string name="home_snackbar_already_on_home">“%1$s” është tashmë në ballinë</string>
-    <string name="home_snackbar_joined_project">I njëjti repo si %1$s. Shfaqet atje si worktree.</string>
+    <string name="home_snackbar_joined_project">Repo e njëjtë me %1$s. Shfaqet atje si worktree.</string>
     <string name="home_all">Të gjitha</string>
     <string name="home_all_projects">Të gjitha projektet</string>
     <plurals name="home_project_count">
@@ -296,7 +296,7 @@
     <string name="archived_sessions_empty_title">Nuk ka sesione të arkivuara</string>
     <string name="archived_sessions_empty_message">Sesionet që arkivon në %1$s shfaqen këtu.</string>
     <string name="archived_sessions_show_all_projects">Shfaq të gjitha projektet</string>
-    <string name="archived_sessions_footer">Trokit një sesion për më shumë. Çarkivimi e kthen në ballinë.</string>
+    <string name="archived_sessions_footer">Prek një sesion për më shumë. Çarkivimi e kthen në ballinë.</string>
     <string name="archived_sessions_load_failed">Sesionet e arkivuara nuk u ngarkuan.</string>
     <string name="archived_sessions_unarchive_failed">Sesioni nuk u çarkivua.</string>
     <string name="session_chat_archived_banner">Arkivuar %1$s</string>
@@ -307,7 +307,7 @@
     <string name="add_project_checking_folder">Po kontrollohet dosja</string>
     <string name="add_project_loading_projects">Po ngarkohen projektet</string>
     <string name="add_project_loading_folders">Po ngarkohen dosjet</string>
-    <string name="add_project_list_error_title">Kjo dosje nuk u listua</string>
+    <string name="add_project_list_error_title">Kjo dosje nuk mund të listohet</string>
     <string name="add_project_list_error_message">Kontrollo shtegun dhe provo sërish.</string>
     <string name="add_project_no_other_projects">Nuk ka projekte të tjera në këtë server.</string>
     <string name="add_project_folder_path">Shtegu i dosjes</string>
@@ -315,7 +315,7 @@
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Zgjidh një dosje</string>
     <string name="add_project_already_on_home">Tashmë në ballinë</string>
-    <string name="add_project_add_home_folder">Shto dosjen kryesore</string>
+    <string name="add_project_add_home_folder">Shto dosjen home</string>
     <string name="add_project_add_this_folder">Shto këtë dosje</string>
     <string name="add_project_path_not_found">Shtegu nuk u gjet</string>
     <string name="add_project_no_folder_named">Nuk ka dosje me emrin “%1$s”</string>
@@ -329,17 +329,17 @@
     <string name="add_project_no_subfolders">Pa nëndosje</string>
     <string name="add_project_nothing_starts_with">Asgjë në %1$s nuk fillon me “%2$s”</string>
     <plurals name="add_project_truncation_hint">
-        <item quantity="one">Po shfaqet dosja e parë %1$d. Shkruaj më shumë nga emri për ta ngushtuar listën.</item>
+        <item quantity="one">Po shfaqet %1$d dosja e parë. Shkruaj më shumë nga emri për ta ngushtuar listën.</item>
         <item quantity="other">Po shfaqen %1$d dosjet e para. Shkruaj më shumë nga emri për ta ngushtuar listën.</item>
     </plurals>
     <string name="add_project_in_folder">Në %1$s</string>
-    <string name="add_project_root_home">Kryesorja</string>
-    <string name="add_project_error_add_failed">Ky direktori nuk u shtua</string>
+    <string name="add_project_root_home">Home</string>
+    <string name="add_project_error_add_failed">Kjo dosje nuk u shtua</string>
     <string name="worktree_new_row">Worktree i ri…</string>
     <string name="worktree_run_in_subtitle">Krijo një checkout dhe nise aty</string>
     <string name="worktree_move_subtitle">Krijo një checkout dhe kalo aty</string>
     <string name="worktree_needs_v2">Kërkon një server opencode v2</string>
-    <string name="worktree_turn_on">Aktivizo Worktree te Cilësimet</string>
+    <string name="worktree_turn_on">Aktivizo worktree-t te Cilësimet</string>
     <string name="worktree_not_git">Kërkon një repo git</string>
     <string name="worktree_no_commit">Kërkon një repo git me të paktën një commit</string>
     <string name="worktree_unsupported">Ky server nuk mund të krijojë worktree</string>
@@ -347,12 +347,12 @@
     <string name="worktree_name">Emri</string>
     <string name="worktree_branch">Dega</string>
     <string name="worktree_base">Krijo nga</string>
-    <string name="worktree_v1_branch_note">opencode v1 e emërton sipas worktree</string>
+    <string name="worktree_v1_branch_note">opencode v1 e emërton sipas worktree-t</string>
     <string name="worktree_v2_no_branch">Pa degë (detached)</string>
     <string name="worktree_v2_branch_note">checkout-et e opencode v2 nuk kanë degë</string>
     <string name="worktree_current_checkout">Checkout-i aktual</string>
     <string name="worktree_v1_base_note">opencode v1 përdor checkout-in aktual</string>
-    <string name="worktree_base_pick_hint">Trokit për të zgjedhur një degë</string>
+    <string name="worktree_base_pick_hint">Prek për të zgjedhur një degë</string>
     <string name="worktree_current_branch">%1$s (aktuale)</string>
     <string name="worktree_base_loading">Po ngarkohen degët…</string>
     <string name="worktree_base_failed">Degët nuk u ngarkuan</string>
@@ -383,9 +383,9 @@
     <string name="files_empty_project">Ky projekt nuk ka skedarë për t\'u shfaqur.</string>
     <string name="files_ignored">e shpërfillur</string>
     <string name="files_finding">Po kërkohen skedarët</string>
-    <string name="files_find_error">Skedarët nuk u kërkuan</string>
+    <string name="files_find_error">Kërkimi i skedarëve dështoi</string>
     <string name="files_find_no_match">Asnjë skedar nuk përputhet me “%1$s”</string>
-    <string name="files_find_no_match_detail">Kërkimi në server kalon dosjet e shpërfillura.</string>
+    <string name="files_find_no_match_detail">Kërkimi në server anashkalon dosjet e shpërfillura.</string>
     <string name="files_error_check_server_connection">Kontrollo lidhjen me serverin dhe provo sërish.</string>
     <string name="files_error_server_status">Serveri u përgjigj me %1$d.</string>
     <string name="files_no_file_title">Hap një skedar nga pema</string>
@@ -490,9 +490,9 @@
     <string name="session_chat_commands_fork_label">Degëzo</string>
     <string name="session_chat_commands_fork_description">Degëzo këtë sesion</string>
     <string name="session_chat_commands_undo_label">Zhbër</string>
-    <string name="session_chat_commands_undo_description">Zhbën mesazhin e fundit</string>
+    <string name="session_chat_commands_undo_description">Zhbëj mesazhin e fundit</string>
     <string name="session_chat_commands_redo_label">Ribëje</string>
-    <string name="session_chat_commands_redo_description">Ribën mesazhin e zhbërë</string>
+    <string name="session_chat_commands_redo_description">Ribëj mesazhin e zhbërë</string>
     <string name="session_chat_commands_compact_label">Kompakt</string>
     <string name="session_chat_commands_compact_description">Ngjesh kontekstin e sesionit</string>
     <string name="session_chat_commands_terminal_label">Terminali</string>
@@ -517,8 +517,8 @@
     <string name="session_chat_variant_default">Parazgjedhja</string>
     <string name="session_chat_model_chip_placeholder">Modeli</string>
     <string name="session_chat_model_chip_loading">Po ngarkohet modeli…</string>
-    <string name="session_chat_model_notice_load_failed">Modelet nuk u ngarkuan. Trokit Modeli për të provuar sërish.</string>
-    <string name="session_chat_model_notice_none_usable">Nuk ka modele të përdorshme. Trokit Modeli për të provuar sërish.</string>
+    <string name="session_chat_model_notice_load_failed">Modelet nuk u ngarkuan. Prek Modeli për të provuar sërish.</string>
+    <string name="session_chat_model_notice_none_usable">Nuk ka modele të përdorshme. Prek Modeli për të provuar sërish.</string>
     <string name="session_chat_model_notice_variant_unavailable">Varianti i kujtuar nuk është i disponueshëm. Po përdoret Parazgjedhja.</string>
     <string name="session_chat_model_notice_model_unavailable">Modeli i zgjedhur nuk është i disponueshëm. Po përdoret %1$s.</string>
     <string name="session_chat_side_question_unsupported">/btw kërkon një server opencode v2 që u përgjigjet pyetjeve anësore. Ky server nuk mund të përgjigjet pa i shtuar diçka bisedës.</string>
@@ -534,8 +534,8 @@
     <string name="attachment_error_model_some">Ky model nuk mbështet disa nga bashkëngjitjet e zgjedhura.</string>
     <string name="attachment_error_unreadable">Bashkëngjitja nuk u lexua.</string>
     <string name="attachment_error_upload_failed">Ngarkimi dështoi</string>
-    <string name="attachment_drop_reject_one">Kjo nuk bashkëngjitet</string>
-    <string name="attachment_drop_reject_many">Këto nuk bashkëngjiten</string>
+    <string name="attachment_drop_reject_one">Kjo nuk mund të bashkëngjitet</string>
+    <string name="attachment_drop_reject_many">Këto nuk mund të bashkëngjiten</string>
     <plurals name="attachment_drop_attach_images_count">
         <item quantity="one">Lësho për të bashkëngjitur %1$d imazh</item>
         <item quantity="other">Lësho për të bashkëngjitur %1$d imazhe</item>
@@ -559,8 +559,8 @@
     <string name="session_chat_activity_request_failed">Kërkesa dështoi</string>
     <string name="session_chat_activity_btw_failed">/btw dështoi · Provo sërish</string>
     <string name="session_chat_activity_btw_failed_count">/btw dështoi ×%1$d · Provo sërish</string>
-    <string name="session_chat_activity_btw_ready">Përgjigjja /btw është gati</string>
-    <string name="session_chat_activity_btw_ready_count">Përgjigjja /btw është gati ×%1$d</string>
+    <string name="session_chat_activity_btw_ready">Përgjigja /btw është gati</string>
+    <string name="session_chat_activity_btw_ready_count">Përgjigja /btw është gati ×%1$d</string>
     <plurals name="session_chat_activity_queued">
         <item quantity="one">%1$d në radhë</item>
         <item quantity="other">%1$d në radhë</item>
@@ -579,10 +579,10 @@
         <item quantity="one">%1$d përgjigje pyetjeje anësore është gati</item>
         <item quantity="other">%1$d përgjigje pyetjesh anësore janë gati</item>
     </plurals>
-    <string name="session_chat_activity_side_question_running">Pyetja anësore po punon</string>
+    <string name="session_chat_activity_side_question_running">Pyetja anësore po ekzekutohet</string>
     <plurals name="session_chat_activity_side_questions_running">
-        <item quantity="one">%1$d pyetje anësore po punon</item>
-        <item quantity="other">%1$d pyetje anësore po punojnë</item>
+        <item quantity="one">%1$d pyetje anësore po ekzekutohet</item>
+        <item quantity="other">%1$d pyetje anësore po ekzekutohen</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
     <string name="session_chat_activity_action_open_request">Hap kërkesën</string>
@@ -623,7 +623,7 @@
     <string name="new_session_starts_from">Fillon nga</string>
     <string name="new_session_local">Lokal</string>
     <string name="new_session_new_worktree">Worktree i ri</string>
-    <string name="new_session_not_git">Asnjë · nuk është depo Git</string>
+    <string name="new_session_not_git">Asnjë · nuk është repo Git</string>
     <string name="new_session_created_on_send">Krijohet kur dërgon</string>
     <string name="new_session_search_projects">Kërko projekte</string>
     <string name="new_session_no_project_matches">Asnjë projekt i përputhshëm</string>
@@ -640,7 +640,7 @@
     <string name="timeline_state_empty">Ende pa mesazhe. Dërgo një kërkesë për të nisur.</string>
     <string name="timeline_state_refreshing">Po rifreskohen mesazhet</string>
     <string name="timeline_message_assistant">Mesazh i asistentit</string>
-    <string name="timeline_message_actions_hint_long_press">Shtype gjatë për të shfaqur veprimet e mesazhit</string>
+    <string name="timeline_message_actions_hint_long_press">Shtyp gjatë për të shfaqur veprimet e mesazhit</string>
     <string name="timeline_message_actions_hint">Shfaq veprimet e mesazhit</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
     <string name="timeline_failure_copy">Kopjo</string>
@@ -666,15 +666,15 @@
     <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s në ekzekutim</string>
     <plurals name="timeline_tool_result_files_modified">
         <item quantity="one">%1$d i modifikuar</item>
-        <item quantity="other">%1$d të modifikuara</item>
+        <item quantity="other">%1$d të modifikuar</item>
     </plurals>
     <plurals name="timeline_tool_result_files_added">
         <item quantity="one">%1$d i shtuar</item>
-        <item quantity="other">%1$d të shtuara</item>
+        <item quantity="other">%1$d të shtuar</item>
     </plurals>
     <plurals name="timeline_tool_result_files_deleted">
         <item quantity="one">%1$d i fshirë</item>
-        <item quantity="other">%1$d të fshira</item>
+        <item quantity="other">%1$d të fshirë</item>
     </plurals>
     <string name="tool_title_read">Lexo</string>
     <string name="tool_title_grep">Grep</string>
@@ -788,7 +788,7 @@
     <string name="tool_placeholder_preparing_read">Po përgatitet leximi…</string>
     <string name="tool_placeholder_preparing_edit">Po përgatitet ndryshimi…</string>
     <string name="tool_placeholder_preparing_write">Po përgatitet shkrimi…</string>
-    <string name="tool_subtitle_background">%1$s (në prapaskenë)</string>
+    <string name="tool_subtitle_background">%1$s (në sfond)</string>
     <string name="tool_subtitle_plan_ready">Gati për zbatim?</string>
     <string name="tool_unknown_title">Mjet i panjohur</string>
     <string name="tool_unknown_detail">Mjeti nuk është i disponueshëm</string>
@@ -872,12 +872,12 @@
     <string name="session_chat_compact_failure">Konteksti i sesionit nuk u kompaktua.</string>
     <string name="session_chat_revert_undo_failed">Mesazhi i fundit nuk u zhbë.</string>
     <string name="session_chat_revert_failed">Mesazhi nuk u kthye.</string>
-    <string name="session_chat_revert_redo_failed">Nuk u ribë.</string>
+    <string name="session_chat_revert_redo_failed">Ribërja nuk u krye.</string>
     <string name="session_chat_revert_cancel_failed">Kthimi nuk u anulua.</string>
     <string name="session_chat_revert_commit_failed">Kthimi nuk u konfirmua.</string>
-    <string name="session_chat_fork_rename_failed">Fork-u u krijua, por emri nuk u ndryshua.</string>
+    <string name="session_chat_fork_rename_failed">Degëzimi u krijua, por emri nuk u ndryshua.</string>
     <string name="session_chat_pending_prompt_update_failed">Kërkesa në pritje nuk u përditësua</string>
-    <string name="session_chat_shell_stop_failed">Shell nuk u ndal. Provo sërish.</string>
+    <string name="session_chat_shell_stop_failed">Shell-i nuk u ndal. Provo sërish.</string>
     <string name="session_chat_shell_status_running">Në ekzekutim</string>
     <string name="session_chat_shell_status_exited">Doli</string>
     <string name="session_chat_shell_status_timed_out">Koha mbaroi</string>
@@ -891,7 +891,7 @@
     <string name="session_chat_sheet_copy_output">Kopjo daljen</string>
     <string name="session_chat_sheet_message_actions_title">Mesazh</string>
     <string name="session_chat_sheet_message_actions_revert">Ktheje mesazhin</string>
-    <string name="session_chat_sheet_message_actions_fork">Bëj fork që këtu</string>
+    <string name="session_chat_sheet_message_actions_fork">Degëzo që këtu</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Kopjo bllokun e kodit</string>
     <string name="session_chat_sheet_message_actions_copy_message">Kopjo mesazhin</string>
     <string name="session_chat_sheet_message_actions_select_text">Zgjidh tekstin</string>
@@ -914,7 +914,7 @@
     <string name="session_chat_sheet_mcp_status_connecting">Po lidhet</string>
     <string name="session_chat_sheet_mcp_status_disabled">I çaktivizuar</string>
     <string name="session_chat_sheet_mcp_status_failed">Dështoi</string>
-    <string name="session_chat_sheet_mcp_status_needs_sign_in">Kërkon hyrje</string>
+    <string name="session_chat_sheet_mcp_status_needs_sign_in">Kërkon identifikim</string>
     <string name="session_chat_sheet_pending_prompts_title">Më pas</string>
     <plurals name="session_chat_sheet_pending_prompts_waiting">
         <item quantity="one">%1$d në pritje</item>
@@ -954,11 +954,11 @@
         <item quantity="other">Pa progres për %1$d raunde; pauzohet pas %2$d</item>
     </plurals>
     <string name="session_chat_goal_waiting">Në pritje</string>
-    <string name="session_chat_goal_waiting_shell">Pret që një shell në prapaskenë të mbarojë: %1$s. Pauzohet nëse nuk ekzekutohet gjë për %2$d minuta.</string>
+    <string name="session_chat_goal_waiting_shell">Pret që një shell në sfond të mbarojë: %1$s. Pauzohet nëse nuk ekzekutohet gjë për %2$d minuta.</string>
     <string name="session_chat_goal_waiting_subagent">Pret që një nënagjent të mbarojë. Pauzohet nëse nuk ekzekutohet gjë për %1$d minuta.</string>
     <string name="session_chat_goal_waiting_on_you">Pret ty</string>
-    <string name="session_chat_goal_waiting_permission">Një kërkesë për leje është e hapur. Objektivi vazhdon sapo ta përgjigjesh.</string>
-    <string name="session_chat_goal_waiting_question">Një pyetje është e hapur. Objektivi vazhdon sapo ta përgjigjesh.</string>
+    <string name="session_chat_goal_waiting_permission">Një kërkesë për leje është e hapur. Objektivi vazhdon sapo t\'i përgjigjesh.</string>
+    <string name="session_chat_goal_waiting_question">Një pyetje është e hapur. Objektivi vazhdon sapo t\'i përgjigjesh.</string>
     <string name="session_chat_goal_evidence">Dëshmi</string>
     <string name="session_chat_goal_reconnecting">Po rilidhet. Po shfaqet objektivi i fundit i njohur.</string>
     <string name="session_chat_goal_pause">Pauzo</string>
@@ -979,7 +979,7 @@
     <string name="session_chat_goal_paused_round_limit">Objektivi u pauzua pas %1$d raundesh</string>
     <string name="session_chat_goal_paused_restart">Objektivi në pauzë: serveri u rinis</string>
     <string name="session_chat_goal_paused_reviewer">Objektivi në pauzë: rishikuesi nuk arriti të vendosë</string>
-    <string name="session_chat_goal_paused_quiet">Objektivi në pauzë: puna në prapaskenë heshti</string>
+    <string name="session_chat_goal_paused_quiet">Objektivi në pauzë: puna në sfond nuk po ecën</string>
     <string name="session_chat_goal_met">Objektivi u arrit</string>
     <string name="session_chat_goal_set">Objektivi u caktua</string>
     <string name="session_chat_goal_ended">përfundoi</string>
@@ -987,8 +987,8 @@
     <string name="session_chat_goal_bubble_label">Objektivi</string>
     <string name="session_chat_goal_objective_hint">Përshkruaj si duket «përfunduar»…</string>
     <string name="session_chat_goal_resume_placeholder">Përgjigju, pastaj vazhdo objektivin…</string>
-    <string name="session_chat_goal_count">%1$s / %2$s shkronja</string>
-    <string name="session_chat_goal_count_over">%1$s / %2$s shkronja · shkurtoje objektivin për ta dërguar</string>
+    <string name="session_chat_goal_count">%1$s / %2$s karaktere</string>
+    <string name="session_chat_goal_count_over">%1$s / %2$s karaktere · shkurtoje objektivin për ta dërguar</string>
     <string name="session_chat_goal_command_replaces">Zëvendëson objektivin aktual</string>
     <string name="session_chat_goal_command_replaces_paused">Zëvendëson objektivin aktual (në pauzë)</string>
     <string name="session_chat_goal_command_replaces_met">Zëvendëson objektivin aktual (arritur)</string>
@@ -1005,10 +1005,10 @@
     <string name="session_chat_failure_retry_after_seconds">Provo sërish pas %1$d s</string>
     <string name="session_chat_failure_retry_after_minutes">Provo sërish pas %1$d min</string>
     <string name="component_outgoing_message_pending_caption">Në pritje · dërgohet në hapin tjetër</string>
-    <string name="component_keyboard_hint_prompt">Shtyp Tab për të përgjigjur me tastierë</string>
+    <string name="component_keyboard_hint_prompt">Shtyp Tab për t\'u përgjigjur me tastierë</string>
     <string name="component_session_status_bar_context_usage">Përdorimi i kontekstit %1$d përqind</string>
     <string name="component_session_status_bar_context_usage_unavailable">Përdorimi i kontekstit nuk disponohet</string>
-    <string name="app_lock_prompt_title">Zhbllokoje OpenCode Mobile</string>
+    <string name="app_lock_prompt_title">Zhblloko OpenCode Mobile</string>
     <plurals name="component_branch_pill_files">
         <item quantity="one">%1$d skedar</item>
         <item quantity="other">%1$d skedarë</item>
@@ -1163,13 +1163,13 @@
     <string name="settings_send_feedback_subtitle">Raporto një gabim ose ndaj një ide</string>
     <string name="settings_hide_user_directory_title">Fshih dosjen e përdoruesit</string>
     <string name="settings_hide_user_directory_subtitle">Shfaq ~/Projects/… në vend të /Users/you/Projects/…</string>
-    <string name="settings_recent_window_title">Dritarja e së fundmes</string>
+    <string name="settings_recent_window_title">Dritarja e kohës së fundit</string>
     <string name="settings_recent_window_message">Sesionet qëndrojnë te Të fundit ndërsa janë në ekzekutim ose gati, ose kur përditësohen brenda kësaj dritareje.</string>
     <plurals name="settings_recent_window_hours">
         <item quantity="one">%1$d orë</item>
         <item quantity="other">%1$d orë</item>
     </plurals>
-    <string name="settings_collapse_tool_calls_title">Mbyll thirrjet e njëpasnjëshme të mjeteve</string>
+    <string name="settings_collapse_tool_calls_title">Palos thirrjet e njëpasnjëshme të mjeteve</string>
     <string name="settings_collapse_tool_calls_subtitle">Grupo mjetet radhazi në një kartë përmbledhëse</string>
     <string name="settings_timeline_style_title">Stili i rrjedhës</string>
     <string name="settings_timeline_style_standard_title">Standard</string>
@@ -1178,7 +1178,7 @@
     <string name="settings_timeline_style_step_rail_subtitle">Një rresht për çdo hap në një shinë, drejtpërdrejt ndërsa agjenti punon</string>
     <string name="settings_timeline_style_activity_card_title">Karta e aktivitetit</string>
     <string name="settings_timeline_style_activity_card_subtitle">Hapat në ekzekutim në një kartë të vetme që mbyllet në përmbledhje</string>
-    <string name="settings_follow_up_title">Dërgimi i vazhdimit</string>
+    <string name="settings_follow_up_title">Dërgimi i mesazhit vijues</string>
     <string name="settings_follow_up_steer">Drejto</string>
     <string name="settings_follow_up_queue">Në radhë</string>
     <string name="settings_follow_up_subtitle_steer">Drejto · vetëm serverat V2. V1 nuk e mbështet.</string>
@@ -1206,9 +1206,9 @@
     <string name="settings_privacy_policy_title">Politika e privatësisë</string>
     <string name="settings_privacy_policy_subtitle">Si i trajtojnë të dhënat aplikacionet</string>
     <string name="settings_analytics_title">Analitika dhe raportet e prishjeve</string>
-    <string name="settings_analytics_subtitle">Lejo ngjarje opsionale të përdorimit të produktit dhe raporte prishjesh. Joaktiv nuk dërgon asgjë te Firebase.</string>
+    <string name="settings_analytics_subtitle">Lejo ngjarje opsionale të përdorimit të produktit dhe raporte prishjesh. Kur është joaktiv, nuk dërgohet asgjë te Firebase.</string>
     <string name="settings_analytics_label">Analitika e produktit</string>
-    <string name="settings_diagnostic_logs_subtitle">Ndaj një dritare rrotulluese të regjistrit të ekzekutimit, të redaktuar</string>
+    <string name="settings_diagnostic_logs_subtitle">Ndaj një dritare të fundit të regjistrit të ekzekutimit, me të dhënat e ndjeshme të maskuara</string>
     <string name="settings_clear_all_data_title">Pastro të gjitha të dhënat</string>
     <string name="settings_clear_all_data_subtitle">Hiq lidhjen dhe cache-in</string>
     <string name="settings_clear_all_data_dialog_title">Të pastrohen të gjitha të dhënat?</string>
@@ -1225,13 +1225,13 @@
     <string name="diagnostics_loading">Po ngarkohen regjistrat e diagnostikimit</string>
     <string name="diagnostics_entries_title">Hyrjet</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d rresht i redaktuar në dritaren e ruajtur</item>
-        <item quantity="other">%1$d rreshta të redaktuar në dritaren e ruajtur</item>
+        <item quantity="one">%1$d rresht i maskuar në dritaren e ruajtur</item>
+        <item quantity="other">%1$d rreshta të maskuar në dritaren e ruajtur</item>
     </plurals>
     <string name="diagnostics_entries_empty">Ende pa hyrje në dritaren e ruajtur</string>
     <string name="diagnostics_kept_title">Të ruajtura</string>
     <plurals name="diagnostics_last_minutes">
-        <item quantity="one">%1$d minuta e fundit</item>
+        <item quantity="one">%1$d minutë e fundit</item>
         <item quantity="other">%1$d minutat e fundit</item>
     </plurals>
     <string name="diagnostics_export_title">Eksporto</string>
@@ -1242,7 +1242,7 @@
         <item quantity="other">maks. %1$d · asnjë nuk u hodh</item>
     </plurals>
     <string name="diagnostics_format_title">Formati</string>
-    <string name="diagnostics_format_value">JSONL · sekretet dhe trupat e mesazheve të redaktuara</string>
+    <string name="diagnostics_format_value">JSONL · sekretet dhe përmbajtja e mesazheve janë të maskuara</string>
     <string name="diagnostics_range_title">Diapazoni</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
     <string name="diagnostics_areas_title">Zonat</string>
@@ -1254,19 +1254,19 @@
     <string name="diagnostics_save_to_files">Ruaj te Skedarët</string>
     <string name="diagnostics_clear_dialog_title">Të pastrohen regjistrat e diagnostikimit?</string>
     <string name="diagnostics_clear_dialog_message">Kjo heq regjistrin e ruajtur të diagnostikimit.</string>
-    <string name="diagnostics_error_share">Regjistri i diagnostikimit nuk u përgatit për ndarje.</string>
+    <string name="diagnostics_error_share">Regjistri i diagnostikimit nuk u përgatit për t\'u ndarë.</string>
     <string name="diagnostics_error_save">Regjistri i diagnostikimit nuk u ruajt.</string>
     <string name="diagnostics_saved">Regjistri i diagnostikimit u ruajt.</string>
     <string name="appearance_title">Pamja e jashtme</string>
     <string name="appearance_theme_title">Tema</string>
     <string name="appearance_theme_subtitle">%1$s · %2$s</string>
     <string name="appearance_code_highlight_title">Theksimi i kodit</string>
-    <string name="appearance_theme_blurb_porcelain">Gati e bardhë / gati e zezë</string>
+    <string name="appearance_theme_blurb_porcelain">Pothuajse e bardhë / pothuajse e zezë</string>
     <string name="appearance_theme_blurb_linen">Letër e ngrohtë / espreso</string>
     <string name="appearance_theme_blurb_signal">E bardhë e pastër / e zezë e pastër</string>
     <string name="appearance_theme_blurb_hotline">Kornizë neutrale, rozë e fortë</string>
     <string name="appearance_theme_blurb_phosphor">Kornizë neutrale, e gjelbër CRT</string>
-    <string name="appearance_syntax_name_match">Përputh temën</string>
+    <string name="appearance_syntax_name_match">Përputhu me temën</string>
     <string name="appearance_syntax_blurb_match">Përdor tokenët e vetë temës së ndërfaqes</string>
     <string name="appearance_syntax_blurb_nocturne">Familja One Dark</string>
     <string name="appearance_syntax_blurb_citrus">Familja Solarized</string>
@@ -1284,8 +1284,8 @@
     <string name="appearance_mode_light">E çelët</string>
     <string name="appearance_mode_dark">E errët</string>
     <string name="appearance_mode_note_system">Ndjek cilësimin e çelët ose të errët të telefonit.</string>
-    <string name="appearance_mode_note_light">Gjithmonë e çelët, çfarëdo që ka telefoni.</string>
-    <string name="appearance_mode_note_dark">Gjithmonë e errët, çfarëdo që ka telefoni.</string>
+    <string name="appearance_mode_note_light">Gjithmonë e çelët, pavarësisht cilësimit të telefonit.</string>
+    <string name="appearance_mode_note_dark">Gjithmonë e errët, pavarësisht cilësimit të telefonit.</string>
     <string name="appearance_text_home_title">Teksti i listës kryesore</string>
     <string name="appearance_text_session_chat_title">Teksti i bisedës së sesionit</string>
     <string name="appearance_text_code_title">Teksti i kodit</string>
@@ -1314,12 +1314,12 @@
     <string name="feedback_title_report">Raporto një problem</string>
     <string name="feedback_title_hide_parts">Fshih pjesë</string>
     <string name="feedback_title_log_preview">Regjistri i diagnostikimit</string>
-    <string name="feedback_title_listening">Po dëgjon</string>
+    <string name="feedback_title_listening">Duke dëgjuar</string>
     <string name="feedback_kind_bug">Gabim</string>
     <string name="feedback_kind_idea">Ide</string>
     <string name="feedback_placeholder_bug">Çfarë ndodhi? Çfarë prisje?</string>
     <string name="feedback_placeholder_idea">Çfarë do ta bënte OpenCode më të mirë për ty?</string>
-    <string name="feedback_privacy_note">Shkon vetëm te ekipi i OpenCode Mobile. Nuk përfshin kurrë adresën, emrin e përdoruesit ose fjalëkalimin e serverit. Regjistrat redaktohen në këtë telefon.</string>
+    <string name="feedback_privacy_note">Shkon vetëm te ekipi i OpenCode Mobile. Nuk përfshin kurrë adresën, emrin e përdoruesit ose fjalëkalimin e serverit. Regjistrat maskohen në këtë telefon.</string>
     <string name="feedback_error_offline">Je jashtë linje. Raporti yt ruhet këtu — provo sërish kur të lidhesh.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">Sapo dërgove një raport. Provo sërish pas %1$d s.</item>
@@ -1361,13 +1361,13 @@
         <item quantity="other">Pamje ekrani, %1$d zona të fshehura</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">Minuta e fundit %1$d · gzip gjatë ngarkimit. Redaktuar në këtë telefon.</item>
-        <item quantity="other">%1$d minutat e fundit · gzip gjatë ngarkimit. Redaktuar në këtë telefon.</item>
+        <item quantity="one">%1$d minutë e fundit · gzip gjatë ngarkimit. Të maskuara në këtë telefon.</item>
+        <item quantity="other">%1$d minutat e fundit · gzip gjatë ngarkimit. Të maskuara në këtë telefon.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Po ngarkohet…</string>
     <string name="feedback_log_preview_empty_title">Pa rreshta regjistri</string>
     <plurals name="feedback_log_preview_empty_message">
-        <item quantity="one">Asgjë nuk u regjistrua në minutën e fundit %1$d.</item>
+        <item quantity="one">Asgjë nuk u regjistrua në %1$d minutën e fundit.</item>
         <item quantity="other">Asgjë nuk u regjistrua në %1$d minutat e fundit.</item>
     </plurals>
     <string name="feedback_sent_title">Faleminderit — raporti u dërgua</string>
@@ -1376,19 +1376,19 @@
     <string name="feedback_sent_reference">Ref. %1$s</string>
     <string name="feedback_share_chooser_title">Ndaj raportin</string>
     <string name="feedback_dictation_microphone_off">Qasja te mikrofoni është e çaktivizuar</string>
-    <string name="feedback_dictation_listening">Po dëgjon · %1$s</string>
-    <string name="feedback_dictation_listening_on_device">Po dëgjon · %1$s · në pajisje</string>
+    <string name="feedback_dictation_listening">Duke dëgjuar · %1$s</string>
+    <string name="feedback_dictation_listening_on_device">Duke dëgjuar · %1$s · në pajisje</string>
     <string name="session_search_title">Kërko sesione</string>
     <string name="session_search_clear">Pastro kërkimin</string>
-    <string name="session_search_placeholder">Kërko te %1$s</string>
-    <string name="session_search_hint">Përputh titujt e sesioneve te %1$s.</string>
+    <string name="session_search_placeholder">Kërko në %1$s</string>
+    <string name="session_search_hint">Përputhet me titujt e sesioneve në %1$s.</string>
     <string name="session_search_searching">Po kërkohet…</string>
     <plurals name="session_search_results">
         <item quantity="one">%1$d rezultat</item>
         <item quantity="other">%1$d rezultate</item>
     </plurals>
     <string name="session_search_no_match_title">Asnjë sesion nuk përputhet me «%1$s»</string>
-    <string name="session_search_no_match_message">te %1$s</string>
+    <string name="session_search_no_match_message">në %1$s</string>
     <string name="session_search_search_all_projects">Kërko në të gjitha projektet</string>
     <string name="session_search_include_archived">Përfshi të arkivuarat</string>
     <string name="session_search_include_archived_count">Përfshi të arkivuarat · %1$d</string>
@@ -1439,7 +1439,7 @@
     <string name="changes_loading_title">Po ngarkohen ndryshimet</string>
     <string name="changes_loading_message">Po merret diff-i…</string>
     <string name="changes_no_turn_title">Asnjë raund i përfunduar</string>
-    <string name="changes_no_turn_message">Dërgo një kërkesë, prit të përfundojë dhe provo përsëri.</string>
+    <string name="changes_no_turn_message">Dërgo një kërkesë, prit të përfundojë dhe provo sërish.</string>
     <string name="changes_error_title">Ndryshimet nuk u ngarkuan</string>
     <string name="changes_error_fallback">Ndryshimet nuk u ngarkuan.</string>
     <string name="changes_error_request_failed">Kërkesa dështoi</string>
@@ -1447,7 +1447,7 @@
     <string name="changes_refresh_failed">Rifreskimi dështoi: %1$s</string>
     <string name="changes_filter_hint">Filtro</string>
     <string name="changes_filter_accessibility_label">Filtro skedarët e ndryshuar</string>
-    <string name="changes_no_matches_title">Asnjë skedar përputhet</string>
+    <string name="changes_no_matches_title">Asnjë skedar nuk përputhet</string>
     <string name="changes_no_matches_message">Provo një shteg tjetër ose pastro filtrin.</string>
     <string name="changes_no_matches_clear_filter">Pastro filtrin</string>
     <string name="changes_select_file_title">Zgjidh një skedar</string>
@@ -1533,25 +1533,25 @@
     <string name="dictation_model_downloading_detail">Ky është një shkarkim i sistemit. Vazhdon edhe nëse e mbyll këtë kartë.</string>
     <string name="session_list_scope_load_loading">Po ngarkohen sesionet…</string>
     <string name="dictation_insert">Fut</string>
-    <string name="dictation_action_check_again">Kontrollo përsëri</string>
+    <string name="dictation_action_check_again">Kontrollo sërish</string>
     <string name="component_activity_sheet_steps">Hapat</string>
     <string name="component_list_item_show_actions">Shfaq veprimet</string>
     <string name="dictation_status_line">%1$s · %2$s</string>
     <string name="component_attachment_kind_image">Imazh</string>
     <string name="component_composer_hide_question">Fshih pyetjen</string>
     <string name="live_updates_status_connecting">po lidhet</string>
-    <string name="dictation_model_queued_detail">%1$s e vuri shkarkimin në radhë. Mund të presë për Wi-Fi, karikim ose hapësirë të lirë. Provo përsëri pas pak minutash.</string>
+    <string name="dictation_model_queued_detail">%1$s e vuri shkarkimin në radhë. Mund të presë për Wi-Fi, karikim ose hapësirë të lirë. Kontrollo sërish pas pak minutash.</string>
     <string name="dictation_model_not_installed_detail">Diktimi funksionon në këtë pajisje, ndaj zëri yt nuk ngarkohet kurrë. %1$s e shkarkon modelin një herë dhe e ruan për të gjitha aplikacionet.</string>
     <string name="component_outgoing_message_shows_actions_hint">Shfaq veprimet e mesazhit</string>
-    <string name="component_activity_status_stopped">ndaluar</string>
-    <string name="dictation_action_try_again">Provo përsëri</string>
-    <string name="component_composer_model_effort">Modeli %1$s, përpjekja %2$s</string>
+    <string name="component_activity_status_stopped">ndalur</string>
+    <string name="dictation_action_try_again">Provo sërish</string>
+    <string name="component_composer_model_effort">Modeli %1$s, niveli i arsyetimit %2$s</string>
     <string name="component_activity_card_working">Po punon</string>
     <string name="component_activity_card_opens_activity">%1$s, hap aktivitetin</string>
     <string name="component_image_loading_label">%1$s, po ngarkohet</string>
     <string name="session_list_dock_new_session">Sesion i ri</string>
     <string name="component_composer_always_allows">Lejon gjithmonë: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">Dil nga modaliteti i pyetjes anësore</string>
+    <string name="component_composer_leave_side_question_mode">Dil nga mënyra e pyetjes anësore</string>
     <string name="session_list_worktree_empty_other_projects">Pastro filtrin për të parë sesionet në projekte të tjera.</string>
     <string name="component_attachment_uploading">Po ngarkohet…</string>
     <string name="component_composer_deny">Moho</string>
@@ -1584,11 +1584,11 @@
     <string name="component_composer_question">Pyetje</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">Pastro filtrin për të parë sesionet në worktree të tjera.</string>
-    <string name="component_composer_side_question_mode">Modaliteti i pyetjes anësore</string>
+    <string name="component_composer_side_question_mode">Mënyra e pyetjes anësore</string>
     <string name="component_page_indicator_label">Faqja %1$d nga %2$d</string>
     <string name="component_composer_next">Tjetra</string>
     <string name="component_message_image_label">Imazh %1$s</string>
-    <string name="component_composer_leave_shell_mode">Dil nga modaliteti shell</string>
+    <string name="component_composer_leave_shell_mode">Dil nga mënyra shell</string>
     <string name="dictation_action_downloading">Po shkarkohet…</string>
     <string name="component_image_viewer_share">Ndaj</string>
     <string name="session_list_status_failed">Dështoi</string>
@@ -1607,11 +1607,11 @@
     <string name="share_diagnostics_subject">Regjistrat e diagnostikimit të OpenCode</string>
     <string name="component_reorderable_list_move_up">Lëviz lart</string>
     <string name="session_list_scope_load_failed_title">%1$s nuk u ngarkua</string>
-    <string name="dictation_status_listening">Po dëgjon</string>
+    <string name="dictation_status_listening">Duke dëgjuar</string>
     <string name="dictation_downloading_model">Po shkarkohet modeli i të folurit</string>
     <string name="session_list_worktree_empty_every_worktree">Pastro filtrin për të parë çdo worktree.</string>
     <string name="component_overflow_menu_more_options">Më shumë opsione</string>
-    <string name="session_list_status_retrying_attempt">Po provon përsëri · %1$d</string>
+    <string name="session_list_status_retrying_attempt">Po provohet sërish · %1$d</string>
     <string name="live_updates_status_offline">jashtë linje</string>
     <string name="component_attachment_kind_text">Tekst</string>
     <string name="component_composer_next_question">Pyetja tjetër</string>
@@ -1640,9 +1640,9 @@
     <string name="component_composer_previous_question">Pyetja e mëparshme</string>
     <string name="component_activity_card_agent">Agjenti</string>
     <string name="session_list_section_today">Sot</string>
-    <string name="component_composer_child_lockout">Sesionet fëmijë nuk mund të marrin kërkesa.</string>
+    <string name="component_composer_child_lockout">Sesionet e nënagjentëve nuk pranojnë kërkesa.</string>
     <string name="component_attachment_uploading_percent">Po ngarkohet %1$d%%</string>
-    <string name="component_composer_custom_answer_hint">Shkruaj një përgjigje tëndën</string>
+    <string name="component_composer_custom_answer_hint">Shkruaj një përgjigje të personalizuar</string>
     <string name="component_composer_cancel_revert">Anulo rikthimin</string>
     <string name="session_list_scope_load_slow_caption">Ende po ngarkohet — projektet e mëdha mund të vonojnë pak</string>
     <string name="component_outgoing_message_label_with_actions">Mesazh dalës. Shfaq veprimet e mesazhit</string>
@@ -1662,7 +1662,7 @@
     <string name="session_list_scope_load_failed_message">Serveri nuk ktheu sesionet e këtij projekti.</string>
     <string name="component_drop_overlay_accessibility_label">%1$s. %2$s</string>
     <string name="component_image_view_full_screen">Shiko në ekran të plotë</string>
-    <string name="component_activity_sheet_back">Mbrapa te aktiviteti</string>
+    <string name="component_activity_sheet_back">Kthehu te aktiviteti</string>
     <string name="component_file_tabs_close">Mbyll %1$s</string>
     <string name="dictation_action_download">Shkarko</string>
     <string name="component_attachment_kind_pdf">PDF</string>
@@ -1687,17 +1687,17 @@
     <string name="component_image_viewer_retry">Provo sërish</string>
     <string name="component_image_viewer_loading_full">Po ngarkohet imazhi i plotë</string>
     <string name="session_list_worktree_empty_action">Pastro filtrin</string>
-    <string name="dictation_model_download_failed_detail">Kontrollo lidhjen dhe hapësirën e lirë në këtë pajisje, pastaj provo përsëri.</string>
+    <string name="dictation_model_download_failed_detail">Kontrollo lidhjen dhe hapësirën e lirë në këtë pajisje, pastaj provo sërish.</string>
     <string name="component_composer_send_queue">Dërgo në radhë</string>
     <string name="session_list_dock_new_session_hint">Përdor Zgjidh projektin ose worktree për të nisur diku tjetër.</string>
     <string name="session_list_section_yesterday">Dje</string>
     <string name="component_code_file_line_label">Rreshti %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">Ide për OpenCode Mobile</string>
     <string name="component_hunk_navigation_previous">Blloku i mëparshëm</string>
-    <string name="session_list_section_week_of">Java %1$s – %2$s</string>
+    <string name="session_list_section_week_of">Java e %1$s – %2$s</string>
     <string name="dictation_model_download_failed_title">%1$s nuk e shkarkoi %2$s</string>
     <string name="component_activity_status_pending">në pritje</string>
-    <string name="component_composer_revert_tag">Riktheje</string>
+    <string name="component_composer_revert_tag">Rikthim</string>
     <string name="component_composer_model">Modeli %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
         <item quantity="one">%1$d hap i mëparshëm</item>
@@ -1714,10 +1714,10 @@
     <string name="session_list_status_stopped">Ndalur</string>
     <string name="component_attachment_cancel_upload">Anulo ngarkimin e %1$s</string>
     <string name="dictation_cancel_description">Anulo diktimin</string>
-    <string name="component_composer_shell_mode">Modaliteti shell</string>
+    <string name="component_composer_shell_mode">Mënyra shell</string>
     <string name="component_skeleton_illustration_connect">Lidhu</string>
     <string name="component_composer_not_selected">Nuk është zgjedhur</string>
-    <string name="component_composer_shell_mode_description">Modaliteti shell. Dil nga modaliteti shell</string>
+    <string name="component_composer_shell_mode_description">Mënyra shell. Dil nga mënyra shell</string>
     <string name="component_branch_pill_based_on">Bazuar në %1$s</string>
     <string name="component_composer_add_attachment">Shto bashkëngjitje</string>
     <string name="dictation_microphone_off">Qasja te mikrofoni është e çaktivizuar</string>
@@ -1729,21 +1729,21 @@
     <string name="component_close">Mbyll</string>
     <string name="relative_time_now">tani</string>
     <string name="component_composer_previous_permission">Kërkesa e mëparshme e lejes</string>
-    <string name="component_composer_dictate">Diktoj</string>
-    <string name="component_composer_side_question_mode_description">Modaliteti i pyetjes anësore. Dil nga modaliteti i pyetjes anësore</string>
+    <string name="component_composer_dictate">Diktoje</string>
+    <string name="component_composer_side_question_mode_description">Mënyra e pyetjes anësore. Dil nga mënyra e pyetjes anësore</string>
     <string name="component_composer_abort">Ndërprit punën aktive</string>
     <string name="component_server_address_scheme_button">Skema %1$s</string>
     <string name="component_composer_open_subagent_session">Hap sesionin e nënagjentit</string>
     <string name="component_composer_question_step">Hapi %1$d nga %2$d</string>
     <string name="share_feedback_subject_bug">Raport gabimi për OpenCode Mobile</string>
-    <string name="component_activity_card_opens_child_session_hint">Hap sesionin fëmijë</string>
+    <string name="component_activity_card_opens_child_session_hint">Hap sesionin e nënagjentit</string>
     <string name="component_activity_status_failed">dështoi</string>
     <string name="dictation_model_not_installed_title">%1$s ka nevojë për %2$s</string>
     <string name="component_composer_back_to_main_session">Kthehu te sesioni kryesor</string>
     <string name="component_activity_sheet_working_count">Po punon %1$d</string>
-    <string name="session_list_status_retrying">Po provon përsëri</string>
+    <string name="session_list_status_retrying">Po provohet sërish</string>
     <string name="component_attachment_remove">Hiq %1$s</string>
-    <string name="component_composer_send_steer">Dërgo si Drejtim</string>
+    <string name="component_composer_send_steer">Dërgo si Drejto</string>
     <string name="component_composer_next_permission">Kërkesa tjetër e lejes</string>
     <string name="session_list_dock_project_filter">Filtri i projekteve</string>
     <string name="component_split_pane_resize_hint">Trokit dy herë për të fshehur shiritin anësor</string>
@@ -1752,7 +1752,7 @@
     <string name="component_thinking">Duke menduar</string>
     <string name="dictation_model_downloading_title">%1$s po e shkarkon %2$s</string>
     <string name="component_hunk_navigation_expand_context">Zgjero kontekstin</string>
-    <string name="dictation_listening_placeholder">Po dëgjon…</string>
+    <string name="dictation_listening_placeholder">Duke dëgjuar…</string>
     <string name="component_skeleton_illustration_unofficial">Jozyrtar</string>
     <string name="dictation_status_ready">Gati për futje</string>
     <string name="dictation_starting">Po niset…</string>
@@ -1770,11 +1770,11 @@
     <string name="dictation_status_line_on_device">%1$s · %2$s · në pajisje</string>
     <string name="component_composer_select_at_least">Zgjidh të paktën %1$d</string>
     <string name="dictation_insert_description">Fut transkriptin</string>
-    <string name="worktrees_title">Worktrees</string>
+    <string name="worktrees_title">Worktree-t</string>
     <string name="worktrees_subtitle">%1$s · %2$s</string>
     <plurals name="worktrees_count">
         <item quantity="one">%1$d worktree</item>
-        <item quantity="other">%1$d worktrees</item>
+        <item quantity="other">%1$d worktree</item>
     </plurals>
     <string name="worktrees_main_checkout">Checkout kryesor</string>
     <string name="worktrees_cannot_remove">Nuk mund të hiqet</string>
@@ -1786,7 +1786,7 @@
     <string name="worktrees_footer">Heqja e një worktree fshin dosjen e saj në server. Sesionet e saj mbeten, por nuk mund të ekzekutohen më aty.</string>
     <string name="worktrees_more">Më shumë veprime për %1$s</string>
     <string name="worktrees_removing">Po hiqet…</string>
-    <string name="worktrees_actions_show_on_home">Shfaq sesionet në Kreu</string>
+    <string name="worktrees_actions_show_on_home">Shfaq sesionet në Kryefaqe</string>
     <string name="worktrees_actions_new_session">Sesion i ri këtu</string>
     <string name="worktrees_actions_remove">Hiq worktree…</string>
     <string name="worktrees_remove_title">Të hiqet worktree “%1$s”?</string>
@@ -1797,7 +1797,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">Ndryshimet e pakomituara do të humbasin.</string>
     <string name="worktrees_remove_changes_unchecked">Ndryshimet e pakomituara nuk u kontrolluan. Çdo ndryshim aty do të humbasë.</string>
-    <string name="worktrees_remove_sessions_stay">Sesionet që përdorin këtë worktree mbeten në Kreu, por nuk mund të ekzekutohen më këtu.</string>
+    <string name="worktrees_remove_sessions_stay">Sesionet që përdorin këtë worktree mbeten në Kryefaqe, por nuk mund të ekzekutohen më këtu.</string>
     <string name="worktrees_remove_confirm_anyway">Hiqe gjithsesi</string>
     <string name="worktrees_blocked_title">“%1$s” nuk mund të hiqet ende</string>
     <string name="worktrees_blocked_message">Një sesion po ekzekutohet në këtë worktree. Ndale, pastaj hiq worktree.</string>
@@ -1805,19 +1805,19 @@
     <string name="worktrees_blocked_show_session">Shfaq sesionin</string>
     <string name="worktrees_removed">Worktree “%1$s” u hoq</string>
     <string name="worktrees_remove_failed">“%1$s” nuk u hoq. %2$s</string>
-    <string name="worktrees_remove_failed_connection">“%1$s” nuk u hoq. Kontrollo lidhjen dhe provo përsëri.</string>
+    <string name="worktrees_remove_failed_connection">“%1$s” nuk u hoq. Kontrollo lidhjen dhe provo sërish.</string>
     <string name="worktrees_menu_subtitle">%1$d në %2$s</string>
     <string name="worktrees_menu_none">Asnjë</string>
     <string name="session_list_worktree_removed">worktree u hoq</string>
     <string name="whats_new_title">Çfarë ka të re</string>
     <string name="whats_new_version">Versioni %1$s</string>
-    <string name="whats_new_skipped_one">Ke kaluar një përditësim, ndaj është përfshirë më poshtë.</string>
-    <string name="whats_new_skipped_many">Ke kaluar %1$d përditësime, ndaj janë përfshirë më poshtë.</string>
+    <string name="whats_new_skipped_one">Ke anashkaluar një përditësim, ndaj është përfshirë më poshtë.</string>
+    <string name="whats_new_skipped_many">Ke anashkaluar %1$d përditësime, ndaj janë përfshirë më poshtë.</string>
     <string name="whats_new_in_version">Në %1$s</string>
-    <string name="whats_new_also_since">Gjithashtu e re nga përditësimi i fundit · %1$s</string>
+    <string name="whats_new_also_since">Gjithashtu e re që nga përditësimi yt i fundit · %1$s</string>
     <string name="whats_new_fixes">Rregullime</string>
     <string name="whats_new_done">U krye</string>
-    <string name="whats_new_find_again">Gjeje përsëri te Cilësimet → Çfarë ka të re</string>
+    <string name="whats_new_find_again">Gjeje sërish te Cilësimet → Çfarë ka të re</string>
     <string name="whats_new_installed">Instaluar</string>
     <string name="whats_new_settings_subtitle">Shënimet e botimit për çdo version</string>
 </resources>

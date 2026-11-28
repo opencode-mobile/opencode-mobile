@@ -22,13 +22,13 @@
     <string name="connection_setup_action_scan_new_qr">নতুন QR স্ক্যান করুন</string>
     <string name="connection_setup_action_enter_pairing_code">পেয়ারিং কোড দিন</string>
     <string name="connection_setup_action_use_host_password">হোস্ট ও পাসওয়ার্ড ব্যবহার করুন</string>
-    <string name="connection_setup_action_scan_qr_instead">বদলে QR স্ক্যান করুন</string>
+    <string name="connection_setup_action_scan_qr_instead">এর বদলে QR স্ক্যান করুন</string>
     <string name="connection_setup_scan_qr_instead_hint">opencode pair থেকে</string>
     <string name="connection_setup_remove_server">সার্ভার সরান</string>
     <string name="connection_setup_remove_dialog_title_unnamed">“সার্ভার” সরাবেন?</string>
     <string name="connection_setup_instructions_run">আপনার কম্পিউটারে এটি চালান, তারপর QR স্ক্যান করুন।</string>
     <string name="connection_setup_instructions_first_run">প্রথমবার প্রায় এক মিনিট লাগে। OpenCode 2.0.25 বা তার পরের সংস্করণ লাগবে। সার্ভিস চালু না থাকলে নিজে থেকেই চালু হবে।</string>
-    <string name="connection_setup_instructions_same_wifi_title">বদলে একই Wi-Fi</string>
+    <string name="connection_setup_instructions_same_wifi_title">এর বদলে একই Wi-Fi</string>
     <string name="connection_setup_instructions_same_wifi_body">সার্ভার localhost-এর বাইরে পৌঁছানো গেলে তবেই সাধারণ pair QR দেখায়।</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">হোস্ট</string>
@@ -73,7 +73,7 @@
     <string name="server_error_session_busy">সেশন ব্যস্ত আছে</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">অথেনটিকেশন ব্যর্থ হয়েছে</string>
-    <string name="connection_error_unhealthy">সার্ভার অসুস্থ বলে জানিয়েছে</string>
+    <string name="connection_error_unhealthy">সার্ভার ঠিকমতো চলছে না বলে জানিয়েছে</string>
     <string name="connection_scanner_title">পেয়ারিং QR স্ক্যান করুন</string>
     <string name="connection_scanner_card_title">OpenCode পেয়ারিং QR</string>
     <string name="connection_scanner_card_body">opencode pair --remote থেকে। সাধারণ pair শুধু তখনই QR দেখায়, যখন সার্ভার localhost-এর বাইরে থেকে পৌঁছানো যায়।</string>
@@ -87,12 +87,12 @@
     <string name="onboarding_unofficial_body">OpenCode Mobile হলো opencode সেশনের জন্য একটি নেটিভ ক্লায়েন্ট — কাজ চলছে। এটি OpenCode-এর অফিসিয়াল পণ্য নয়।</string>
     <string name="onboarding_unofficial_badge">অনানুষ্ঠানিক</string>
     <string name="onboarding_connect_page_title">আপনার সার্ভারের\nসাথে সংযোগ করুন</string>
-    <string name="onboarding_connect_page_body">অ্যাপটিকে আপনার মেশিনের একটি opencode সার্ভারে নির্দেশ করুন। আমরা Tailscale ব্যবহারের পরামর্শ দিই, যাতে আপনার ফোন যেকোনো জায়গা থেকে নিরাপদে সার্ভারে পৌঁছাতে পারে।</string>
+    <string name="onboarding_connect_page_body">অ্যাপে আপনার মেশিনের একটি opencode সার্ভারের ঠিকানা দিন। আমরা Tailscale ব্যবহারের পরামর্শ দিই, যাতে আপনার ফোন যেকোনো জায়গা থেকে নিরাপদে সার্ভারে পৌঁছাতে পারে।</string>
     <string name="onboarding_connect_page_setup_link">আগে সার্ভার দরকার?</string>
     <string name="onboarding_features_title">এখান থেকে আপনি\nযা করতে পারবেন</string>
     <string name="onboarding_features_sessions_title">সেশন</string>
     <string name="onboarding_features_sessions_detail">তালিকা, খোলা, তৈরি, নাম পরিবর্তন, ফর্ক, সংরক্ষণাগার, মুছে ফেলা</string>
-    <string name="onboarding_features_chat_title">চ্যাট ও বন্ধ করা</string>
+    <string name="onboarding_features_chat_title">চ্যাট ও থামানো</string>
     <string name="onboarding_features_chat_detail">প্রম্পট পাঠান এবং চলমান কাজ থামান</string>
     <string name="onboarding_features_permissions_title">অনুমতি</string>
     <string name="onboarding_features_permissions_detail">অনুরোধ অনুমোদন বা অস্বীকার করুন (স্থায়ীভাবে মনে রাখা হয় না)</string>
@@ -101,7 +101,7 @@
     <string name="onboarding_features_live_title">খোলা থাকলে লাইভ</string>
     <string name="onboarding_features_live_detail">ফোরগ্রাউন্ড ইভেন্ট স্ট্রিম; আবার সংযোগের পর রিফ্রেশ</string>
     <string name="onboarding_setup_title">opencode serve সেট আপ করুন</string>
-    <string name="onboarding_setup_intro">অ্যাপটি আপনার চালানো opencode সার্ভারের সাথে কথা বলে। নিচে সংক্ষিপ্ত পথ — পূর্ণ বিবরণ অফিসিয়াল ডকুমেন্টেশনে।</string>
+    <string name="onboarding_setup_intro">অ্যাপটি আপনার চালানো opencode সার্ভারের সাথে কথা বলে। নিচে সংক্ষিপ্ত ধাপগুলো দেওয়া হলো — পূর্ণ বিবরণ অফিসিয়াল ডকুমেন্টেশনে।</string>
     <string name="onboarding_setup_step_number">ধাপ %1$d</string>
     <string name="onboarding_setup_step1_title">আপনার মেশিনে সার্ভার চালু করুন</string>
     <string name="onboarding_setup_step1_body">আপনার প্রকল্পে opencode সার্ভার (হেডলেস) চালান। ফোন ব্যবহারের সময় এটি চালু রাখুন।</string>
@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">ফোন থেকে সার্ভারে পৌঁছান</string>
     <string name="onboarding_setup_step3_body">প্রস্তাবিত: Tailscale — মেশিন ও ফোন দুটোতেই Tailscale ইনস্টল করুন, তারপর সার্ভার URL হিসেবে মেশিনের Tailscale IP বা MagicDNS নাম ব্যবহার করুন।\n\nএগুলোও চলবে: একই LAN, VPN, HTTPS, বা আপনার নিজের পরিচালিত অন্য কোনো টানেল। অ্যাপ আপনার জন্য কোনো রিলে তৈরি করে না।</string>
     <string name="onboarding_setup_step4_title">অ্যাপে সংযোগ করুন</string>
-    <string name="onboarding_setup_step4_body">বেস URL ও পাসওয়ার্ড লিখুন। অ্যাপ GET /global/health যাচাই করে, তারপর এই ডিভাইসে একটি সংরক্ষিত সার্ভার সংযোগ সেভ করে।</string>
+    <string name="onboarding_setup_step4_body">বেস URL ও পাসওয়ার্ড লিখুন। অ্যাপ GET /global/health যাচাই করে, তারপর এই ডিভাইসে একটি সংরক্ষিত সার্ভার সংযোগ সংরক্ষণ করে।</string>
     <string name="onboarding_setup_open_docs">সার্ভার ডকুমেন্টেশন খুলুন</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile লক করা আছে</string>
@@ -131,7 +131,7 @@
     <string name="server_health_range_day">২৪ ঘণ্টা</string>
     <string name="server_health_range_week">৭ দিন</string>
     <string name="server_health_uptime">আপটাইম</string>
-    <string name="server_health_uptime_detail">পরিমাপ করা %1$s-এর মধ্যে</string>
+    <string name="server_health_uptime_detail">%1$s পরিমাপের মধ্যে</string>
     <string name="server_health_reconnects">পুনঃসংযোগ</string>
     <string name="server_health_reconnects_detail">মধ্যমানে %1$s-এ ফিরেছে</string>
     <string name="server_health_no_drops">কোনো বিচ্ছিন্নতা নেই</string>
@@ -192,8 +192,8 @@
     <string name="server_health_status_auth_failed">অথেনটিকেশন ব্যর্থ</string>
     <string name="server_health_status_stopped">পরিমাপ বন্ধ</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">আপটাইম %1$s · আজ %2$dবার রিকানেক্ট</item>
-        <item quantity="other">আপটাইম %1$s · আজ %2$dবার রিকানেক্ট</item>
+        <item quantity="one">আপটাইম %1$s · আজ %2$dবার পুনঃসংযোগ</item>
+        <item quantity="other">আপটাইম %1$s · আজ %2$dবার পুনঃসংযোগ</item>
     </plurals>
     <string name="server_health_quick_view_measuring">পরিমাপ চলছে…</string>
     <string name="server_health_details">বিস্তারিত</string>
@@ -235,7 +235,7 @@
     <string name="home_remove_project_message">\"%1$s\" হোম থেকে সরাবেন? এর সেশনগুলো সার্ভারেই থাকবে।</string>
     <string name="home_snackbar_removed">হোম থেকে \"%1$s\" সরানো হয়েছে</string>
     <string name="home_snackbar_already_on_home">\"%1$s\" আগে থেকেই হোমে আছে</string>
-    <string name="home_snackbar_joined_project">%1$s-এর একই রিপো। সেখানে worktree হিসেবে দেখানো হচ্ছে।</string>
+    <string name="home_snackbar_joined_project">%1$s-এর সাথে একই রিপো। সেখানে worktree হিসেবে দেখানো হচ্ছে।</string>
     <string name="home_all">সব</string>
     <string name="home_all_projects">সব প্রকল্প</string>
     <plurals name="home_project_count">
@@ -283,23 +283,23 @@
     <string name="home_session_error_request_failed">অনুরোধ ব্যর্থ হয়েছে</string>
     <string name="home_session_error_unreadable_response">সার্ভারের উত্তর পড়া যায়নি</string>
     <string name="home_session_error_generic">কিছু ভুল হয়েছে</string>
-    <string name="archived_sessions_title">সংরক্ষিত সেশন</string>
+    <string name="archived_sessions_title">সংরক্ষণাগারে থাকা সেশন</string>
     <string name="home_menu_archived_count">%2$s-এ %1$dটি</string>
     <string name="archived_sessions_section_this_week">এই সপ্তাহ</string>
     <string name="archived_sessions_section_earlier">আগের</string>
     <string name="archived_sessions_unarchive">সংরক্ষণাগার থেকে সরান</string>
     <string name="archived_sessions_delete">মুছে দিন…</string>
     <string name="archived_sessions_delete_dialog_message">“%1$s” সার্ভার থেকে মুছে যাবে। এটি পূর্বাবস্থায় ফেরানো যাবে না।</string>
-    <string name="archived_sessions_archived_at">সংরক্ষিত হয়েছে %1$s</string>
+    <string name="archived_sessions_archived_at">সংরক্ষণাগারে পাঠানো হয়েছে %1$s</string>
     <string name="archived_sessions_unarchived">“%1$s” সংরক্ষণাগার থেকে সরানো হয়েছে</string>
     <string name="archived_sessions_undo">পূর্বাবস্থায় ফেরান</string>
-    <string name="archived_sessions_empty_title">কোনো সংরক্ষিত সেশন নেই</string>
+    <string name="archived_sessions_empty_title">সংরক্ষণাগারে কোনো সেশন নেই</string>
     <string name="archived_sessions_empty_message">%1$s-এ আপনি যে সেশন সংরক্ষণাগারে রাখবেন, তা এখানে দেখা যাবে।</string>
     <string name="archived_sessions_show_all_projects">সব প্রকল্প দেখান</string>
     <string name="archived_sessions_footer">আরও দেখতে একটি সেশনে ট্যাপ করুন। সংরক্ষণাগার থেকে সরালে সেটি হোমে ফিরে যাবে।</string>
-    <string name="archived_sessions_load_failed">সংরক্ষিত সেশন লোড করা যায়নি।</string>
+    <string name="archived_sessions_load_failed">সংরক্ষণাগারের সেশন লোড করা যায়নি।</string>
     <string name="archived_sessions_unarchive_failed">সেশন সংরক্ষণাগার থেকে সরানো যায়নি।</string>
-    <string name="session_chat_archived_banner">সংরক্ষিত হয়েছে %1$s</string>
+    <string name="session_chat_archived_banner">সংরক্ষণাগারে পাঠানো হয়েছে %1$s</string>
     <string name="add_project_title">প্রকল্প যোগ করুন</string>
     <string name="add_project_browse_folders">ফোল্ডার ব্রাউজ করুন</string>
     <string name="add_project_browse_folders_subtitle">এই সার্ভারের যেকোনো ফোল্ডার বেছে নিন</string>
@@ -341,7 +341,7 @@
     <string name="worktree_needs_v2">opencode v2 সার্ভার প্রয়োজন</string>
     <string name="worktree_turn_on">সেটিংসে Worktrees চালু করুন</string>
     <string name="worktree_not_git">একটি git রিপোজিটরি প্রয়োজন</string>
-    <string name="worktree_no_commit">কমিট সহ একটি git রিপোজিটরি প্রয়োজন</string>
+    <string name="worktree_no_commit">কমিটসহ একটি git রিপোজিটরি প্রয়োজন</string>
     <string name="worktree_unsupported">এই সার্ভার worktree তৈরি করতে পারে না</string>
     <string name="worktree_form_title">নতুন worktree</string>
     <string name="worktree_name">নাম</string>
@@ -384,7 +384,7 @@
     <string name="files_ignored">উপেক্ষিত</string>
     <string name="files_finding">ফাইল খোঁজা হচ্ছে</string>
     <string name="files_find_error">ফাইল অনুসন্ধান করা যায়নি</string>
-    <string name="files_find_no_match">“%1$s” এর সাথে মেলে এমন কোনো ফাইল নেই</string>
+    <string name="files_find_no_match">“%1$s”-এর সাথে মেলে এমন কোনো ফাইল নেই</string>
     <string name="files_find_no_match_detail">সার্ভারের অনুসন্ধান উপেক্ষিত ফোল্ডার বাদ দেয়।</string>
     <string name="files_error_check_server_connection">সার্ভারের সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।</string>
     <string name="files_error_server_status">সার্ভার %1$d দিয়ে সাড়া দিয়েছে।</string>
@@ -402,7 +402,7 @@
     <string name="file_viewer_error_title">ফাইল খোলা যায়নি</string>
     <string name="file_viewer_empty_title">ফাইল খালি</string>
     <string name="file_viewer_empty_message">এই ফাইলে কোনো কনটেন্ট নেই।</string>
-    <string name="file_viewer_truncated">এই ফাইলের প্রথম 1 MB দেখানো হচ্ছে।</string>
+    <string name="file_viewer_truncated">এই ফাইলের প্রথম ১ MB দেখানো হচ্ছে।</string>
     <string name="file_viewer_tab_preview">প্রিভিউ</string>
     <string name="file_viewer_tab_source">সোর্স</string>
     <string name="file_viewer_binary_title">বাইনারি ফাইল</string>
@@ -427,23 +427,23 @@
     <string name="terminal_title">টার্মিনাল</string>
     <string name="terminal_catalog_title">টার্মিনাল</string>
     <string name="terminal_catalog_loading">টার্মিনাল লোড হচ্ছে</string>
-    <string name="terminal_catalog_empty_title">কোনো শেল চলছে না</string>
+    <string name="terminal_catalog_empty_title">কোনো shell চলছে না</string>
     <string name="terminal_catalog_empty_message">একটি প্রকল্পের জন্য শুরু করুন। এটি কোনো চ্যাট সেশনের সাথে যুক্ত নয়।</string>
-    <string name="terminal_select_title">একটি শেল বেছে নিন</string>
-    <string name="terminal_select_message">তালিকা থেকে একটি শেল বেছে নিন।</string>
-    <string name="terminal_new_shell">নতুন শেল</string>
+    <string name="terminal_select_title">একটি shell বেছে নিন</string>
+    <string name="terminal_select_message">তালিকা থেকে একটি shell বেছে নিন।</string>
+    <string name="terminal_new_shell">নতুন shell</string>
     <string name="terminal_close">বন্ধ করুন</string>
-    <string name="terminal_close_dialog_title">এই শেল বন্ধ করবেন?</string>
+    <string name="terminal_close_dialog_title">এই shell বন্ধ করবেন?</string>
     <string name="terminal_close_dialog_title_named">“%1$s” বন্ধ করবেন?</string>
-    <string name="terminal_close_dialog_message">এতে সার্ভারে শেলটি শেষ হয়ে যাবে।</string>
+    <string name="terminal_close_dialog_message">এতে সার্ভারে shell-টি শেষ হয়ে যাবে।</string>
     <string name="terminal_projects_empty_title">এখনও কোনো প্রকল্প নেই</string>
-    <string name="terminal_projects_empty_message">হোমে একটি প্রকল্প যোগ করুন, তারপর এখানে শেল শুরু করুন।</string>
-    <string name="terminal_error_create">শেল শুরু করা যায়নি।</string>
+    <string name="terminal_projects_empty_message">হোমে একটি প্রকল্প যোগ করুন, তারপর এখানে shell শুরু করুন।</string>
+    <string name="terminal_error_create">shell শুরু করা যায়নি।</string>
     <string name="terminal_connecting_title">সংযোগ হচ্ছে</string>
-    <string name="terminal_connecting_subtitle">শেল শুরু হচ্ছে…</string>
+    <string name="terminal_connecting_subtitle">shell শুরু হচ্ছে…</string>
     <string name="terminal_connect_failed_title">সংযোগ ব্যর্থ হয়েছে</string>
-    <string name="terminal_connect_failed_message">এই প্রকল্পের জন্য শেল শুরু করা যায়নি।</string>
-    <string name="terminal_exited">শেল শেষ হয়েছে</string>
+    <string name="terminal_connect_failed_message">এই প্রকল্পের জন্য shell শুরু করা যায়নি।</string>
+    <string name="terminal_exited">shell শেষ হয়েছে</string>
     <string name="terminal_retry">আবার চেষ্টা করুন</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
@@ -496,7 +496,7 @@
     <string name="session_chat_commands_compact_label">সংক্ষিপ্ত</string>
     <string name="session_chat_commands_compact_description">সেশনের প্রসঙ্গ সংক্ষিপ্ত করুন</string>
     <string name="session_chat_commands_terminal_label">টার্মিনাল</string>
-    <string name="session_chat_commands_terminal_description">প্রকল্পের শেল খুলুন</string>
+    <string name="session_chat_commands_terminal_description">প্রকল্পের shell খুলুন</string>
     <string name="session_chat_commands_files_label">ফাইল</string>
     <string name="session_chat_commands_files_description">প্রকল্পের ফাইল ব্রাউজ করুন</string>
     <string name="session_chat_commands_mcp_label">MCP সার্ভার</string>
@@ -517,11 +517,11 @@
     <string name="session_chat_variant_default">ডিফল্ট</string>
     <string name="session_chat_model_chip_placeholder">মডেল</string>
     <string name="session_chat_model_chip_loading">মডেল লোড হচ্ছে…</string>
-    <string name="session_chat_model_notice_load_failed">মডেল লোড করা যায়নি। আবার চেষ্টা করতে মডেল-এ ট্যাপ করুন।</string>
-    <string name="session_chat_model_notice_none_usable">ব্যবহারযোগ্য কোনো মডেল নেই। আবার চেষ্টা করতে মডেল-এ ট্যাপ করুন।</string>
+    <string name="session_chat_model_notice_load_failed">মডেল লোড করা যায়নি। আবার চেষ্টা করতে মডেলে ট্যাপ করুন।</string>
+    <string name="session_chat_model_notice_none_usable">ব্যবহারযোগ্য কোনো মডেল নেই। আবার চেষ্টা করতে মডেলে ট্যাপ করুন।</string>
     <string name="session_chat_model_notice_variant_unavailable">মনে রাখা ভ্যারিয়েন্ট পাওয়া যাচ্ছে না। ডিফল্ট ব্যবহার করা হচ্ছে।</string>
     <string name="session_chat_model_notice_model_unavailable">নির্বাচিত মডেল পাওয়া যাচ্ছে না। %1$s ব্যবহার করা হচ্ছে।</string>
-    <string name="session_chat_side_question_unsupported">/btw-এর জন্য opencode v2 সার্ভার লাগবে, যা সাইড প্রশ্নের উত্তর দিতে পারে। এই সার্ভার কথোপকথনে কিছু যোগ না করে উত্তর দিতে পারে না।</string>
+    <string name="session_chat_side_question_unsupported">/btw-এর জন্য opencode v2 সার্ভার লাগবে, যা আনুষঙ্গিক প্রশ্নের উত্তর দিতে পারে। এই সার্ভার কথোপকথনে কিছু যোগ না করে উত্তর দিতে পারে না।</string>
     <string name="session_chat_side_question_unavailable">/btw-এর জন্য আরও নতুন opencode সার্ভার লাগবে।</string>
     <string name="session_chat_side_question_copied">উত্তর কপি করা হয়েছে</string>
     <string name="session_chat_side_question_failed">/btw ব্যর্থ হয়েছে: “%1$s”</string>
@@ -548,10 +548,10 @@
     <string name="attachment_drop_attach_files">ফাইল সংযুক্ত করতে ছাড়ুন</string>
     <string name="attachment_drop_adds_to_draft">আপনি যে বার্তা লিখছেন সেখানে যোগ হবে</string>
     <plurals name="attachment_drop_skipped_count">
-        <item quantity="one">%1$dটি বাদ যাবে</item>
-        <item quantity="other">%1$dটি বাদ যাবে</item>
+        <item quantity="one">%1$dটি বাদ পড়বে</item>
+        <item quantity="other">%1$dটি বাদ পড়বে</item>
     </plurals>
-    <string name="attachment_drop_some_skipped">কিছু বাদ যাবে</string>
+    <string name="attachment_drop_some_skipped">কিছু বাদ পড়বে</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
     <string name="session_chat_activity_review_permission">অনুমতি পর্যালোচনা করুন</string>
     <string name="session_chat_activity_review_permission_request">অনুমতির অনুরোধ পর্যালোচনা করুন</string>
@@ -569,20 +569,20 @@
         <item quantity="one">%1$dটি সারিবদ্ধ প্রম্পট</item>
         <item quantity="other">%1$dটি সারিবদ্ধ প্রম্পট</item>
     </plurals>
-    <string name="session_chat_activity_side_question_failed">পাশের প্রশ্ন ব্যর্থ হয়েছে</string>
+    <string name="session_chat_activity_side_question_failed">আনুষঙ্গিক প্রশ্ন ব্যর্থ হয়েছে</string>
     <plurals name="session_chat_activity_side_questions_failed">
-        <item quantity="one">%1$dটি পাশের প্রশ্ন ব্যর্থ হয়েছে</item>
-        <item quantity="other">%1$dটি পাশের প্রশ্ন ব্যর্থ হয়েছে</item>
+        <item quantity="one">%1$dটি আনুষঙ্গিক প্রশ্ন ব্যর্থ হয়েছে</item>
+        <item quantity="other">%1$dটি আনুষঙ্গিক প্রশ্ন ব্যর্থ হয়েছে</item>
     </plurals>
-    <string name="session_chat_activity_side_question_ready">পাশের প্রশ্নের উত্তর প্রস্তুত</string>
+    <string name="session_chat_activity_side_question_ready">আনুষঙ্গিক প্রশ্নের উত্তর প্রস্তুত</string>
     <plurals name="session_chat_activity_side_questions_ready">
-        <item quantity="one">%1$dটি পাশের প্রশ্নের উত্তর প্রস্তুত</item>
-        <item quantity="other">%1$dটি পাশের প্রশ্নের উত্তর প্রস্তুত</item>
+        <item quantity="one">%1$dটি আনুষঙ্গিক প্রশ্নের উত্তর প্রস্তুত</item>
+        <item quantity="other">%1$dটি আনুষঙ্গিক প্রশ্নের উত্তর প্রস্তুত</item>
     </plurals>
-    <string name="session_chat_activity_side_question_running">পাশের প্রশ্ন চলছে</string>
+    <string name="session_chat_activity_side_question_running">আনুষঙ্গিক প্রশ্ন চলছে</string>
     <plurals name="session_chat_activity_side_questions_running">
-        <item quantity="one">%1$dটি পাশের প্রশ্ন চলছে</item>
-        <item quantity="other">%1$dটি পাশের প্রশ্ন চলছে</item>
+        <item quantity="one">%1$dটি আনুষঙ্গিক প্রশ্ন চলছে</item>
+        <item quantity="other">%1$dটি আনুষঙ্গিক প্রশ্ন চলছে</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s। %2$s</string>
     <string name="session_chat_activity_action_open_request">অনুরোধ খুলুন</string>
@@ -617,10 +617,10 @@
     <string name="new_session_title">নতুন সেশন</string>
     <string name="new_session_draft_subtitle">খসড়া · পাঠালে তৈরি হবে</string>
     <string name="new_session_discard_draft">খসড়া বাতিল করুন</string>
-    <string name="new_session_run_in_caption">সেশন চালান</string>
+    <string name="new_session_run_in_caption">যেখানে সেশন চলবে</string>
     <string name="new_session_project">প্রকল্প</string>
     <string name="new_session_worktree">Worktree</string>
-    <string name="new_session_starts_from">শুরু হবে</string>
+    <string name="new_session_starts_from">যেখান থেকে শুরু</string>
     <string name="new_session_local">লোকাল</string>
     <string name="new_session_new_worktree">নতুন Worktree</string>
     <string name="new_session_not_git">কিছু নেই · Git রিপো নয়</string>
@@ -629,7 +629,7 @@
     <string name="new_session_no_project_matches">কোনো প্রকল্প মেলেনি</string>
     <string name="new_session_add_project">প্রকল্প যোগ করুন…</string>
     <string name="new_session_run_in_project">%1$s-এ চালান</string>
-    <string name="new_session_current_checkout">%1$s · বর্তমান checkout</string>
+    <string name="new_session_current_checkout">%1$s · বর্তমান চেকআউট</string>
     <string name="new_session_new_worktree_subtitle">আলাদা কপি, পাঠালে তৈরি হবে</string>
     <string name="new_session_worktrees_section">Worktree</string>
     <string name="timeline_state_loading_title">বার্তা লোড হচ্ছে</string>
@@ -640,19 +640,19 @@
     <string name="timeline_state_empty">এখনও কোনো বার্তা নেই। শুরু করতে একটি প্রম্পট পাঠান।</string>
     <string name="timeline_state_refreshing">বার্তা রিফ্রেশ হচ্ছে</string>
     <string name="timeline_message_assistant">অ্যাসিস্ট্যান্টের বার্তা</string>
-    <string name="timeline_message_actions_hint_long_press">বার্তার অ্যাকশন দেখতে দীর্ঘক্ষণ চেপে ধরুন</string>
+    <string name="timeline_message_actions_hint_long_press">বার্তার অ্যাকশন দেখতে চেপে ধরে রাখুন</string>
     <string name="timeline_message_actions_hint">বার্তার অ্যাকশন দেখায়</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
     <string name="timeline_failure_copy">কপি</string>
     <string name="timeline_retry_retrying_in">%1$d সেকেন্ডে আবার চেষ্টা হবে</string>
-    <string name="timeline_retry_attempt_retrying_in">প্রচেষ্টা %1$d, %2$d সেকেন্ডে আবার চেষ্টা হবে</string>
+    <string name="timeline_retry_attempt_retrying_in">%1$dতম চেষ্টা, %2$d সেকেন্ডে আবার চেষ্টা হবে</string>
     <plurals name="timeline_background_work_subagent_count">
         <item quantity="one">%1$dটি সাবএজেন্ট</item>
         <item quantity="other">%1$dটি সাবএজেন্ট</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
-        <item quantity="one">%1$dটি শেল</item>
-        <item quantity="other">%1$dটি শেল</item>
+        <item quantity="one">%1$dটি shell</item>
+        <item quantity="other">%1$dটি shell</item>
     </plurals>
     <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
     <string name="timeline_background_work_subagents_and_shells_spoken">%1$s এবং %2$s</string>
@@ -681,7 +681,7 @@
     <string name="tool_title_glob">Glob</string>
     <string name="tool_title_search">অনুসন্ধান</string>
     <string name="tool_title_fetch">আনা</string>
-    <string name="tool_title_shell">শেল</string>
+    <string name="tool_title_shell">shell</string>
     <string name="tool_title_execute">চালানো</string>
     <string name="tool_title_lsp">LSP</string>
     <string name="tool_title_plan">পরিকল্পনা</string>
@@ -719,8 +719,8 @@
         <item quantity="other">%1$dটি আনা</item>
     </plurals>
     <plurals name="tool_count_shell">
-        <item quantity="one">%1$dটি শেল</item>
-        <item quantity="other">%1$dটি শেল</item>
+        <item quantity="one">%1$dটি shell</item>
+        <item quantity="other">%1$dটি shell</item>
     </plurals>
     <plurals name="tool_count_execute">
         <item quantity="one">%1$dটি চালানো</item>
@@ -780,7 +780,7 @@
     </plurals>
     <string name="tool_error_malformed">চালানো হয়নি: টুল কল ত্রুটিপূর্ণ</string>
     <string name="tool_error_failed">ব্যর্থ</string>
-    <string name="tool_error_exit_code">কোড %1$d সহ বের হয়েছে</string>
+    <string name="tool_error_exit_code">কোড %1$d দিয়ে শেষ হয়েছে</string>
     <string name="tool_status_declined">প্রত্যাখ্যাত</string>
     <string name="tool_user_note">আপনার নোট: %1$s</string>
     <string name="tool_status_stopped">থামানো হয়েছে</string>
@@ -816,11 +816,11 @@
     <string name="timeline_step_ran_named">%1$s চালানো হয়েছে</string>
     <string name="timeline_step_ran_command">কমান্ড চালানো হয়েছে</string>
     <string name="timeline_step_loading_skill">দক্ষতা লোড হচ্ছে…</string>
-    <string name="timeline_step_loading_skill_named">দক্ষতা %1$s লোড হচ্ছে</string>
-    <string name="timeline_step_skill_named">দক্ষতা %1$s</string>
+    <string name="timeline_step_loading_skill_named">%1$s দক্ষতা লোড হচ্ছে</string>
+    <string name="timeline_step_skill_named">%1$s দক্ষতা</string>
     <string name="timeline_step_thought_duration">চিন্তা · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
-    <string name="timeline_explore_title">অন্বেষণ করা হয়েছে — %1$s</string>
+    <string name="timeline_explore_title">খুঁজে দেখা হয়েছে — %1$s</string>
     <string name="timeline_list_separator">%1$s · %2$s</string>
     <string name="timeline_role_you">আপনি</string>
     <string name="timeline_role_assistant">সহকারী</string>
@@ -851,9 +851,9 @@
     <string name="timeline_notice_moved_to">সরানো হয়েছে</string>
     <string name="timeline_notice_agent_changed">এজেন্ট বদলানো হয়েছে</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
-    <string name="timeline_notice_switched_to">বদলে হয়েছে</string>
-    <string name="timeline_notice_variant_switched">ভ্যারিয়েন্ট বদলে হয়েছে</string>
-    <string name="timeline_notice_variant_default">ভ্যারিয়েন্ট বদলে ডিফল্ট হয়েছে</string>
+    <string name="timeline_notice_switched_to">পরিবর্তন করা হয়েছে</string>
+    <string name="timeline_notice_variant_switched">ভ্যারিয়েন্ট পরিবর্তন করা হয়েছে</string>
+    <string name="timeline_notice_variant_default">ভ্যারিয়েন্ট পরিবর্তন করে ডিফল্ট করা হয়েছে</string>
     <string name="timeline_notice_instructions_updated">নির্দেশনা আপডেট হয়েছে</string>
     <string name="timeline_notice_restart">রিস্টার্টের পর চলছে</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
@@ -877,9 +877,9 @@
     <string name="session_chat_revert_commit_failed">রিভার্ট কমিট করা যায়নি।</string>
     <string name="session_chat_fork_rename_failed">ফর্ক তৈরি হয়েছে, কিন্তু নাম বদলানো যায়নি।</string>
     <string name="session_chat_pending_prompt_update_failed">অপেক্ষমাণ প্রম্পট আপডেট করা যায়নি</string>
-    <string name="session_chat_shell_stop_failed">শেল থামানো যায়নি। আবার চেষ্টা করুন।</string>
+    <string name="session_chat_shell_stop_failed">shell থামানো যায়নি। আবার চেষ্টা করুন।</string>
     <string name="session_chat_shell_status_running">চলছে</string>
-    <string name="session_chat_shell_status_exited">প্রস্থান করেছে</string>
+    <string name="session_chat_shell_status_exited">শেষ হয়েছে</string>
     <string name="session_chat_shell_status_timed_out">সময় শেষ</string>
     <string name="session_chat_shell_duration_seconds">%1$d সে.</string>
     <string name="session_chat_shell_duration_minutes">%1$d মি.</string>
@@ -941,12 +941,12 @@
     <string name="session_chat_goal_tag_met">অর্জিত</string>
     <string name="session_chat_goal_show_all">সব দেখান</string>
     <string name="session_chat_goal_show_less">কম দেখান</string>
-    <string name="session_chat_goal_first_turn">প্রথম টার্ন · %1$d-এর মধ্যে রাউন্ড 0</string>
+    <string name="session_chat_goal_first_turn">প্রথম টার্ন · %1$d-এর মধ্যে রাউন্ড ০</string>
     <string name="session_chat_goal_round">%2$d-এর মধ্যে রাউন্ড %1$d</string>
     <string name="session_chat_goal_paused_in_round">%2$d-এর মধ্যে রাউন্ড %1$d-এ বিরতি</string>
     <string name="session_chat_goal_met_in_round">রাউন্ড %1$d-এ অর্জিত</string>
     <string name="session_chat_goal_reviewer_last_round">রিভিউয়ার, শেষ রাউন্ড</string>
-    <string name="session_chat_goal_not_met_yet">এখনো অর্জিত হয়নি: %1$s</string>
+    <string name="session_chat_goal_not_met_yet">এখনও অর্জিত হয়নি: %1$s</string>
     <string name="session_chat_goal_reviewer">রিভিউয়ার</string>
     <string name="session_chat_goal_reviewer_pending">এই টার্ন শেষ হলে কাজ যাচাই করবে।</string>
     <plurals name="session_chat_goal_stalls">
@@ -954,7 +954,7 @@
         <item quantity="other">%1$d রাউন্ডে অগ্রগতি নেই; %2$d রাউন্ডের পর বিরতি</item>
     </plurals>
     <string name="session_chat_goal_waiting">অপেক্ষায়</string>
-    <string name="session_chat_goal_waiting_shell">একটি ব্যাকগ্রাউন্ড শেল শেষ হওয়ার অপেক্ষায়: %1$s। %2$d মিনিট কিছু না চললে বিরতি দেবে।</string>
+    <string name="session_chat_goal_waiting_shell">একটি ব্যাকগ্রাউন্ড shell শেষ হওয়ার অপেক্ষায়: %1$s। %2$d মিনিট কিছু না চললে বিরতি দেবে।</string>
     <string name="session_chat_goal_waiting_subagent">একটি সাবএজেন্ট শেষ হওয়ার অপেক্ষায়। %1$d মিনিট কিছু না চললে বিরতি দেবে।</string>
     <string name="session_chat_goal_waiting_on_you">আপনার অপেক্ষায়</string>
     <string name="session_chat_goal_waiting_permission">একটি অনুমতির অনুরোধ খোলা আছে। আপনি উত্তর দিলে লক্ষ্য আবার চলবে।</string>
@@ -968,7 +968,7 @@
     <string name="session_chat_goal_clear">মুছুন</string>
     <string name="session_chat_goal_clearing">মুছে ফেলা হচ্ছে…</string>
     <string name="session_chat_goal_new">নতুন লক্ষ্য…</string>
-    <string name="session_chat_goal_footnote_active">প্রতিটি টার্নের পর একজন রিভিউয়ার লক্ষ্যের সাথে কাজ মিলিয়ে দেখে। লক্ষ্য অর্জিত না হওয়া, আপনার প্রয়োজন হওয়া বা %1$d রাউন্ড পার না হওয়া পর্যন্ত এজেন্ট চালিয়ে যায়।</string>
+    <string name="session_chat_goal_footnote_active">প্রতিটি টার্নের পর একজন রিভিউয়ার লক্ষ্যের সাথে কাজ মিলিয়ে দেখে। লক্ষ্য অর্জিত হওয়া, আপনার সাহায্যের প্রয়োজন হওয়া বা %1$d রাউন্ড শেষ হওয়া পর্যন্ত এজেন্ট চলতে থাকে।</string>
     <string name="session_chat_goal_footnote_paused">আবার শুরু করলে নতুন করে %1$d রাউন্ড পাওয়া যাবে।</string>
     <string name="session_chat_goal_footnote_met">নতুন লক্ষ্য এটিকে প্রতিস্থাপন করবে।</string>
     <string name="session_chat_goal_paused">লক্ষ্য বিরতিতে</string>
@@ -988,20 +988,20 @@
     <string name="session_chat_goal_objective_hint">“সম্পন্ন” বলতে কী বোঝায় তা লিখুন…</string>
     <string name="session_chat_goal_resume_placeholder">উত্তর দিন, তারপর লক্ষ্য আবার শুরু করুন…</string>
     <string name="session_chat_goal_count">%1$s / %2$s অক্ষর</string>
-    <string name="session_chat_goal_count_over">%1$s / %2$s অক্ষর · পাঠাতে উদ্দেশ্য ছোট করুন</string>
+    <string name="session_chat_goal_count_over">%1$s / %2$s অক্ষর · পাঠাতে লক্ষ্যের বিবরণ ছোট করুন</string>
     <string name="session_chat_goal_command_replaces">আপনার বর্তমান লক্ষ্য প্রতিস্থাপন করবে</string>
     <string name="session_chat_goal_command_replaces_paused">আপনার বর্তমান লক্ষ্য প্রতিস্থাপন করবে (বিরতিতে)</string>
     <string name="session_chat_goal_command_replaces_met">আপনার বর্তমান লক্ষ্য প্রতিস্থাপন করবে (অর্জিত)</string>
     <string name="session_chat_goal_pause_failed">লক্ষ্যে বিরতি দেওয়া যায়নি</string>
-    <string name="session_chat_goal_pause_failed_reason">লক্ষ্য বিরতি দেওয়া যায়নি: %1$s</string>
+    <string name="session_chat_goal_pause_failed_reason">লক্ষ্যে বিরতি দেওয়া যায়নি: %1$s</string>
     <string name="session_chat_goal_resume_failed">লক্ষ্য আবার শুরু করা যায়নি</string>
     <string name="session_chat_goal_resume_failed_reason">লক্ষ্য আবার শুরু করা যায়নি: %1$s</string>
     <string name="session_chat_goal_clear_failed">লক্ষ্য মুছে ফেলা যায়নি</string>
     <string name="session_chat_goal_clear_failed_reason">লক্ষ্য মুছে ফেলা যায়নি: %1$s</string>
     <string name="session_chat_timeline_style_notice">টাইমলাইন: %1$s। যেকোনো সময় সেটিংসে বদলাতে পারবেন।</string>
     <string name="session_chat_branch_copied">ব্রাঞ্চের নাম কপি করা হয়েছে</string>
-    <string name="session_chat_follow_up_switched_steer">দিকনির্দেশে পাল্টানো হয়েছে</string>
-    <string name="session_chat_follow_up_switched_queue">সারিতে পাল্টানো হয়েছে</string>
+    <string name="session_chat_follow_up_switched_steer">দিকনির্দেশে বদলানো হয়েছে</string>
+    <string name="session_chat_follow_up_switched_queue">সারিতে বদলানো হয়েছে</string>
     <string name="session_chat_failure_retry_after_seconds">%1$d সেকেন্ড পরে আবার চেষ্টা করুন</string>
     <string name="session_chat_failure_retry_after_minutes">%1$d মিনিট পরে আবার চেষ্টা করুন</string>
     <string name="component_outgoing_message_pending_caption">অপেক্ষমাণ · পরের ধাপে পাঠানো হবে</string>
@@ -1028,7 +1028,7 @@
     <string name="session_chat_mcp_load_failed">MCP সার্ভার লোড করা যায়নি। সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।</string>
     <string name="session_chat_create_failed">সেশন তৈরি করা যায়নি</string>
     <string name="session_chat_send_timed_out">পাঠানো যায়নি। আবার চেষ্টা করুন।</string>
-    <string name="session_chat_shell_cannot_queue">শেল কমান্ড সারিতে রাখা যায় না। এখনই চালাতে দিকনির্দেশে পাল্টান।</string>
+    <string name="session_chat_shell_cannot_queue">shell কমান্ড সারিতে রাখা যায় না। এখনই চালাতে দিকনির্দেশে পাল্টান।</string>
     <string name="session_chat_reply_error_permission">আপনার উত্তর পাঠানো যায়নি। আবার চেষ্টা করুন।</string>
     <string name="session_chat_reply_error_permission_reason">আপনার উত্তর পাঠানো যায়নি। %1$s।</string>
     <string name="session_chat_reply_error_question">আপনার উত্তর পাঠানো যায়নি। আবার চেষ্টা করুন।</string>
@@ -1075,15 +1075,15 @@
     <string name="session_chat_sheet_tool_result_copy_link">%1$s কপি করুন</string>
     <string name="session_chat_sheet_tool_result_copies_link_hint">লিংক কপি করে</string>
     <string name="session_chat_sheet_tool_result_line_accessibility">লাইন %1$d, %2$s</string>
-    <string name="session_chat_sheet_shell_title">শেল</string>
+    <string name="session_chat_sheet_shell_title">shell</string>
     <string name="session_chat_sheet_shell_command_accessibility">কমান্ড, %1$s</string>
     <string name="session_chat_sheet_shell_no_output">এখনও কোনো আউটপুট নেই</string>
     <string name="session_chat_sheet_shell_truncated">সর্বশেষ আউটপুট দেখানো হচ্ছে</string>
-    <string name="session_chat_sheet_shell_stop">শেল থামান</string>
+    <string name="session_chat_sheet_shell_stop">shell থামান</string>
     <string name="session_chat_sheet_shell_stopping">থামানো হচ্ছে…</string>
     <string name="session_chat_sheet_background_work_title">ব্যাকগ্রাউন্ড কাজ</string>
     <string name="session_chat_sheet_background_work_subagents">সাবএজেন্ট</string>
-    <string name="session_chat_sheet_background_work_shells">শেল</string>
+    <string name="session_chat_sheet_background_work_shells">shell</string>
     <string name="session_chat_sheet_background_work_tab_running">চলছে</string>
     <string name="session_chat_sheet_background_work_tab_done">সম্পন্ন</string>
     <string name="session_chat_sheet_background_work_running_empty">কিছুই চলছে না। শেষ হওয়া কাজ \"সম্পন্ন\" ট্যাবে আছে।</string>
@@ -1147,7 +1147,7 @@
     <string name="settings_section_appearance">চেহারা</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
     <string name="settings_section_home">হোম</string>
-    <string name="settings_section_session_cache">সেশন ক্যাশে</string>
+    <string name="settings_section_session_cache">সেশন ক্যাশ</string>
     <string name="settings_section_privacy">গোপনীয়তা</string>
     <string name="settings_section_about">সম্পর্কে</string>
     <string name="settings_servers_summary_none">কোনো সার্ভার সংরক্ষিত নেই</string>
@@ -1195,9 +1195,9 @@
     <string name="settings_session_cache_size_label">সেশন ক্যাশের আকার</string>
     <string name="settings_session_cache_empty">খালি</string>
     <string name="settings_session_cache_bytes">%1$d B</string>
-    <string name="settings_clear_session_cache_title">সেশন ক্যাশে মুছুন</string>
+    <string name="settings_clear_session_cache_title">সেশন ক্যাশ মুছুন</string>
     <string name="settings_clear_session_cache_subtitle">ক্যাশ করা সেশন ও বার্তা সরান</string>
-    <string name="settings_clear_session_cache_dialog_title">সেশন ক্যাশে মুছবেন?</string>
+    <string name="settings_clear_session_cache_dialog_title">সেশন ক্যাশ মুছবেন?</string>
     <string name="settings_clear_session_cache_dialog_message">ক্যাশ করা সেশন ও বার্তা সরানো হবে। আপনার সংযোগ ও ক্রেডেনশিয়াল থাকবে।</string>
     <string name="settings_clear">মুছুন</string>
     <string name="settings_app_lock_title">অ্যাপ লক</string>
@@ -1225,8 +1225,8 @@
     <string name="diagnostics_loading">ডায়াগনস্টিক লগ লোড হচ্ছে</string>
     <string name="diagnostics_entries_title">এন্ট্রি</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">সংরক্ষিত সময়সীমায় %1$dটি গোপনীয়তা-সংশোধিত লাইন</item>
-        <item quantity="other">সংরক্ষিত সময়সীমায় %1$dটি গোপনীয়তা-সংশোধিত লাইন</item>
+        <item quantity="one">সংরক্ষিত সময়সীমায় গোপনীয় তথ্য সরানো %1$dটি লাইন</item>
+        <item quantity="other">সংরক্ষিত সময়সীমায় গোপনীয় তথ্য সরানো %1$dটি লাইন</item>
     </plurals>
     <string name="diagnostics_entries_empty">সংরক্ষিত সময়সীমায় এখনও কোনো এন্ট্রি নেই</string>
     <string name="diagnostics_kept_title">সংরক্ষিত</string>
@@ -1242,7 +1242,7 @@
         <item quantity="other">সর্বোচ্চ %1$d · কিছু বাদ যায়নি</item>
     </plurals>
     <string name="diagnostics_format_title">ফরম্যাট</string>
-    <string name="diagnostics_format_value">JSONL · সিক্রেট ও মেসেজের বিষয়বস্তু সরানো হয়েছে</string>
+    <string name="diagnostics_format_value">JSONL · সিক্রেট ও বার্তার বিষয়বস্তু সরানো হয়েছে</string>
     <string name="diagnostics_range_title">পরিসর</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
     <string name="diagnostics_areas_title">এলাকা</string>
@@ -1274,7 +1274,7 @@
     <string name="appearance_syntax_blurb_neon">Dracula ধারা</string>
     <string name="appearance_preview_light">লাইট</string>
     <string name="appearance_preview_dark">ডার্ক</string>
-    <string name="appearance_preview_sample_message">টোকেন স্টোর দেখো।</string>
+    <string name="appearance_preview_sample_message">টোকেন স্টোরটি দেখে নিন।</string>
     <string name="appearance_preview_sample_reply">একবার রিফ্রেশ করে আবার চেষ্টা করছি।</string>
     <string name="appearance_more_options">আরও বিকল্প</string>
     <string name="appearance_reset_text_sizes">টেক্সটের আকার রিসেট করুন</string>
@@ -1298,8 +1298,8 @@
     <string name="appearance_text_size_large">বড়</string>
     <string name="appearance_text_size_extra_large">অতি বড়</string>
     <string name="appearance_text_code_note">টার্মিনাল, পরিবর্তন, ফাইল ভিউয়ার এবং টুলের আউটপুট।</string>
-    <string name="appearance_text_session_chat_note">মেসেজ ও কম্পোজারের কোড ব্লক সেশন চ্যাটের আকার অনুসরণ করে।</string>
-    <string name="appearance_sample_session_one">অস্থির লগইন রিডাইরেক্ট টেস্ট ঠিক করুন</string>
+    <string name="appearance_text_session_chat_note">বার্তা ও কম্পোজারের কোড ব্লক সেশন চ্যাটের আকার অনুসরণ করে।</string>
+    <string name="appearance_sample_session_one">অনিয়মিতভাবে ফেইল করা লগইন রিডাইরেক্ট টেস্ট ঠিক করুন</string>
     <string name="appearance_sample_session_two">সেটিংস নতুন স্টোরে মাইগ্রেট করুন</string>
     <string name="appearance_sample_time_now">এখন</string>
     <string name="appearance_sample_time_minutes">১২ মি.</string>
@@ -1319,7 +1319,7 @@
     <string name="feedback_kind_idea">আইডিয়া</string>
     <string name="feedback_placeholder_bug">কী হয়েছে? আপনি কী আশা করেছিলেন?</string>
     <string name="feedback_placeholder_idea">কী হলে OpenCode আপনার জন্য আরও ভালো হবে?</string>
-    <string name="feedback_privacy_note">শুধু OpenCode Mobile টিমের কাছে যায়। আপনার সার্ভারের ঠিকানা, ইউজারনেম বা পাসওয়ার্ড কখনো পাঠানো হয় না। লগ এই ফোনেই গোপন করা হয়।</string>
+    <string name="feedback_privacy_note">শুধু OpenCode Mobile টিমের কাছে যায়। আপনার সার্ভারের ঠিকানা, ইউজারনেম বা পাসওয়ার্ড কখনো পাঠানো হয় না। লগ থেকে গোপনীয় তথ্য এই ফোনেই সরিয়ে ফেলা হয়।</string>
     <string name="feedback_error_offline">আপনি অফলাইনে আছেন। আপনার রিপোর্ট এখানে রাখা আছে — সংযুক্ত হলে আবার চেষ্টা করুন।</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">আপনি এইমাত্র একটি রিপোর্ট পাঠিয়েছেন। %1$d সেকেন্ড পরে আবার চেষ্টা করুন।</item>
@@ -1330,7 +1330,7 @@
     <string name="feedback_action_try_again">আবার চেষ্টা করুন</string>
     <string name="feedback_action_share_instead">বদলে শেয়ার করুন</string>
     <string name="feedback_undo">পূর্বাবস্থায় ফেরান</string>
-    <string name="feedback_done">হয়েছে</string>
+    <string name="feedback_done">সম্পন্ন</string>
     <string name="feedback_add_attachment">সংযুক্তি যোগ করুন</string>
     <string name="feedback_dictate">বলে লিখুন</string>
     <string name="feedback_send">রিপোর্ট পাঠান</string>
@@ -1361,8 +1361,8 @@
         <item quantity="other">স্ক্রিনশট, %1$dটি অংশ লুকানো</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">শেষ %1$d মিনিট · আপলোডের সময় gzip করা হয়। এই ফোনেই গোপন করা হয়েছে।</item>
-        <item quantity="other">শেষ %1$d মিনিট · আপলোডের সময় gzip করা হয়। এই ফোনেই গোপন করা হয়েছে।</item>
+        <item quantity="one">শেষ %1$d মিনিট · আপলোডের সময় gzip করা হয়। গোপনীয় তথ্য এই ফোনেই সরানো হয়েছে।</item>
+        <item quantity="other">শেষ %1$d মিনিট · আপলোডের সময় gzip করা হয়। গোপনীয় তথ্য এই ফোনেই সরানো হয়েছে।</item>
     </plurals>
     <string name="feedback_log_preview_loading">লোড হচ্ছে…</string>
     <string name="feedback_log_preview_empty_title">কোনো লগ লাইন নেই</string>
@@ -1387,13 +1387,13 @@
         <item quantity="one">%1$dটি ফলাফল</item>
         <item quantity="other">%1$dটি ফলাফল</item>
     </plurals>
-    <string name="session_search_no_match_title">“%1$s” এর সাথে মেলে এমন কোনো সেশন নেই</string>
+    <string name="session_search_no_match_title">“%1$s”-এর সাথে মেলে এমন কোনো সেশন নেই</string>
     <string name="session_search_no_match_message">%1$s-এ</string>
     <string name="session_search_search_all_projects">সব প্রকল্পে অনুসন্ধান করুন</string>
-    <string name="session_search_include_archived">আর্কাইভ করা সহ</string>
-    <string name="session_search_include_archived_count">আর্কাইভ করা সহ · %1$d</string>
-    <string name="session_search_archived_section">আর্কাইভ করা</string>
-    <string name="session_search_archived_tag">আর্কাইভ করা</string>
+    <string name="session_search_include_archived">সংরক্ষণাগারভুক্ত সহ</string>
+    <string name="session_search_include_archived_count">সংরক্ষণাগারভুক্ত সহ · %1$d</string>
+    <string name="session_search_archived_section">সংরক্ষণাগারভুক্ত</string>
+    <string name="session_search_archived_tag">সংরক্ষণাগারভুক্ত</string>
     <string name="session_search_scope_selected">%1$s, নির্বাচিত</string>
     <string name="keyboard_shortcuts_group_session">সেশন</string>
     <string name="keyboard_shortcuts_group_prompt">প্রম্পট</string>
@@ -1477,7 +1477,7 @@
         <item quantity="other">%1$dটি ফাইল</item>
     </plurals>
     <string name="component_review_changes_pill_title">পরিবর্তন পর্যালোচনা</string>
-    <string name="component_unified_diff_summary_added">ফাইল যোগ হয়েছে %1$s, %2$s, %3$s</string>
+    <string name="component_unified_diff_summary_added">যোগ করা ফাইল %1$s, %2$s, %3$s</string>
     <string name="component_activity_status_running">চলছে</string>
     <string name="component_subagent_state_running">চলছে</string>
     <string name="component_todo_item_accessibility_label">%1$s, %2$s</string>
@@ -1493,7 +1493,7 @@
     <string name="component_reasoning_row_duration_minutes_seconds">%1$dমি %2$dসে</string>
     <string name="component_reasoning_row_duration_hours_minutes">%1$dঘ %2$dমি</string>
     <string name="component_reasoning_row_shows_thought_hint">পুরো ভাবনা দেখায়</string>
-    <string name="component_unified_diff_row_kind_hunk">হাঙ্ক</string>
+    <string name="component_unified_diff_row_kind_hunk">hunk</string>
     <string name="component_unified_diff_row_kind_metadata">মেটাডেটা</string>
     <string name="component_unified_diff_row_kind_context">প্রসঙ্গ</string>
     <string name="component_unified_diff_row_kind_addition">সংযোজন</string>
@@ -1545,7 +1545,7 @@
     <string name="component_outgoing_message_shows_actions_hint">বার্তার অ্যাকশন দেখায়</string>
     <string name="component_activity_status_stopped">থেমে গেছে</string>
     <string name="dictation_action_try_again">আবার চেষ্টা করুন</string>
-    <string name="component_composer_model_effort">মডেল %1$s, এফোর্ট %2$s</string>
+    <string name="component_composer_model_effort">মডেল %1$s, যুক্তির মাত্রা %2$s</string>
     <string name="component_activity_card_working">কাজ চলছে</string>
     <string name="component_activity_card_opens_activity">%1$s, অ্যাক্টিভিটি খোলে</string>
     <string name="component_image_loading_label">%1$s, লোড হচ্ছে</string>
@@ -1555,14 +1555,14 @@
     <string name="session_list_worktree_empty_other_projects">অন্য প্রকল্পের সেশন দেখতে ফিল্টার সরিয়ে দিন।</string>
     <string name="component_attachment_uploading">আপলোড হচ্ছে…</string>
     <string name="component_composer_deny">অস্বীকার করুন</string>
-    <string name="component_composer_deny_options">আরও অস্বীকার বিকল্প</string>
+    <string name="component_composer_deny_options">অস্বীকারের আরও বিকল্প</string>
     <string name="component_composer_deny_with_note_menu">নোটসহ অস্বীকার করুন…</string>
     <string name="component_composer_deny_with_note_menu_subtitle">এজেন্টকে বলুন তার বদলে কী করবে</string>
     <string name="component_composer_deny_with_note_title">নোটসহ অস্বীকার করুন</string>
     <string name="component_composer_deny_note_placeholder">OpenCode-কে বলুন কী ভিন্নভাবে করবে</string>
     <plurals name="component_composer_deny_note_also_denies">
-        <item quantity="one">অপেক্ষমাণ আরও %1$dটি অনুরোধও অস্বীকার করা হবে।</item>
-        <item quantity="other">অপেক্ষমাণ আরও %1$dটি অনুরোধও অস্বীকার করা হবে।</item>
+        <item quantity="one">অপেক্ষমাণ অন্য %1$dটি অনুরোধও অস্বীকার করা হবে।</item>
+        <item quantity="other">অপেক্ষমাণ অন্য %1$dটি অনুরোধও অস্বীকার করা হবে।</item>
     </plurals>
     <string name="dictation_stopped">ডিক্টেশন বন্ধ হয়েছে</string>
     <string name="dictation_microphone_failed">মাইক্রোফোন ব্যবহার করা যায়নি</string>
@@ -1588,7 +1588,7 @@
     <string name="component_page_indicator_label">পৃষ্ঠা %1$d/%2$d</string>
     <string name="component_composer_next">পরবর্তী</string>
     <string name="component_message_image_label">ছবি %1$s</string>
-    <string name="component_composer_leave_shell_mode">শেল মোড থেকে বেরিয়ে আসুন</string>
+    <string name="component_composer_leave_shell_mode">shell মোড থেকে বেরিয়ে আসুন</string>
     <string name="dictation_action_downloading">ডাউনলোড হচ্ছে…</string>
     <string name="component_image_viewer_share">শেয়ার করুন</string>
     <string name="session_list_status_failed">ব্যর্থ হয়েছে</string>
@@ -1607,7 +1607,7 @@
     <string name="share_diagnostics_subject">OpenCode ডায়াগনস্টিক লগ</string>
     <string name="component_reorderable_list_move_up">উপরে সরান</string>
     <string name="session_list_scope_load_failed_title">%1$s লোড করা যায়নি</string>
-    <string name="dictation_status_listening">শুনছে</string>
+    <string name="dictation_status_listening">শুনছি</string>
     <string name="dictation_downloading_model">স্পিচ মডেল ডাউনলোড হচ্ছে</string>
     <string name="session_list_worktree_empty_every_worktree">সব worktree দেখতে ফিল্টার সরিয়ে দিন।</string>
     <string name="component_overflow_menu_more_options">আরও বিকল্প</string>
@@ -1627,13 +1627,13 @@
         <item quantity="other">%1$dটি ধাপ</item>
     </plurals>
     <string name="theme_error_apply_failed">থিম প্রিসেট প্রয়োগ করা যায়নি</string>
-    <string name="component_unified_diff_summary_deleted">ফাইল মুছে ফেলা হয়েছে %1$s, %2$s, %3$s</string>
+    <string name="component_unified_diff_summary_deleted">মুছে ফেলা ফাইল %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">চলছে</string>
     <string name="component_step_rail_expands">%1$s, প্রসারিত হয়</string>
     <string name="session_list_status_done">সম্পন্ন</string>
     <string name="session_list_status_idle">নিষ্ক্রিয়</string>
     <string name="component_attachment_kind_file">ফাইল</string>
-    <string name="component_composer_run_shell_command">শেল কমান্ড চালান</string>
+    <string name="component_composer_run_shell_command">shell কমান্ড চালান</string>
     <string name="component_image_could_not_load">লোড করা যায়নি</string>
     <string name="component_outgoing_message_show_actions">বার্তার অ্যাকশন দেখান</string>
     <string name="live_updates_accessibility_label">লাইভ আপডেট %1$s</string>
@@ -1658,7 +1658,7 @@
     <string name="theme_error_syntax_preset_not_found">সিনট্যাক্স হাইলাইট প্রিসেট পাওয়া যায়নি</string>
     <string name="session_list_scope_load_slow">এখনও লোড হচ্ছে…</string>
     <string name="session_list_dock_hint">প্রকল্প ফিল্টার খোলে।</string>
-    <string name="component_hunk_navigation_next">পরবর্তী হাঙ্ক</string>
+    <string name="component_hunk_navigation_next">পরবর্তী hunk</string>
     <string name="session_list_scope_load_failed_message">সার্ভার এই প্রকল্পের সেশন ফেরত দেয়নি।</string>
     <string name="component_drop_overlay_accessibility_label">%1$s। %2$s</string>
     <string name="component_image_view_full_screen">পূর্ণ স্ক্রিনে দেখুন</string>
@@ -1689,12 +1689,12 @@
     <string name="session_list_worktree_empty_action">ফিল্টার মুছুন</string>
     <string name="dictation_model_download_failed_detail">সংযোগ ও এই ডিভাইসের ফাঁকা স্টোরেজ পরীক্ষা করে আবার চেষ্টা করুন।</string>
     <string name="component_composer_send_queue">সারিতে পাঠান</string>
-    <string name="session_list_dock_new_session_hint">অন্য কোথাও শুরু করতে প্রকল্প বা worktree বেছে নিন ব্যবহার করুন।</string>
+    <string name="session_list_dock_new_session_hint">অন্য কোথাও শুরু করতে “প্রকল্প বা worktree বেছে নিন” ব্যবহার করুন।</string>
     <string name="session_list_section_yesterday">গতকাল</string>
     <string name="component_code_file_line_label">লাইন %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">OpenCode Mobile আইডিয়া রিপোর্ট</string>
-    <string name="component_hunk_navigation_previous">আগের হাঙ্ক</string>
-    <string name="session_list_section_week_of">সপ্তাহ %1$s – %2$s</string>
+    <string name="component_hunk_navigation_previous">আগের hunk</string>
+    <string name="session_list_section_week_of">%1$s – %2$s সপ্তাহ</string>
     <string name="dictation_model_download_failed_title">%1$s %2$s ডাউনলোড করতে পারেনি</string>
     <string name="component_activity_status_pending">অপেক্ষমাণ</string>
     <string name="component_composer_revert_tag">রিভার্ট</string>
@@ -1703,25 +1703,25 @@
         <item quantity="one">আগের %1$dটি ধাপ</item>
         <item quantity="other">আগের %1$dটি ধাপ</item>
     </plurals>
-    <string name="component_outgoing_message_long_press_hint">মেসেজের অ্যাকশন দেখতে দীর্ঘক্ষণ চেপে ধরুন</string>
+    <string name="component_outgoing_message_long_press_hint">বার্তার অ্যাকশন দেখতে চেপে ধরে রাখুন</string>
     <string name="component_composer_hide_permission">অনুমতির অনুরোধ লুকান</string>
     <string name="dictation_downloading_model_progress">স্পিচ মডেল ডাউনলোড হচ্ছে, %1$s</string>
     <string name="component_branch_pill_copy_branch_name">ব্রাঞ্চের নাম কপি করুন</string>
-    <string name="component_truncation_row_full_message_title">পুরো মেসেজ দেখান</string>
+    <string name="component_truncation_row_full_message_title">পুরো বার্তা দেখান</string>
     <string name="component_truncation_row_full_message_caption">%2$sটি অক্ষরের মধ্যে %1$sটি দেখানো হচ্ছে</string>
-    <string name="component_truncation_row_full_message_hint">পুরো মেসেজ খোলে</string>
-    <string name="component_outgoing_message_label">পাঠানো মেসেজ</string>
+    <string name="component_truncation_row_full_message_hint">পুরো বার্তা খোলে</string>
+    <string name="component_outgoing_message_label">পাঠানো বার্তা</string>
     <string name="session_list_status_stopped">থামানো হয়েছে</string>
     <string name="component_attachment_cancel_upload">%1$s আপলোড বাতিল করুন</string>
     <string name="dictation_cancel_description">ডিক্টেশন বাতিল করুন</string>
-    <string name="component_composer_shell_mode">শেল মোড</string>
+    <string name="component_composer_shell_mode">shell মোড</string>
     <string name="component_skeleton_illustration_connect">সংযোগ করুন</string>
     <string name="component_composer_not_selected">নির্বাচিত নয়</string>
-    <string name="component_composer_shell_mode_description">শেল মোড। শেল মোড থেকে বেরিয়ে আসুন</string>
+    <string name="component_composer_shell_mode_description">shell মোড। shell মোড থেকে বেরিয়ে আসুন</string>
     <string name="component_branch_pill_based_on">%1$s-এর উপর ভিত্তি করে</string>
     <string name="component_composer_add_attachment">সংযুক্তি যোগ করুন</string>
     <string name="dictation_microphone_off">মাইক্রোফোনের অ্যাক্সেস বন্ধ আছে</string>
-    <string name="component_composer_shell">শেল</string>
+    <string name="component_composer_shell">shell</string>
     <string name="live_updates_status_auth_failed">প্রমাণীকরণ ব্যর্থ হয়েছে</string>
     <string name="component_branch_pill_view_all_changes">সব পরিবর্তন দেখুন</string>
     <string name="component_composer_send">পাঠান</string>
@@ -1731,7 +1731,7 @@
     <string name="component_composer_previous_permission">আগের অনুমতির অনুরোধ</string>
     <string name="component_composer_dictate">ডিক্টেট করুন</string>
     <string name="component_composer_side_question_mode_description">সাইড প্রশ্ন মোড। সাইড প্রশ্ন মোড থেকে বেরিয়ে আসুন</string>
-    <string name="component_composer_abort">চলমান কাজ বন্ধ করুন</string>
+    <string name="component_composer_abort">চলমান কাজ থামান</string>
     <string name="component_server_address_scheme_button">স্কিম %1$s</string>
     <string name="component_composer_open_subagent_session">সাবএজেন্ট সেশন খুলুন</string>
     <string name="component_composer_question_step">ধাপ %1$d/%2$d</string>
@@ -1753,7 +1753,7 @@
     <string name="dictation_model_downloading_title">%1$s %2$s ডাউনলোড করছে</string>
     <string name="component_hunk_navigation_expand_context">প্রসঙ্গ বড় করুন</string>
     <string name="dictation_listening_placeholder">শুনছি…</string>
-    <string name="component_skeleton_illustration_unofficial">अননুমোদিত</string>
+    <string name="component_skeleton_illustration_unofficial">অননুমোদিত</string>
     <string name="dictation_status_ready">যোগ করার জন্য প্রস্তুত</string>
     <string name="dictation_starting">শুরু হচ্ছে…</string>
     <string name="dictation_language_speech_model">%1$s স্পিচ মডেল</string>
@@ -1763,7 +1763,7 @@
         <item quantity="other">%1$dটি আইটেম</item>
     </plurals>
     <string name="component_server_address_scheme">স্কিম</string>
-    <string name="component_server_address_scheme_picker_hint">স্কিম বাছাইকারী খোলে</string>
+    <string name="component_server_address_scheme_picker_hint">স্কিম পিকার খোলে</string>
     <string name="component_split_pane_hide_sidebar">সাইডবার লুকান</string>
     <string name="component_composer_select_range">%1$d থেকে %2$dটি বেছে নিন</string>
     <string name="component_image_viewer_position">%2$d-এর মধ্যে %1$d</string>
@@ -1782,7 +1782,7 @@
         <item quantity="one">%1$dটি পরিবর্তিত</item>
         <item quantity="other">%1$dটি পরিবর্তিত</item>
     </plurals>
-    <string name="worktrees_none_in_project">কোনো worktree নেই। নতুন সেশন → প্রকল্প বা worktree বেছে নিন বিকল্পে একটি তৈরি হয়।</string>
+    <string name="worktrees_none_in_project">কোনো worktree নেই। নতুন সেশন → “প্রকল্প বা worktree বেছে নিন” থেকে একটি তৈরি করা যায়।</string>
     <string name="worktrees_footer">worktree সরালে সার্ভার থেকে এর ফোল্ডার মুছে যায়। এর সেশনগুলো থেকে যায়, কিন্তু আর এতে চালানো যায় না।</string>
     <string name="worktrees_more">%1$s-এর জন্য আরও অ্যাকশন</string>
     <string name="worktrees_removing">সরানো হচ্ছে…</string>
@@ -1815,9 +1815,9 @@
     <string name="whats_new_skipped_many">আপনি %1$dটি আপডেট বাদ দিয়েছেন, তাই সেগুলো নিচে যুক্ত করা হয়েছে।</string>
     <string name="whats_new_in_version">%1$s-এ</string>
     <string name="whats_new_also_since">আপনার শেষ আপডেটের পর আরও নতুন · %1$s</string>
-    <string name="whats_new_fixes">সমাধান</string>
+    <string name="whats_new_fixes">বাগ ফিক্স</string>
     <string name="whats_new_done">সম্পন্ন</string>
-    <string name="whats_new_find_again">এটি আবার পাবেন সেটিংস → নতুন কী আছে-তে</string>
+    <string name="whats_new_find_again">এটি আবার দেখুন: সেটিংস → নতুন কী আছে</string>
     <string name="whats_new_installed">ইনস্টল করা</string>
     <string name="whats_new_settings_subtitle">প্রতিটি সংস্করণের রিলিজ নোট</string>
 </resources>

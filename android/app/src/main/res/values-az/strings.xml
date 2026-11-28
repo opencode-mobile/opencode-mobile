@@ -62,36 +62,36 @@
     <string name="connection_error_camera_denied">Cütləşdirmə QR-ını skan etmək üçün kameraya icazə verin</string>
     <string name="connection_error_camera_unavailable">Bu cihazda kamera əlçatan deyil</string>
     <string name="connection_error_enter_host">Host daxil edin</string>
-    <string name="connection_error_enter_pairing_code">Cütləmə kodunu daxil edin</string>
-    <string name="connection_error_pairing_link_expired">Bu cütləmə linkinin vaxtı bitib və ya artıq istifadə olunub</string>
+    <string name="connection_error_enter_pairing_code">Cütləşdirmə kodunu daxil edin</string>
+    <string name="connection_error_pairing_link_expired">Bu cütləşdirmə linkinin vaxtı bitib və ya artıq istifadə olunub</string>
     <string name="connection_error_duplicate_profile">Bu host və istifadəçi adı ilə server artıq saxlanılıb</string>
-    <string name="connection_error_qr_scan_failed">QR qoşulmadı. OpenCode 2-nin cütləmə API-si hələ dəyişir, ona görə tətbiq işləyərkən də skan uğursuz ola bilər. Host daxil edib qoşulun. Şifrə istəyə bağlıdır. Cütləmə kodu da işləyir.</string>
+    <string name="connection_error_qr_scan_failed">QR qoşulmadı. OpenCode 2-nin cütləşdirmə API-si hələ dəyişir, ona görə tətbiq işləyərkən də skan uğursuz ola bilər. Host daxil edib qoşulun. Şifrə istəyə bağlıdır. Cütləşdirmə kodu da işləyir.</string>
     <string name="connection_error_unreachable">Serverə qoşulmaq mümkün olmadı</string>
-    <string name="server_error_pairing_expired">Cütləmənin vaxtı bitib, yenidən cütləyin</string>
+    <string name="server_error_pairing_expired">Cütləşdirmənin vaxtı bitib, yenidən cütləşdirin</string>
     <string name="server_error_not_found">Qovluq və ya fayl tapılmadı</string>
     <string name="server_error_not_found_path">Qovluq və ya fayl tapılmadı · %1$s</string>
     <string name="server_error_session_busy">Sessiya məşğuldur</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Autentifikasiya uğursuz oldu</string>
     <string name="connection_error_unhealthy">Server sağlam olmadığını bildirdi</string>
-    <string name="connection_scanner_title">Cütləmə QR-ını skan edin</string>
-    <string name="connection_scanner_card_title">OpenCode cütləmə QR-ı</string>
-    <string name="connection_scanner_card_body">opencode pair --remote əmrindən. Adi pair yalnız server localhost-dan kənarda əlçatan olduqda QR göstərir.</string>
+    <string name="connection_scanner_title">Cütləşdirmə QR-ını skan edin</string>
+    <string name="connection_scanner_card_title">OpenCode cütləşdirmə QR-ı</string>
+    <string name="connection_scanner_card_body">opencode pair --remote əmrindən. Sadə pair yalnız server localhost xaricindən əlçatan olduqda QR göstərir.</string>
     <string name="connection_onboarding_title">Serverinizə qoşulun</string>
-    <string name="connection_onboarding_body">OpenCode Mobile inkişaf cihazınızda işləyən opencode serverindəki sessiyaları idarə edir.</string>
+    <string name="connection_onboarding_body">OpenCode Mobile kompüterinizdə işləyən opencode serverindəki sessiyaları idarə edir.</string>
     <string name="connection_onboarding_connect">Serverə qoşul</string>
     <string name="onboarding_skip">Keç</string>
     <string name="onboarding_next">Növbəti</string>
     <string name="onboarding_connect">Serverə qoşul</string>
     <string name="onboarding_unofficial_title">Qeyri-rəsmi\nopencode klienti</string>
-    <string name="onboarding_unofficial_body">OpenCode Mobile opencode sessiyaları üçün yerli klientdir — hazırlanma mərhələsindədir. Bu, rəsmi OpenCode məhsulu deyil.</string>
+    <string name="onboarding_unofficial_body">OpenCode Mobile opencode sessiyaları üçün nativ klientdir — hazırlanma mərhələsindədir. Bu, rəsmi OpenCode məhsulu deyil.</string>
     <string name="onboarding_unofficial_badge">Qeyri-rəsmi</string>
     <string name="onboarding_connect_page_title">Serverlərinizə\nqoşulun</string>
     <string name="onboarding_connect_page_body">Tətbiqi kompüterinizdəki opencode serverinə yönəldin. Telefonunuzun ona hər yerdən təhlükəsiz çata bilməsi üçün Tailscale tövsiyə edirik.</string>
     <string name="onboarding_connect_page_setup_link">Əvvəlcə server lazımdır?</string>
     <string name="onboarding_features_title">Buradan nələr\nedə bilərsiniz</string>
     <string name="onboarding_features_sessions_title">Sessiyalar</string>
-    <string name="onboarding_features_sessions_detail">Siyahı, açmaq, yaratmaq, adını dəyişmək, fork etmək, arxivləmək, silmək</string>
+    <string name="onboarding_features_sessions_detail">Siyahıya baxın, açın, yaradın, adını dəyişin, fork edin, arxivləyin, silin</string>
     <string name="onboarding_features_chat_title">Çat və dayandırma</string>
     <string name="onboarding_features_chat_detail">Sorğu göndərin və davam edən işi dayandırın</string>
     <string name="onboarding_features_permissions_title">İcazələr</string>
@@ -99,7 +99,7 @@
     <string name="onboarding_features_changes_title">Dəyişikliklər</string>
     <string name="onboarding_features_changes_detail">Sessiya diff-lərinə baxın</string>
     <string name="onboarding_features_live_title">Açıq olduqda canlı</string>
-    <string name="onboarding_features_live_detail">Ön plan hadisə axını; yenidən qoşulduqdan sonra yeniləyin</string>
+    <string name="onboarding_features_live_detail">Ön planda hadisə axını; yenidən qoşulduqdan sonra yeniləyin</string>
     <string name="onboarding_setup_title">opencode serve qurulumu</string>
     <string name="onboarding_setup_intro">Tətbiq sizin işlətdiyiniz opencode serveri ilə əlaqə qurur. Qısa yol aşağıdadır — ətraflı məlumat rəsmi sənədlərdədir.</string>
     <string name="onboarding_setup_step_number">Addım %1$d</string>
@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">Telefonunuzdan ona çatın</string>
     <string name="onboarding_setup_step3_body">Tövsiyə olunur: Tailscale — Tailscale-i kompüterdə və telefonda quraşdırın, sonra kompüterin Tailscale IP-sindən və ya MagicDNS adından server URL-i kimi istifadə edin.\n\nBunlar da uyğundur: eyni LAN, VPN, HTTPS və ya özünüzün idarə etdiyiniz başqa tunel. Tətbiq sizin üçün relay yaratmır.</string>
     <string name="onboarding_setup_step4_title">Tətbiqdə qoşulun</string>
-    <string name="onboarding_setup_step4_body">Əsas URL və şifrəni daxil edin. Tətbiq GET /global/health yoxlayır, sonra bu cihazda saxlanmış server bağlantısı yaradır.</string>
+    <string name="onboarding_setup_step4_body">Əsas URL və şifrəni daxil edin. Tətbiq GET /global/health ünvanını yoxlayır, sonra bu cihazda server bağlantısını saxlayır.</string>
     <string name="onboarding_setup_open_docs">Server sənədlərini aç</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile kilidlənib</string>
@@ -178,7 +178,7 @@
     <string name="server_health_last_restart">Son yenidən başlatma</string>
     <string name="server_health_last_restart_ago">%1$s əvvəl</string>
     <string name="server_health_last_restart_none">Görünməyib</string>
-    <string name="server_health_restarts_seen">Aşkarlanan yenidənbaşlatmalar</string>
+    <string name="server_health_restarts_seen">Aşkarlanan yenidən başlatmalar</string>
     <string name="server_health_restarts_seen_value">%1$d</string>
     <string name="server_health_event_streams">Hadisə axınları</string>
     <string name="server_health_event_streams_value">%2$d içindən %1$d canlı</string>
@@ -189,7 +189,7 @@
     <string name="server_health_status_connecting">Qoşulur</string>
     <string name="server_health_status_reconnecting">Yenidən qoşulur</string>
     <string name="server_health_status_offline">Oflayn</string>
-    <string name="server_health_status_auth_failed">Autentifikasiya alınmadı</string>
+    <string name="server_health_status_auth_failed">Autentifikasiya uğursuz</string>
     <string name="server_health_status_stopped">Ölçülmür</string>
     <plurals name="server_health_quick_view_summary">
         <item quantity="one">İşləmə müddəti %1$s · bu gün %2$d yenidən qoşulma</item>
@@ -203,11 +203,11 @@
     <string name="server_health_hero_streams">%2$d hadisə axınından %1$d canlıdır</string>
     <string name="servers_status_active">Aktiv</string>
     <string name="servers_add">Server əlavə et</string>
-    <string name="servers_edit_profile">%1$s redaktə et</string>
+    <string name="servers_edit_profile">Redaktə et: %1$s</string>
     <string name="servers_remove_dialog_title_named">“%1$s” silinsin?</string>
-    <string name="servers_remove_dialog_message">Bu cihaz saxlanmış server bağlantısını unudur. Sessiyalar həmin serverdə qalır. Əgər bu aktiv serverdirsə, başqasını seçəcəksiniz — heç biri qalmasa, Qoş ekranına keçəcəksiniz.</string>
+    <string name="servers_remove_dialog_message">Bu cihaz saxlanmış server bağlantısını silir. Sessiyalar həmin serverdə qalır. Əgər bu aktiv serverdirsə, başqasını seçəcəksiniz — heç biri qalmasa, Qoş ekranına keçəcəksiniz.</string>
     <string name="common_retry">Yenidən cəhd et</string>
-    <string name="common_save">Saxla</string>
+    <string name="common_save">Yadda saxla</string>
     <string name="common_delete">Sil</string>
     <string name="common_edit">Redaktə et</string>
     <string name="common_done">Hazır</string>
@@ -218,7 +218,7 @@
     <string name="common_selected">Seçilib</string>
     <string name="home_sessions_title">Sessiyalar</string>
     <string name="home_servers_sheet_using_now">İndi istifadədə</string>
-    <string name="home_servers_sheet_switch_to">Keç</string>
+    <string name="home_servers_sheet_switch_to">Keçid et</string>
     <string name="home_servers_sheet_manage">Tənzimləmələrdə idarə et</string>
     <string name="home_more_options">Daha çox seçim</string>
     <string name="home_filter_sheet_title">Layihəyə görə süz</string>
@@ -282,21 +282,21 @@
     <string name="home_session_error_delete_failed">Sessiyanı silmək alınmadı.</string>
     <string name="home_session_error_request_failed">Sorğu uğursuz oldu</string>
     <string name="home_session_error_unreadable_response">Server cavabını oxumaq mümkün olmadı</string>
-    <string name="home_session_error_generic">Nəsə xəta baş verdi</string>
+    <string name="home_session_error_generic">Nəsə səhv getdi</string>
     <string name="archived_sessions_title">Arxivlənmiş sessiyalar</string>
     <string name="home_menu_archived_count">%2$s daxilində %1$d</string>
     <string name="archived_sessions_section_this_week">Bu həftə</string>
     <string name="archived_sessions_section_earlier">Daha əvvəl</string>
     <string name="archived_sessions_unarchive">Arxivdən çıxar</string>
     <string name="archived_sessions_delete">Sil…</string>
-    <string name="archived_sessions_delete_dialog_message">“%1$s” serverdən silinir. Bu geri qaytarıla bilməz.</string>
+    <string name="archived_sessions_delete_dialog_message">“%1$s” serverdən silinəcək. Bunu geri qaytarmaq olmaz.</string>
     <string name="archived_sessions_archived_at">Arxivlənib: %1$s</string>
     <string name="archived_sessions_unarchived">“%1$s” arxivdən çıxarıldı</string>
     <string name="archived_sessions_undo">Geri al</string>
     <string name="archived_sessions_empty_title">Arxivlənmiş sessiya yoxdur</string>
     <string name="archived_sessions_empty_message">%1$s daxilində arxivlədiyiniz sessiyalar burada görünəcək.</string>
     <string name="archived_sessions_show_all_projects">Bütün layihələri göstər</string>
-    <string name="archived_sessions_footer">Ətraflı üçün sessiyaya toxunun. “Arxivdən çıxar” sessiyanı yenidən Ana səhifəyə qaytarır.</string>
+    <string name="archived_sessions_footer">Daha ətraflı məlumat üçün sessiyaya toxunun. “Arxivdən çıxar” sessiyanı yenidən Ana səhifəyə qaytarır.</string>
     <string name="archived_sessions_load_failed">Arxivlənmiş sessiyaları yükləmək alınmadı.</string>
     <string name="archived_sessions_unarchive_failed">Sessiyanı arxivdən çıxarmaq alınmadı.</string>
     <string name="session_chat_archived_banner">Arxivlənib: %1$s</string>
@@ -339,7 +339,7 @@
     <string name="worktree_run_in_subtitle">Checkout yarat və orada başla</string>
     <string name="worktree_move_subtitle">Checkout yarat və ora keç</string>
     <string name="worktree_needs_v2">opencode v2 serveri tələb olunur</string>
-    <string name="worktree_turn_on">Tənzimləmələrdə Worktree-ləri aktiv edin</string>
+    <string name="worktree_turn_on">Tənzimləmələrdə worktree-ləri aktiv edin</string>
     <string name="worktree_not_git">Git repozitoriyası tələb olunur</string>
     <string name="worktree_no_commit">Commit olan git repozitoriyası tələb olunur</string>
     <string name="worktree_unsupported">Bu server worktree yarada bilmir</string>
@@ -405,7 +405,7 @@
     <string name="file_viewer_truncated">Faylın yalnız ilk 1 MB göstərilir.</string>
     <string name="file_viewer_tab_preview">Önizləmə</string>
     <string name="file_viewer_tab_source">Mənbə</string>
-    <string name="file_viewer_binary_title">İkili fayl</string>
+    <string name="file_viewer_binary_title">Binar fayl</string>
     <string name="file_viewer_binary_message">Bu fayl növü üçün önizləmə yoxdur.</string>
     <string name="file_viewer_binary_message_type">%1$s\nBu fayl növü üçün önizləmə yoxdur.</string>
     <string name="file_viewer_too_large_title">Önizləmə üçün çox böyükdür</string>
@@ -441,7 +441,7 @@
     <string name="terminal_error_create">Shell başlatmaq mümkün olmadı.</string>
     <string name="terminal_connecting_title">Qoşulur</string>
     <string name="terminal_connecting_subtitle">Shell başladılır…</string>
-    <string name="terminal_connect_failed_title">Qoşulma alınmadı</string>
+    <string name="terminal_connect_failed_title">Qoşulmaq mümkün olmadı</string>
     <string name="terminal_connect_failed_message">Bu layihə üçün shell başlatmaq mümkün olmadı.</string>
     <string name="terminal_exited">Shell sonlandı</string>
     <string name="terminal_retry">Yenidən cəhd et</string>
@@ -477,7 +477,7 @@
     <string name="session_chat_fork_result_message_ready">“%1$s” hazırdır.</string>
     <string name="session_chat_fork_result_open">Aç</string>
     <string name="session_chat_fork_result_stay_here">Burada qal</string>
-    <string name="session_chat_attachment_source_title">Əlavə et</string>
+    <string name="session_chat_attachment_source_title">Qoşma əlavə et</string>
     <string name="session_chat_attachment_source_photos">Fotolar</string>
     <string name="session_chat_attachment_source_media">Media</string>
     <string name="session_chat_attachment_source_files">Fayllar</string>
@@ -512,7 +512,7 @@
     <string name="session_chat_move_worktree_menu_title">Worktree-yə köçür…</string>
     <string name="session_chat_move_worktree_sheet_title">Worktree-yə köçür</string>
     <string name="session_chat_move_worktree_no_other">Bu layihədə başqa worktree yoxdur</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Bu addımdan sonra %1$s qovluğuna keçəcək.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Bu addımdan sonra bura keçəcək: %1$s.</string>
     <string name="session_chat_move_worktree_failed">Sessiyanı köçürmək alınmadı: %1$s</string>
     <string name="session_chat_variant_default">Defolt</string>
     <string name="session_chat_model_chip_placeholder">Model</string>
@@ -524,7 +524,7 @@
     <string name="session_chat_side_question_unsupported">/btw yan suallara cavab verən opencode v2 serveri tələb edir. Bu server söhbətə əlavə etmədən cavab verə bilmir.</string>
     <string name="session_chat_side_question_unavailable">/btw üçün daha yeni opencode serveri lazımdır.</string>
     <string name="session_chat_side_question_copied">Cavab kopyalandı</string>
-    <string name="session_chat_side_question_failed">/btw alınmadı: “%1$s”</string>
+    <string name="session_chat_side_question_failed">/btw uğursuz oldu: “%1$s”</string>
     <string name="attachment_error_folder">Qovluqları əlavə etmək olmaz.</string>
     <string name="attachment_error_duplicate">Bu fayl artıq yüklənib</string>
     <string name="attachment_error_too_large">Bu fayl %1$d MB-dan böyükdür.</string>
@@ -533,16 +533,16 @@
     <string name="attachment_error_model_no_pdf">Bu model PDF əlavələrini dəstəkləmir.</string>
     <string name="attachment_error_model_some">Bu model seçilmiş əlavələrin bəzilərini dəstəkləmir.</string>
     <string name="attachment_error_unreadable">Əlavəni oxumaq mümkün olmadı.</string>
-    <string name="attachment_error_upload_failed">Yükləmə alınmadı</string>
+    <string name="attachment_error_upload_failed">Yükləmə uğursuz oldu</string>
     <string name="attachment_drop_reject_one">Bunu əlavə etmək olmur</string>
     <string name="attachment_drop_reject_many">Bunları əlavə etmək olmur</string>
     <plurals name="attachment_drop_attach_images_count">
-        <item quantity="one">%1$d şəkli əlavə etmək üçün buraxın</item>
-        <item quantity="other">%1$d şəkli əlavə etmək üçün buraxın</item>
+        <item quantity="one">%1$d şəkil əlavə etmək üçün buraxın</item>
+        <item quantity="other">%1$d şəkil əlavə etmək üçün buraxın</item>
     </plurals>
     <plurals name="attachment_drop_attach_files_count">
-        <item quantity="one">%1$d faylı əlavə etmək üçün buraxın</item>
-        <item quantity="other">%1$d faylı əlavə etmək üçün buraxın</item>
+        <item quantity="one">%1$d fayl əlavə etmək üçün buraxın</item>
+        <item quantity="other">%1$d fayl əlavə etmək üçün buraxın</item>
     </plurals>
     <string name="attachment_drop_attach_images">Şəkilləri əlavə etmək üçün buraxın</string>
     <string name="attachment_drop_attach_files">Faylları əlavə etmək üçün buraxın</string>
@@ -593,12 +593,12 @@
     <string name="session_chat_activity_action_open_up_next">Növbədəkiləri aç</string>
     <string name="session_chat_activity_action_show_thought">Fikri göstər</string>
     <plurals name="session_chat_activity_collapsed_show_count">
-        <item quantity="one">%1$d fəaliyyəti göstər</item>
-        <item quantity="other">%1$d fəaliyyəti göstər</item>
+        <item quantity="one">%1$d fəaliyyət göstər</item>
+        <item quantity="other">%1$d fəaliyyət göstər</item>
     </plurals>
     <plurals name="session_chat_activity_collapsed_hide_count">
-        <item quantity="one">%1$d fəaliyyəti gizlət</item>
-        <item quantity="other">%1$d fəaliyyəti gizlət</item>
+        <item quantity="one">%1$d fəaliyyət gizlət</item>
+        <item quantity="other">%1$d fəaliyyət gizlət</item>
     </plurals>
     <string name="session_chat_activity_show_more">Daha %1$d göstər</string>
     <string name="session_chat_activity_hide_more">Daha %1$d gizlət</string>
@@ -616,7 +616,7 @@
     <string name="timeline_state_creating_subtitle">Serverdə yaradılır…</string>
     <string name="new_session_title">Yeni sessiya</string>
     <string name="new_session_draft_subtitle">Qaralama · göndərəndə yaradılır</string>
-    <string name="new_session_discard_draft">Qaralamanı at</string>
+    <string name="new_session_discard_draft">Qaralamanı sil</string>
     <string name="new_session_run_in_caption">Sessiyanı burada işlət</string>
     <string name="new_session_project">Layihə</string>
     <string name="new_session_worktree">Worktree</string>
@@ -639,7 +639,7 @@
     <string name="timeline_state_retry">Yenidən cəhd et</string>
     <string name="timeline_state_empty">Hələ mesaj yoxdur. Başlamaq üçün prompt göndərin.</string>
     <string name="timeline_state_refreshing">Mesajlar yenilənir</string>
-    <string name="timeline_message_assistant">Assistent mesajı</string>
+    <string name="timeline_message_assistant">Köməkçi mesajı</string>
     <string name="timeline_message_actions_hint_long_press">Mesaj əməliyyatlarını göstərmək üçün uzun basın</string>
     <string name="timeline_message_actions_hint">Mesaj əməliyyatlarını göstərir</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
@@ -657,10 +657,10 @@
     <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
     <string name="timeline_background_work_subagents_and_shells_spoken">%1$s və %2$s</string>
     <string name="timeline_background_work_running_spoken">%1$s işləyir</string>
-    <string name="timeline_background_work_agent_needs_input">%1$s giriş tələb edir</string>
+    <string name="timeline_background_work_agent_needs_input">%1$s cavabınızı gözləyir</string>
     <plurals name="timeline_background_work_subagents_need_input">
-        <item quantity="one">%1$d subagent giriş tələb edir</item>
-        <item quantity="other">%1$d subagent giriş tələb edir</item>
+        <item quantity="one">%1$d subagent cavabınızı gözləyir</item>
+        <item quantity="other">%1$d subagent cavabınızı gözləyir</item>
     </plurals>
     <string name="timeline_background_work_needs_input_running">%1$s · %2$d işləyir</string>
     <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s işləyir</string>
@@ -689,8 +689,8 @@
     <string name="tool_title_write">Yaz</string>
     <string name="tool_title_skill">Bacarıq</string>
     <string name="tool_title_patch">Yamaq</string>
-    <string name="tool_title_get_issue">Problemi al</string>
-    <string name="tool_title_save_issue">Problemi saxla</string>
+    <string name="tool_title_get_issue">Issue al</string>
+    <string name="tool_title_save_issue">Issue saxla</string>
     <string name="tool_title_question">Sual</string>
     <string name="tool_title_agent">Agent</string>
     <string name="tool_title_thought">Düşüncə</string>
@@ -751,12 +751,12 @@
         <item quantity="other">%1$d yamaq</item>
     </plurals>
     <plurals name="tool_count_get_issue">
-        <item quantity="one">%1$d Problemi al</item>
-        <item quantity="other">%1$d Problemi al</item>
+        <item quantity="one">%1$d Issue al</item>
+        <item quantity="other">%1$d Issue al</item>
     </plurals>
     <plurals name="tool_count_save_issue">
-        <item quantity="one">%1$d Problemi saxla</item>
-        <item quantity="other">%1$d Problemi saxla</item>
+        <item quantity="one">%1$d Issue saxla</item>
+        <item quantity="other">%1$d Issue saxla</item>
     </plurals>
     <plurals name="tool_count_tool">
         <item quantity="one">%1$d alət</item>
@@ -789,7 +789,7 @@
     <string name="tool_placeholder_preparing_edit">Redaktə hazırlanır…</string>
     <string name="tool_placeholder_preparing_write">Yazma hazırlanır…</string>
     <string name="tool_subtitle_background">%1$s (arxa planda)</string>
-    <string name="tool_subtitle_plan_ready">İcraya hazırsınız?</string>
+    <string name="tool_subtitle_plan_ready">İcra etməyə hazırsınız?</string>
     <string name="tool_unknown_title">Naməlum alət</string>
     <string name="tool_unknown_detail">Alət əlçatan deyil</string>
     <string name="tool_result_pull_request_opened">Pull request açıldı</string>
@@ -913,7 +913,7 @@
     <string name="session_chat_sheet_mcp_status_connected">Qoşulub</string>
     <string name="session_chat_sheet_mcp_status_connecting">Qoşulur</string>
     <string name="session_chat_sheet_mcp_status_disabled">Deaktiv</string>
-    <string name="session_chat_sheet_mcp_status_failed">Alınmadı</string>
+    <string name="session_chat_sheet_mcp_status_failed">Uğursuz</string>
     <string name="session_chat_sheet_mcp_status_needs_sign_in">Giriş tələb olunur</string>
     <string name="session_chat_sheet_pending_prompts_title">Növbəti</string>
     <plurals name="session_chat_sheet_pending_prompts_waiting">
@@ -922,7 +922,7 @@
     </plurals>
     <string name="session_chat_sheet_pending_prompts_clear_all">Hamısını təmizlə</string>
     <string name="session_chat_sheet_pending_prompts_sending">Göndərilir…</string>
-    <string name="session_chat_sheet_pending_prompts_move_to_queue">Növbəyə keçir</string>
+    <string name="session_chat_sheet_pending_prompts_move_to_queue">Növbəyə köçür</string>
     <string name="session_chat_sheet_pending_prompts_steer_now">İndi istiqamətləndir</string>
     <string name="session_chat_sheet_pending_prompts_delete">Sil</string>
     <string name="session_chat_sheet_side_question_done">Hazırdır</string>
@@ -943,11 +943,11 @@
     <string name="session_chat_goal_show_less">Daha az göstər</string>
     <string name="session_chat_goal_first_turn">İlk növbə · mərhələ 0/%1$d</string>
     <string name="session_chat_goal_round">Mərhələ %1$d/%2$d</string>
-    <string name="session_chat_goal_paused_in_round">%1$d/%2$d-ci mərhələdə dayandırıldı</string>
-    <string name="session_chat_goal_met_in_round">%1$d-ci mərhələdə çatıldı</string>
-    <string name="session_chat_goal_reviewer_last_round">Rüyyətçi, son mərhələ</string>
+    <string name="session_chat_goal_paused_in_round">Dayandırıldı. Mərhələ: %1$d/%2$d</string>
+    <string name="session_chat_goal_met_in_round">Çatıldı. Mərhələ: %1$d</string>
+    <string name="session_chat_goal_reviewer_last_round">Rəyçi, son mərhələ</string>
     <string name="session_chat_goal_not_met_yet">Hələ çatılmayıb: %1$s</string>
-    <string name="session_chat_goal_reviewer">Rüyyətçi</string>
+    <string name="session_chat_goal_reviewer">Rəyçi</string>
     <string name="session_chat_goal_reviewer_pending">Bu növbə bitəndə işi yoxlayır.</string>
     <plurals name="session_chat_goal_stalls">
         <item quantity="one">%1$d mərhələdir irəliləyiş yoxdur; %2$d mərhələdən sonra dayandırılır</item>
@@ -968,7 +968,7 @@
     <string name="session_chat_goal_clear">Təmizlə</string>
     <string name="session_chat_goal_clearing">Təmizlənir…</string>
     <string name="session_chat_goal_new">Yeni məqsəd…</string>
-    <string name="session_chat_goal_footnote_active">Hər növbədən sonra rüyyətçi işi məqsədə görə yoxlayır. Agent məqsədə çatana, sizə ehtiyac duyana və ya %1$d mərhələ keçənə qədər davam edir.</string>
+    <string name="session_chat_goal_footnote_active">Hər növbədən sonra rəyçi işi məqsədə görə yoxlayır. Agent məqsədə çatana, sizə ehtiyac duyana və ya %1$d mərhələ keçənə qədər davam edir.</string>
     <string name="session_chat_goal_footnote_paused">Davam etmək %1$d mərhələlik yeni limit başladır.</string>
     <string name="session_chat_goal_footnote_met">Yeni məqsəd bunu əvəz edir.</string>
     <string name="session_chat_goal_paused">Məqsəd dayandırıldı</string>
@@ -978,14 +978,14 @@
     <string name="session_chat_goal_paused_no_progress">Məqsəd dayandırıldı: %1$d mərhələdir irəliləyiş yoxdur</string>
     <string name="session_chat_goal_paused_round_limit">Məqsəd %1$d mərhələdən sonra dayandırıldı</string>
     <string name="session_chat_goal_paused_restart">Məqsəd dayandırıldı: server yenidən başladı</string>
-    <string name="session_chat_goal_paused_reviewer">Məqsəd dayandırıldı: rüyyətçi qərar verə bilmədi</string>
+    <string name="session_chat_goal_paused_reviewer">Məqsəd dayandırıldı: rəyçi qərar verə bilmədi</string>
     <string name="session_chat_goal_paused_quiet">Məqsəd dayandırıldı: arxa plan işi səssizləşdi</string>
     <string name="session_chat_goal_met">Məqsədə çatıldı</string>
     <string name="session_chat_goal_set">Məqsəd təyin edildi</string>
     <string name="session_chat_goal_ended">bitdi</string>
     <string name="session_chat_goal_set_earlier">Əvvəlki məqsəd. Təmizlənib və ya əvəz edilib.</string>
     <string name="session_chat_goal_bubble_label">Məqsəd</string>
-    <string name="session_chat_goal_objective_hint">“Bitdi”nin necə görünəcəyini təsvir edin…</string>
+    <string name="session_chat_goal_objective_hint">Tamamlanmış işin necə görünməli olduğunu təsvir edin…</string>
     <string name="session_chat_goal_resume_placeholder">Cavab yazın, sonra məqsədi davam etdirin…</string>
     <string name="session_chat_goal_count">%1$s / %2$s simvol</string>
     <string name="session_chat_goal_count_over">%1$s / %2$s simvol · göndərmək üçün məqsədi qısaldın</string>
@@ -998,7 +998,7 @@
     <string name="session_chat_goal_resume_failed_reason">Məqsədi davam etdirmək alınmadı: %1$s</string>
     <string name="session_chat_goal_clear_failed">Məqsədi təmizləmək alınmadı</string>
     <string name="session_chat_goal_clear_failed_reason">Məqsədi təmizləmək alınmadı: %1$s</string>
-    <string name="session_chat_timeline_style_notice">Xronologiya: %1$s. İstədiyiniz vaxt Tənzimləmələrdən dəyişə bilərsiniz.</string>
+    <string name="session_chat_timeline_style_notice">Zaman xətti: %1$s. İstənilən vaxt Tənzimləmələrdən dəyişə bilərsiniz.</string>
     <string name="session_chat_branch_copied">Branch adı kopyalandı</string>
     <string name="session_chat_follow_up_switched_steer">İstiqamətləndirməyə keçildi</string>
     <string name="session_chat_follow_up_switched_queue">Növbəyə keçildi</string>
@@ -1036,9 +1036,9 @@
     <string name="session_chat_reply_error_dismiss">Sualı bağlamaq alınmadı. Yenidən cəhd edin.</string>
     <string name="session_chat_reply_error_dismiss_reason">Sualı bağlamaq alınmadı. %1$s.</string>
     <string name="session_chat_permission_unavailable">İcazə sorğusu artıq əlçatan deyil</string>
-    <string name="session_chat_question_unavailable">Sual sorğusu artıq əlçatan deyil</string>
-    <string name="session_chat_permission_tree_failed">İcazə sessiya ağacını yeniləmək mümkün olmadı</string>
-    <string name="session_chat_question_tree_failed">Sual sessiya ağacını yeniləmək mümkün olmadı</string>
+    <string name="session_chat_question_unavailable">Sual artıq əlçatan deyil</string>
+    <string name="session_chat_permission_tree_failed">İcazə sorğusunun sessiya ağacını yeniləmək mümkün olmadı</string>
+    <string name="session_chat_question_tree_failed">Sual sorğusunun sessiya ağacını yeniləmək mümkün olmadı</string>
     <string name="session_chat_sheet_timeline_style_picker_title">Yeni: xronologiyanı seçin</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Bu yenilik agentin nə etdiyini izləmək üçün yeni yollar təqdim edir.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">Bunu istədiyiniz vaxt Tənzimləmələr → Xronologiya üslubu bölməsindən dəyişə bilərsiniz.</string>
@@ -1171,7 +1171,7 @@
     </plurals>
     <string name="settings_collapse_tool_calls_title">Ardıcıl alət çağırışlarını yığ</string>
     <string name="settings_collapse_tool_calls_subtitle">Ardıcıl alətləri bir xülasə kartında qruplaşdır</string>
-    <string name="settings_timeline_style_title">Zaman xətti üslubu</string>
+    <string name="settings_timeline_style_title">Xronologiya üslubu</string>
     <string name="settings_timeline_style_standard_title">Standart</string>
     <string name="settings_timeline_style_standard_subtitle">Agentin mesajları arasında alət kartları və qruplar</string>
     <string name="settings_timeline_style_step_rail_title">Addım xətti</string>
@@ -1208,7 +1208,7 @@
     <string name="settings_analytics_title">Analitika və çökmə hesabatları</string>
     <string name="settings_analytics_subtitle">İstəyə bağlı istifadə hadisələrinə və çökmə hesabatlarına icazə verin. Söndürülü olduqda Firebase-ə heç nə göndərilmir.</string>
     <string name="settings_analytics_label">Məhsul analitikası</string>
-    <string name="settings_diagnostic_logs_subtitle">Məlumatları gizlədilmiş işləmə jurnalının son hissəsini paylaşın</string>
+    <string name="settings_diagnostic_logs_subtitle">İşləmə jurnalının məlumatları gizlədilmiş son hissəsini paylaşın</string>
     <string name="settings_clear_all_data_title">Bütün məlumatları sil</string>
     <string name="settings_clear_all_data_subtitle">Bağlantını və keşi sil</string>
     <string name="settings_clear_all_data_dialog_title">Bütün məlumatlar silinsin?</string>
@@ -1225,8 +1225,8 @@
     <string name="diagnostics_loading">Diaqnostika jurnalları yüklənir</string>
     <string name="diagnostics_entries_title">Qeydlər</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">Saxlanılan hissədə %1$d məlumatları gizlədilmiş sətir</item>
-        <item quantity="other">Saxlanılan hissədə %1$d məlumatları gizlədilmiş sətir</item>
+        <item quantity="one">Saxlanılan hissədə məlumatları gizlədilmiş %1$d sətir</item>
+        <item quantity="other">Saxlanılan hissədə məlumatları gizlədilmiş %1$d sətir</item>
     </plurals>
     <string name="diagnostics_entries_empty">Saxlanılan hissədə hələ qeyd yoxdur</string>
     <string name="diagnostics_kept_title">Saxlanılan</string>
@@ -1234,9 +1234,9 @@
         <item quantity="one">Son %1$d dəqiqə</item>
         <item quantity="other">Son %1$d dəqiqə</item>
     </plurals>
-    <string name="diagnostics_export_title">Ixrac</string>
+    <string name="diagnostics_export_title">İxrac</string>
     <string name="diagnostics_soft_cap_title">Yumşaq limit</string>
-    <string name="diagnostics_soft_cap_dropped">Maks. %1$d · %2$d ən köhnə silindi</string>
+    <string name="diagnostics_soft_cap_dropped">Maks. %1$d · ən köhnə %2$d silindi</string>
     <plurals name="diagnostics_soft_cap_none_dropped">
         <item quantity="one">Maks. %1$d · heç biri silinmədi</item>
         <item quantity="other">Maks. %1$d · heç biri silinmədi</item>
@@ -1286,7 +1286,7 @@
     <string name="appearance_mode_note_system">Telefonun açıq və ya tünd rejimini izləyir.</string>
     <string name="appearance_mode_note_light">Telefonun ayarından asılı olmayaraq həmişə açıq.</string>
     <string name="appearance_mode_note_dark">Telefonun ayarından asılı olmayaraq həmişə tünd.</string>
-    <string name="appearance_text_home_title">Ana siyahı mətni</string>
+    <string name="appearance_text_home_title">Ana səhifə siyahısının mətni</string>
     <string name="appearance_text_session_chat_title">Sessiya çatı mətni</string>
     <string name="appearance_text_code_title">Kod mətni</string>
     <string name="appearance_text_size_label">Ölçü</string>
@@ -1311,7 +1311,7 @@
     <string name="feature_flags_more_options">Daha çox seçim</string>
     <string name="feature_flags_intro">Bayrağı dəyişmək uzaqdakı dəyərdən üstün olan cihaz əvəzləməsi yaradır. Uzaq dəyərlər açılışda alınır və növbəti açılışda tətbiq olunur.</string>
     <string name="feature_flags_section_flags">Bayraqlar</string>
-    <string name="feedback_title_report">Problem bildir</string>
+    <string name="feedback_title_report">Problem barədə bildir</string>
     <string name="feedback_title_hide_parts">Hissələri gizlət</string>
     <string name="feedback_title_log_preview">Diaqnostika jurnalı</string>
     <string name="feedback_title_listening">Dinlənilir</string>
@@ -1319,7 +1319,7 @@
     <string name="feedback_kind_idea">İdeya</string>
     <string name="feedback_placeholder_bug">Nə baş verdi? Nə gözləyirdiniz?</string>
     <string name="feedback_placeholder_idea">OpenCode sizin üçün necə daha yaxşı ola bilər?</string>
-    <string name="feedback_privacy_note">Yalnız OpenCode Mobile komandasına göndərilir. Server ünvanınız, istifadəçi adınız və ya şifrəniz heç vaxt daxil edilmir. Jurnallar bu telefonda təmizlənir.</string>
+    <string name="feedback_privacy_note">Yalnız OpenCode Mobile komandasına göndərilir. Server ünvanınız, istifadəçi adınız və ya şifrəniz heç vaxt daxil edilmir. Jurnallarda məxfi məlumatlar bu telefonda gizlədilir.</string>
     <string name="feedback_error_offline">Oflayn vəziyyətdəsiniz. Hesabatınız burada saxlanılır — şəbəkəyə qoşulduqda yenidən cəhd edin.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">Siz indicə hesabat göndərdiniz. %1$d san. sonra yenidən cəhd edin.</item>
@@ -1330,8 +1330,8 @@
     <string name="feedback_action_try_again">Yenidən cəhd et</string>
     <string name="feedback_action_share_instead">Əvəzinə paylaş</string>
     <string name="feedback_undo">Geri al</string>
-    <string name="feedback_done">Hazırdır</string>
-    <string name="feedback_add_attachment">Əlavə et</string>
+    <string name="feedback_done">Hazır</string>
+    <string name="feedback_add_attachment">Qoşma əlavə et</string>
     <string name="feedback_dictate">Səslə yaz</string>
     <string name="feedback_send">Hesabatı göndər</string>
     <string name="feedback_sending">Hesabat göndərilir</string>
@@ -1361,8 +1361,8 @@
         <item quantity="other">Ekran görüntüsü, %1$d sahə gizlidir</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">Son %1$d dəqiqə · yükləmə zamanı gzip ilə sıxılır. Bu telefonda təmizlənib.</item>
-        <item quantity="other">Son %1$d dəqiqə · yükləmə zamanı gzip ilə sıxılır. Bu telefonda təmizlənib.</item>
+        <item quantity="one">Son %1$d dəqiqə · yükləmə zamanı gzip ilə sıxılır. Məxfi məlumatlar bu telefonda gizlədilib.</item>
+        <item quantity="other">Son %1$d dəqiqə · yükləmə zamanı gzip ilə sıxılır. Məxfi məlumatlar bu telefonda gizlədilib.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Yüklənir…</string>
     <string name="feedback_log_preview_empty_title">Jurnal sətri yoxdur</string>
@@ -1396,7 +1396,7 @@
     <string name="session_search_archived_tag">Arxivlənib</string>
     <string name="session_search_scope_selected">%1$s, seçilib</string>
     <string name="keyboard_shortcuts_group_session">Sessiya</string>
-    <string name="keyboard_shortcuts_group_prompt">Sorğu</string>
+    <string name="keyboard_shortcuts_group_prompt">Prompt</string>
     <string name="keyboard_shortcuts_group_go">Keçid</string>
     <string name="keyboard_shortcuts_new_session">Yeni sessiya</string>
     <string name="keyboard_shortcuts_command_palette">Əmr paneli</string>
@@ -1422,15 +1422,15 @@
     <string name="changes_source_menu_selected">%1$s, seçilib</string>
     <string name="changes_source_working_tree_name">Git dəyişiklikləri</string>
     <string name="changes_source_working_tree_empty_title">Git dəyişikliyi yoxdur</string>
-    <string name="changes_source_working_tree_empty_message">İş ağacında təsdiqlənməmiş dəyişiklik yoxdur.</string>
+    <string name="changes_source_working_tree_empty_message">İş ağacında commit edilməmiş dəyişiklik yoxdur.</string>
     <string name="changes_source_last_turn_name">Son addımın dəyişiklikləri</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">Git dəyişikliklərində %1$d dəyişdirilmiş fayl var.</item>
         <item quantity="other">Git dəyişikliklərində %1$d dəyişdirilmiş fayl var.</item>
     </plurals>
     <plurals name="changes_other_source_last_turn">
-        <item quantity="one">Son addım %1$d faylı dəyişdi.</item>
-        <item quantity="other">Son addım %1$d faylı dəyişdi.</item>
+        <item quantity="one">Son addım %1$d fayl dəyişdi.</item>
+        <item quantity="other">Son addım %1$d fayl dəyişdi.</item>
     </plurals>
     <string name="changes_other_source_show">Göstər: %1$s</string>
     <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
@@ -1477,7 +1477,7 @@
         <item quantity="other">%1$d fayl</item>
     </plurals>
     <string name="component_review_changes_pill_title">Dəyişikliklərə bax</string>
-    <string name="component_unified_diff_summary_added">Fayl əlavə edildi %1$s, %2$s, %3$s</string>
+    <string name="component_unified_diff_summary_added">Əlavə edilmiş fayl %1$s, %2$s, %3$s</string>
     <string name="component_activity_status_running">işləyir</string>
     <string name="component_subagent_state_running">işləyir</string>
     <string name="component_todo_item_accessibility_label">%1$s, %2$s</string>
@@ -1488,11 +1488,11 @@
     <string name="component_todos_pill_accessibility_label">Sessiya tapşırıqları, %1$d/%2$d tamamlandı</string>
     <string name="component_todos_pill_accessibility_label_active">Sessiya tapşırıqları, %1$d/%2$d tamamlandı, %3$s</string>
     <string name="component_reasoning_row_thought_duration">Düşündü · %1$s</string>
-    <string name="component_reasoning_row_duration_seconds">%1$ss</string>
+    <string name="component_reasoning_row_duration_seconds">%1$ssan</string>
     <string name="component_reasoning_row_duration_ms">%1$dms</string>
-    <string name="component_reasoning_row_duration_minutes_seconds">%1$ddəq %2$ds</string>
-    <string name="component_reasoning_row_duration_hours_minutes">%1$ds %2$ddəq</string>
-    <string name="component_reasoning_row_shows_thought_hint">Fikrin tam mətnini göstərir</string>
+    <string name="component_reasoning_row_duration_minutes_seconds">%1$ddəq %2$dsan</string>
+    <string name="component_reasoning_row_duration_hours_minutes">%1$dsaat %2$ddəq</string>
+    <string name="component_reasoning_row_shows_thought_hint">Düşüncənin tam mətnini göstərir</string>
     <string name="component_unified_diff_row_kind_hunk">hunk</string>
     <string name="component_unified_diff_row_kind_metadata">metaməlumat</string>
     <string name="component_unified_diff_row_kind_context">kontekst</string>
@@ -1504,18 +1504,18 @@
     <string name="component_floating_pill_state_ready">Hazırdır</string>
     <string name="component_floating_pill_state_needs_attention">Diqqət tələb edir</string>
     <string name="component_floating_pill_state_error">Xəta</string>
-    <string name="component_floating_pill_state_done">Hazırdır</string>
+    <string name="component_floating_pill_state_done">Tamamlandı</string>
     <string name="component_floating_pill_accessibility_label">%1$s, %2$s</string>
     <string name="component_floating_pill_dismiss">Bağla: %1$s</string>
-    <string name="common_expanded">Açıqdır</string>
-    <string name="common_collapsed">Bağlıdır</string>
+    <string name="common_expanded">Genişləndirilib</string>
+    <string name="common_collapsed">Yığılıb</string>
     <string name="component_tree_row_loading">Yüklənir</string>
     <string name="component_timeline_notice_shows_one_line_hint">Bir sətir göstərir</string>
     <string name="component_timeline_notice_shows_full_value_hint">Tam dəyəri göstərir</string>
     <string name="component_attachment_accessibility_label">%1$s, %2$s</string>
-    <string name="component_subagent_state_waiting_for_input">giriş gözləyir</string>
-    <string name="component_subagent_state_done">hazırdır</string>
-    <string name="component_subagent_state_failed">alınmadı</string>
+    <string name="component_subagent_state_waiting_for_input">daxiletmə gözləyir</string>
+    <string name="component_subagent_state_done">bitib</string>
+    <string name="component_subagent_state_failed">uğursuz oldu</string>
     <string name="component_subagent_state_stopped">dayandırılıb</string>
     <string name="component_filter_tabs_unseen">yeni</string>
     <string name="component_text_size_slider_sample_letter">A</string>
@@ -1530,9 +1530,9 @@
     <string name="component_hunk_navigation_collapse_context">Konteksti yığ</string>
     <string name="component_top_bar_project_subtitle">Layihə %1$s %2$s</string>
     <string name="component_composer_dismiss">Bağla</string>
-    <string name="dictation_model_downloading_detail">Bu, sistem yükləməsidir. Bu kartı bağlasanız da davam edəcək.</string>
+    <string name="dictation_model_downloading_detail">Bu, sistem endirməsidir. Bu kartı bağlasanız da davam edəcək.</string>
     <string name="session_list_scope_load_loading">Sessiyalar yüklənir…</string>
-    <string name="dictation_insert">Əlavə et</string>
+    <string name="dictation_insert">Daxil et</string>
     <string name="dictation_action_check_again">Yenidən yoxla</string>
     <string name="component_activity_sheet_steps">Addımlar</string>
     <string name="component_list_item_show_actions">Əməliyyatları göstər</string>
@@ -1540,12 +1540,12 @@
     <string name="component_attachment_kind_image">Şəkil</string>
     <string name="component_composer_hide_question">Sualı gizlət</string>
     <string name="live_updates_status_connecting">qoşulur</string>
-    <string name="dictation_model_queued_detail">%1$s yükləməni növbəyə qoydu. Wi-Fi, şarj və ya boş yaddaş gözləyə bilər. Bir neçə dəqiqədən sonra yenidən yoxlayın.</string>
+    <string name="dictation_model_queued_detail">%1$s endirməni növbəyə qoydu. Endirmə Wi-Fi bağlantısını, şarjı və ya boş yaddaşı gözləyə bilər. Bir neçə dəqiqədən sonra yenidən yoxlayın.</string>
     <string name="dictation_model_not_installed_detail">Səslə yazma bu cihazda işləyir, ona görə səsiniz heç vaxt yüklənmir. %1$s modeli bir dəfə endirir və bütün tətbiqlər üçün saxlayır.</string>
     <string name="component_outgoing_message_shows_actions_hint">Mesaj əməliyyatlarını göstərir</string>
-    <string name="component_activity_status_stopped">dayandırıldı</string>
+    <string name="component_activity_status_stopped">dayandırılıb</string>
     <string name="dictation_action_try_again">Yenidən cəhd et</string>
-    <string name="component_composer_model_effort">Model %1$s, səy %2$s</string>
+    <string name="component_composer_model_effort">Model %1$s, düşünmə səviyyəsi %2$s</string>
     <string name="component_activity_card_working">İşləyir</string>
     <string name="component_activity_card_opens_activity">%1$s, fəaliyyəti açır</string>
     <string name="component_image_loading_label">%1$s, yüklənir</string>
@@ -1572,12 +1572,12 @@
     <string name="session_list_dock_hint_swipe">Layihə filtrini açır. Layihələri dəyişmək üçün sürüşdürün.</string>
     <string name="component_composer_select_one">Birini seçin</string>
     <string name="component_session_list_skeleton_row">Sessiya yüklənir</string>
-    <string name="component_split_pane_resize_sidebar">Yan paneli ölçüsünü dəyiş</string>
+    <string name="component_split_pane_resize_sidebar">Yan panelin ölçüsünü dəyiş</string>
     <string name="session_list_section_recent">Son</string>
     <string name="session_list_section_recent_hint">Nəzər salmaq lazımdır</string>
     <string name="component_activity_status_completed">tamamlandı</string>
-    <string name="share_diagnostics_chooser_title">Diaqnostik loqları paylaş</string>
-    <string name="dictation_model_queued_title">%1$s %2$s modelini sonra yükləyəcək</string>
+    <string name="share_diagnostics_chooser_title">Diaqnostika jurnallarını paylaş</string>
+    <string name="dictation_model_queued_title">%1$s sonra endirəcək: %2$s</string>
     <string name="session_list_dock_choose_project_or_worktree">Layihə və ya worktree seçin</string>
     <string name="component_top_bar_worktree_subtitle">Worktree: %1$s</string>
     <string name="component_image_could_not_load_label">%1$s, yüklənmədi</string>
@@ -1589,9 +1589,9 @@
     <string name="component_composer_next">Növbəti</string>
     <string name="component_message_image_label">Şəkil %1$s</string>
     <string name="component_composer_leave_shell_mode">Shell rejimindən çıx</string>
-    <string name="dictation_action_downloading">Yüklənir…</string>
+    <string name="dictation_action_downloading">Endirilir…</string>
     <string name="component_image_viewer_share">Paylaş</string>
-    <string name="session_list_status_failed">Alınmadı</string>
+    <string name="session_list_status_failed">Uğursuz oldu</string>
     <string name="component_composer_custom_answer_title">Öz cavabınızı yazın</string>
     <string name="component_composer_always">Həmişə</string>
     <string name="component_composer_send_side_question">Əlavə sual ver</string>
@@ -1605,7 +1605,7 @@
     </plurals>
     <string name="component_server_address_scheme_button_description">Sxem %1$s. Sxem seçicisini açır</string>
     <string name="share_diagnostics_subject">OpenCode diaqnostika jurnalları</string>
-    <string name="component_reorderable_list_move_up">Yuxarı apar</string>
+    <string name="component_reorderable_list_move_up">Yuxarı daşı</string>
     <string name="session_list_scope_load_failed_title">%1$s yüklənmədi</string>
     <string name="dictation_status_listening">Dinlənilir</string>
     <string name="dictation_downloading_model">Nitq modeli endirilir</string>
@@ -1616,7 +1616,7 @@
     <string name="component_attachment_kind_text">Mətn</string>
     <string name="component_composer_next_question">Növbəti sual</string>
     <string name="component_split_pane_show_sidebar">Yan paneli göstər</string>
-    <string name="component_composer_placeholder">İstədiyini soruş...</string>
+    <string name="component_composer_placeholder">İstədiyiniz sualı verin...</string>
     <string name="component_server_address_host">Host</string>
     <plurals name="relative_time_hours_ago">
         <item quantity="one">%1$d saat əvvəl</item>
@@ -1626,12 +1626,12 @@
         <item quantity="one">%1$d addım</item>
         <item quantity="other">%1$d addım</item>
     </plurals>
-    <string name="theme_error_apply_failed">Mövzu hazır parametrlərini tətbiq etmək mümkün olmadı</string>
+    <string name="theme_error_apply_failed">Mövzu şablonunu tətbiq etmək mümkün olmadı</string>
     <string name="component_unified_diff_summary_deleted">Silinmiş fayl %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">İşləyir</string>
     <string name="component_step_rail_expands">%1$s, açılır</string>
-    <string name="session_list_status_done">Hazırdır</string>
-    <string name="session_list_status_idle">Boşda</string>
+    <string name="session_list_status_done">Bitib</string>
+    <string name="session_list_status_idle">Boşdur</string>
     <string name="component_attachment_kind_file">Fayl</string>
     <string name="component_composer_run_shell_command">Shell əmrini icra et</string>
     <string name="component_image_could_not_load">Yüklənmədi</string>
@@ -1640,8 +1640,8 @@
     <string name="component_composer_previous_question">Əvvəlki sual</string>
     <string name="component_activity_card_agent">Agent</string>
     <string name="session_list_section_today">Bu gün</string>
-    <string name="component_composer_child_lockout">Alt sessiyalara sorğu göndərmək olmur.</string>
-    <string name="component_attachment_uploading_percent">Yüklənir %1$d%%</string>
+    <string name="component_composer_child_lockout">Alt sessiyalara prompt göndərmək olmur.</string>
+    <string name="component_attachment_uploading_percent">Yüklənir %%%1$d</string>
     <string name="component_composer_custom_answer_hint">Fərdi cavab daxil edin</string>
     <string name="component_composer_cancel_revert">Geri qaytarmanı ləğv et</string>
     <string name="session_list_scope_load_slow_caption">Hələ yüklənir — böyük layihələr bir az çəkə bilər</string>
@@ -1655,7 +1655,7 @@
         <item quantity="one">%1$d agent</item>
         <item quantity="other">%1$d agent</item>
     </plurals>
-    <string name="theme_error_syntax_preset_not_found">Sintaksis işıqlandırma preseti tapılmadı</string>
+    <string name="theme_error_syntax_preset_not_found">Sintaksis vurğulama şablonu tapılmadı</string>
     <string name="session_list_scope_load_slow">Hələ yüklənir…</string>
     <string name="session_list_dock_hint">Layihə filtrini açır.</string>
     <string name="component_hunk_navigation_next">Növbəti hunk</string>
@@ -1689,13 +1689,13 @@
     <string name="session_list_worktree_empty_action">Filtri təmizlə</string>
     <string name="dictation_model_download_failed_detail">Bağlantını və cihazda boş yaddaşı yoxlayın, sonra yenidən cəhd edin.</string>
     <string name="component_composer_send_queue">Növbəyə əlavə et</string>
-    <string name="session_list_dock_new_session_hint">Başqa yerdə başlamaq üçün layihə və ya worktree seçin bölməsindən istifadə edin.</string>
+    <string name="session_list_dock_new_session_hint">Başqa yerdə başlamaq üçün “Layihə və ya worktree seçin” əmrindən istifadə edin.</string>
     <string name="session_list_section_yesterday">Dünən</string>
     <string name="component_code_file_line_label">Sətir %1$d, %2$s</string>
-    <string name="share_feedback_subject_idea">OpenCode Mobile ideya bildirişi</string>
+    <string name="share_feedback_subject_idea">OpenCode Mobile ideya hesabatı</string>
     <string name="component_hunk_navigation_previous">Əvvəlki hunk</string>
     <string name="session_list_section_week_of">%1$s – %2$s həftəsi</string>
-    <string name="dictation_model_download_failed_title">%1$s %2$s modelini yükləyə bilmədi</string>
+    <string name="dictation_model_download_failed_title">%1$s endirə bilmədi: %2$s</string>
     <string name="component_activity_status_pending">gözləyir</string>
     <string name="component_composer_revert_tag">Geri qaytar</string>
     <string name="component_composer_model">Model: %1$s</string>
@@ -1705,7 +1705,7 @@
     </plurals>
     <string name="component_outgoing_message_long_press_hint">Mesaj əməliyyatlarını göstərmək üçün uzun basın</string>
     <string name="component_composer_hide_permission">İcazə sorğusunu gizlət</string>
-    <string name="dictation_downloading_model_progress">Nitq modeli yüklənir, %1$s</string>
+    <string name="dictation_downloading_model_progress">Nitq modeli endirilir, %1$s</string>
     <string name="component_branch_pill_copy_branch_name">Branch adını kopyala</string>
     <string name="component_truncation_row_full_message_title">Mesajın hamısını göstər</string>
     <string name="component_truncation_row_full_message_caption">%2$s simvoldan %1$s simvol göstərilir</string>
@@ -1713,13 +1713,13 @@
     <string name="component_outgoing_message_label">Gedən mesaj</string>
     <string name="session_list_status_stopped">Dayandırılıb</string>
     <string name="component_attachment_cancel_upload">%1$s yüklənməsini ləğv et</string>
-    <string name="dictation_cancel_description">Diktəni ləğv et</string>
+    <string name="dictation_cancel_description">Səslə yazmanı ləğv et</string>
     <string name="component_composer_shell_mode">Shell rejimi</string>
     <string name="component_skeleton_illustration_connect">Qoş</string>
     <string name="component_composer_not_selected">Seçilməyib</string>
     <string name="component_composer_shell_mode_description">Shell rejimi. Shell rejimindən çıx</string>
-    <string name="component_branch_pill_based_on">Əsas: %1$s</string>
-    <string name="component_composer_add_attachment">Əlavə et</string>
+    <string name="component_branch_pill_based_on">%1$s əsasında</string>
+    <string name="component_composer_add_attachment">Qoşma əlavə et</string>
     <string name="dictation_microphone_off">Mikrofona giriş söndürülüb</string>
     <string name="component_composer_shell">Shell</string>
     <string name="live_updates_status_auth_failed">Autentifikasiya uğursuz oldu</string>
@@ -1729,7 +1729,7 @@
     <string name="component_close">Bağla</string>
     <string name="relative_time_now">indi</string>
     <string name="component_composer_previous_permission">Əvvəlki icazə sorğusu</string>
-    <string name="component_composer_dictate">Diktə et</string>
+    <string name="component_composer_dictate">Səslə yaz</string>
     <string name="component_composer_side_question_mode_description">Yan sual rejimi. Yan sual rejimindən çıx</string>
     <string name="component_composer_abort">Aktiv işi dayandır</string>
     <string name="component_server_address_scheme_button">Sxem %1$s</string>
@@ -1742,7 +1742,7 @@
     <string name="component_composer_back_to_main_session">Əsas sessiyaya qayıt</string>
     <string name="component_activity_sheet_working_count">İşləyir: %1$d</string>
     <string name="session_list_status_retrying">Yenidən cəhd edilir</string>
-    <string name="component_attachment_remove">%1$s faylını sil</string>
+    <string name="component_attachment_remove">%1$s faylını çıxar</string>
     <string name="component_composer_send_steer">İstiqamətləndirmə kimi göndər</string>
     <string name="component_composer_next_permission">Növbəti icazə sorğusu</string>
     <string name="session_list_dock_project_filter">Layihə filtri</string>
@@ -1750,14 +1750,14 @@
     <string name="component_branch_pill_shows_details_hint">Branch təfərrüatlarını göstərir</string>
     <string name="component_composer_permission_requested">İcazə sorğusu</string>
     <string name="component_thinking">Düşünmə</string>
-    <string name="dictation_model_downloading_title">%1$s %2$s yükləyir</string>
+    <string name="dictation_model_downloading_title">%1$s endirir: %2$s</string>
     <string name="component_hunk_navigation_expand_context">Konteksti genişləndir</string>
     <string name="dictation_listening_placeholder">Dinlənilir…</string>
     <string name="component_skeleton_illustration_unofficial">Qeyri-rəsmi</string>
     <string name="dictation_status_ready">Daxil etməyə hazırdır</string>
     <string name="dictation_starting">Başlayır…</string>
     <string name="dictation_language_speech_model">%1$s nitq modeli</string>
-    <string name="component_reorderable_list_move_down">Aşağı apar</string>
+    <string name="component_reorderable_list_move_down">Aşağı daşı</string>
     <plurals name="component_section_header_item_count">
         <item quantity="one">%1$d element</item>
         <item quantity="other">%1$d element</item>
@@ -1812,11 +1812,11 @@
     <string name="whats_new_title">Yeniliklər</string>
     <string name="whats_new_version">Versiya %1$s</string>
     <string name="whats_new_skipped_one">Bir yeniləməni buraxmısınız, ona görə aşağıda verilib.</string>
-    <string name="whats_new_skipped_many">%1$d yeniləməni buraxmısınız, ona görə aşağıda verilib.</string>
+    <string name="whats_new_skipped_many">%1$d yeniləməni buraxmısınız, ona görə onlar aşağıda verilib.</string>
     <string name="whats_new_in_version">%1$s versiyasında</string>
     <string name="whats_new_also_since">Son yeniləmənizdən bəri digər yeniliklər · %1$s</string>
     <string name="whats_new_fixes">Düzəlişlər</string>
-    <string name="whats_new_done">Hazırdır</string>
+    <string name="whats_new_done">Hazır</string>
     <string name="whats_new_find_again">Bunu yenidən Tənzimləmələr → Yeniliklər bölməsində tapa bilərsiniz</string>
     <string name="whats_new_installed">Quraşdırılıb</string>
     <string name="whats_new_settings_subtitle">Hər versiya üçün buraxılış qeydləri</string>

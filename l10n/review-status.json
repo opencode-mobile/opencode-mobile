@@ -1,14 +1,134 @@
 {
+  "am": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 140,
+    "date": "2026-11-28"
+  },
+  "az": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 111,
+    "date": "2026-11-28"
+  },
+  "bg": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 185,
+    "date": "2026-11-28"
+  },
+  "bn": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 112,
+    "date": "2026-11-28"
+  },
+  "bs": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 159,
+    "date": "2026-11-28"
+  },
+  "ca": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 62,
+    "date": "2026-11-28"
+  },
+  "cs": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 103,
+    "date": "2026-11-28"
+  },
+  "da": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 104,
+    "date": "2026-11-28"
+  },
   "de": {
     "model": "claude-agent/opus",
     "reviewed": 1520,
     "fixed": 144,
     "date": "2026-11-28"
   },
+  "el": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 123,
+    "date": "2026-11-28"
+  },
+  "es": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 73,
+    "date": "2026-11-28"
+  },
+  "et": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 147,
+    "date": "2026-11-28"
+  },
   "fi": {
     "model": "claude-agent/opus",
     "reviewed": 1520,
     "fixed": 156,
+    "date": "2026-11-28"
+  },
+  "fo": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 267,
+    "date": "2026-11-28"
+  },
+  "fr": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 127,
+    "date": "2026-11-28"
+  },
+  "hi": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 139,
+    "date": "2026-11-28"
+  },
+  "hr": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 169,
+    "date": "2026-11-28"
+  },
+  "hu": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 160,
+    "date": "2026-11-28"
+  },
+  "hy": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 134,
+    "date": "2026-11-28"
+  },
+  "id": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 83,
+    "date": "2026-11-28"
+  },
+  "is": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 147,
+    "date": "2026-11-28"
+  },
+  "it": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 63,
     "date": "2026-11-28"
   },
   "ja": {
@@ -23,10 +143,82 @@
     "fixed": 135,
     "date": "2026-11-28"
   },
+  "ko": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 139,
+    "date": "2026-11-28"
+  },
+  "lt": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 141,
+    "date": "2026-11-28"
+  },
+  "lv": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 196,
+    "date": "2026-11-28"
+  },
+  "mk": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 165,
+    "date": "2026-11-28"
+  },
+  "mn": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 140,
+    "date": "2026-11-28"
+  },
+  "ms": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 108,
+    "date": "2026-11-28"
+  },
   "my": {
     "model": "claude-agent/opus",
     "reviewed": 1520,
     "fixed": 137,
+    "date": "2026-11-28"
+  },
+  "nb": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 104,
+    "date": "2026-11-28"
+  },
+  "ne": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 108,
+    "date": "2026-11-28"
+  },
+  "nl": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 97,
+    "date": "2026-11-28"
+  },
+  "pl": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 59,
+    "date": "2026-11-28"
+  },
+  "pt-BR": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 27,
+    "date": "2026-11-28"
+  },
+  "ro": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 144,
     "date": "2026-11-28"
   },
   "ru": {
@@ -35,16 +227,88 @@
     "fixed": 94,
     "date": "2026-11-28"
   },
+  "sk": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 64,
+    "date": "2026-11-28"
+  },
+  "sl": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 145,
+    "date": "2026-11-28"
+  },
+  "sq": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 113,
+    "date": "2026-11-28"
+  },
+  "sr": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 91,
+    "date": "2026-11-28"
+  },
+  "sv": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 85,
+    "date": "2026-11-28"
+  },
+  "tg": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 124,
+    "date": "2026-11-28"
+  },
   "th": {
     "model": "claude-agent/opus",
     "reviewed": 1520,
     "fixed": 61,
     "date": "2026-11-28"
   },
+  "tk": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 86,
+    "date": "2026-11-28"
+  },
+  "tr": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 70,
+    "date": "2026-11-28"
+  },
   "uk": {
     "model": "claude-agent/opus",
     "reviewed": 1520,
     "fixed": 123,
+    "date": "2026-11-28"
+  },
+  "uz": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 163,
+    "date": "2026-11-28"
+  },
+  "vi": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 55,
+    "date": "2026-11-28"
+  },
+  "zh-Hans": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 43,
+    "date": "2026-11-28"
+  },
+  "zh-Hant": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 42,
     "date": "2026-11-28"
   }
 }

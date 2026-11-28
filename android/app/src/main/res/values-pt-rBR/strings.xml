@@ -179,8 +179,8 @@
     <string name="server_health_protocol_v2">API v2</string>
     <string name="server_health_last_restart">Última reinicialização</string>
     <string name="server_health_last_restart_ago">há %1$s</string>
-    <string name="server_health_last_restart_none">Nenhuma vista</string>
-    <string name="server_health_restarts_seen">Reinicializações vistas</string>
+    <string name="server_health_last_restart_none">Nenhuma detectada</string>
+    <string name="server_health_restarts_seen">Reinicializações detectadas</string>
     <string name="server_health_restarts_seen_value">%1$d</string>
     <string name="server_health_event_streams">Fluxos de eventos</string>
     <string name="server_health_event_streams_value">%1$d de %2$d ao vivo</string>
@@ -238,7 +238,7 @@
     <string name="home_remove_project_message">Remover \"%1$s\" da tela inicial? As sessões continuam no servidor.</string>
     <string name="home_snackbar_removed">\"%1$s\" removido da tela inicial</string>
     <string name="home_snackbar_already_on_home">\"%1$s\" já está na tela inicial</string>
-    <string name="home_snackbar_joined_project">Mesmo repositório que %1$s. Exibindo como worktree lá.</string>
+    <string name="home_snackbar_joined_project">Mesmo repositório de %1$s. Exibido lá como worktree.</string>
     <string name="home_all">Todos</string>
     <string name="home_all_projects">Todos os projetos</string>
     <plurals name="home_project_count">
@@ -253,9 +253,9 @@
         <item quantity="other">%1$d worktrees</item>
     </plurals>
     <plurals name="home_all_worktrees">
-        <item quantity="one">%1$d worktree no total</item>
-        <item quantity="many">Todos os %1$d de worktrees</item>
-        <item quantity="other">Todos os %1$d worktrees</item>
+        <item quantity="one">Todos (%1$d worktree)</item>
+        <item quantity="many">Todos (%1$d de worktrees)</item>
+        <item quantity="other">Todos (%1$d worktrees)</item>
     </plurals>
     <plurals name="home_running_count">
         <item quantity="one">%1$d em execução</item>
@@ -344,7 +344,7 @@
     </plurals>
     <string name="add_project_in_folder">Em %1$s</string>
     <string name="add_project_root_home">Pessoal</string>
-    <string name="add_project_error_add_failed">Não foi possível adicionar este diretório</string>
+    <string name="add_project_error_add_failed">Não foi possível adicionar esta pasta</string>
     <string name="worktree_new_row">Novo worktree…</string>
     <string name="worktree_run_in_subtitle">Cria um checkout e começa nele</string>
     <string name="worktree_move_subtitle">Cria um checkout e muda para ele</string>
@@ -396,7 +396,7 @@
     <string name="files_finding">Buscando arquivos</string>
     <string name="files_find_error">Não foi possível buscar arquivos</string>
     <string name="files_find_no_match">Nenhum arquivo corresponde a “%1$s”</string>
-    <string name="files_find_no_match_detail">A busca do servidor ignora pastas ignoradas.</string>
+    <string name="files_find_no_match_detail">A busca do servidor não inclui pastas ignoradas.</string>
     <string name="files_error_check_server_connection">Verifique a conexão com o servidor e tente novamente.</string>
     <string name="files_error_server_status">O servidor respondeu com %1$d.</string>
     <string name="files_no_file_title">Abra um arquivo da árvore</string>
@@ -413,7 +413,7 @@
     <string name="file_viewer_error_title">Não foi possível abrir o arquivo</string>
     <string name="file_viewer_empty_title">Arquivo vazio</string>
     <string name="file_viewer_empty_message">Este arquivo não tem conteúdo.</string>
-    <string name="file_viewer_truncated">Mostrando o primeiro 1 MB deste arquivo.</string>
+    <string name="file_viewer_truncated">Mostrando apenas o início deste arquivo (1 MB).</string>
     <string name="file_viewer_tab_preview">Prévia</string>
     <string name="file_viewer_tab_source">Código-fonte</string>
     <string name="file_viewer_binary_title">Arquivo binário</string>
@@ -441,7 +441,7 @@
     <string name="terminal_catalog_title">Terminais</string>
     <string name="terminal_catalog_loading">Carregando terminais</string>
     <string name="terminal_catalog_empty_title">Nenhum shell em execução</string>
-    <string name="terminal_catalog_empty_message">Inicie um para um projeto. Ele não fica vinculado a uma sessão de chat.</string>
+    <string name="terminal_catalog_empty_message">Inicie um shell para um projeto. Ele não fica vinculado a uma sessão de chat.</string>
     <string name="terminal_select_title">Selecione um shell</string>
     <string name="terminal_select_message">Escolha um shell da lista.</string>
     <string name="terminal_new_shell">Novo shell</string>
@@ -531,7 +531,7 @@
     <string name="session_chat_model_chip_placeholder">Modelo</string>
     <string name="session_chat_model_chip_loading">Carregando modelo…</string>
     <string name="session_chat_model_notice_load_failed">Não foi possível carregar os modelos. Toque em Modelo para tentar novamente.</string>
-    <string name="session_chat_model_notice_none_usable">Nenhum modelo utilizável disponível. Toque em Modelo para tentar novamente.</string>
+    <string name="session_chat_model_notice_none_usable">Não há modelos utilizáveis disponíveis. Toque em Modelo para tentar novamente.</string>
     <string name="session_chat_model_notice_variant_unavailable">A variante lembrada não está disponível. Usando Padrão.</string>
     <string name="session_chat_model_notice_model_unavailable">O modelo selecionado não está disponível. Usando %1$s.</string>
     <string name="session_chat_side_question_unsupported">/btw requer um servidor opencode v2 que responda perguntas paralelas. Este servidor não consegue responder sem acrescentar à conversa.</string>
@@ -611,7 +611,7 @@
     <string name="session_chat_activity_action_show_in_chat">Mostrar no chat</string>
     <string name="session_chat_activity_action_retry">Tentar novamente</string>
     <string name="session_chat_activity_action_open">Abrir</string>
-    <string name="session_chat_activity_action_open_up_next">Abrir A seguir</string>
+    <string name="session_chat_activity_action_open_up_next">Abrir “Próximos”</string>
     <string name="session_chat_activity_action_show_thought">Mostrar raciocínio</string>
     <plurals name="session_chat_activity_collapsed_show_count">
         <item quantity="one">Mostrar %1$d atividade</item>
@@ -645,7 +645,7 @@
     <string name="new_session_run_in_caption">Executar sessão em</string>
     <string name="new_session_project">Projeto</string>
     <string name="new_session_worktree">Worktree</string>
-    <string name="new_session_starts_from">Começa de</string>
+    <string name="new_session_starts_from">Começa a partir de</string>
     <string name="new_session_local">Local</string>
     <string name="new_session_new_worktree">Novo worktree</string>
     <string name="new_session_not_git">Nenhum · não é um repositório Git</string>
@@ -724,7 +724,7 @@
     <string name="tool_title_save_issue">Salvar issue</string>
     <string name="tool_title_question">Pergunta</string>
     <string name="tool_title_agent">Agente</string>
-    <string name="tool_title_thought">Pensamento</string>
+    <string name="tool_title_thought">Raciocínio</string>
     <plurals name="tool_title_asked_questions">
         <item quantity="one">%1$d pergunta feita</item>
         <item quantity="many">%1$d de perguntas feitas</item>
@@ -796,14 +796,14 @@
         <item quantity="other">%1$d patches</item>
     </plurals>
     <plurals name="tool_count_get_issue">
-        <item quantity="one">%1$d Obter issue</item>
-        <item quantity="many">%1$d de Obter issue</item>
-        <item quantity="other">%1$d Obter issue</item>
+        <item quantity="one">%1$d issue obtida</item>
+        <item quantity="many">%1$d de issues obtidas</item>
+        <item quantity="other">%1$d issues obtidas</item>
     </plurals>
     <plurals name="tool_count_save_issue">
-        <item quantity="one">%1$d Salvar issue</item>
-        <item quantity="many">%1$d de Salvar issue</item>
-        <item quantity="other">%1$d Salvar issue</item>
+        <item quantity="one">%1$d issue salva</item>
+        <item quantity="many">%1$d de issues salvas</item>
+        <item quantity="other">%1$d issues salvas</item>
     </plurals>
     <plurals name="tool_count_tool">
         <item quantity="one">%1$d ferramenta</item>
@@ -871,7 +871,7 @@
     <string name="timeline_step_loading_skill">Carregando habilidade…</string>
     <string name="timeline_step_loading_skill_named">Carregando habilidade %1$s</string>
     <string name="timeline_step_skill_named">Habilidade %1$s</string>
-    <string name="timeline_step_thought_duration">Pensou · %1$s</string>
+    <string name="timeline_step_thought_duration">Raciocinou · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">Explorou — %1$s</string>
     <string name="timeline_list_separator">%1$s · %2$s</string>
@@ -893,9 +893,9 @@
         <item quantity="other">%1$d comandos</item>
     </plurals>
     <plurals name="timeline_activity_count_thought">
-        <item quantity="one">%1$d pensamento</item>
-        <item quantity="many">%1$d de pensamentos</item>
-        <item quantity="other">%1$d pensamentos</item>
+        <item quantity="one">%1$d raciocínio</item>
+        <item quantity="many">%1$d de raciocínios</item>
+        <item quantity="other">%1$d raciocínios</item>
     </plurals>
     <plurals name="timeline_activity_count_agent">
         <item quantity="one">%1$d agente</item>
@@ -932,7 +932,7 @@
     <string name="session_chat_revert_redo_failed">Não foi possível refazer.</string>
     <string name="session_chat_revert_cancel_failed">Não foi possível cancelar a reversão.</string>
     <string name="session_chat_revert_commit_failed">Não foi possível confirmar a reversão.</string>
-    <string name="session_chat_fork_rename_failed">Fork criado, mas não foi possível renomeá-lo.</string>
+    <string name="session_chat_fork_rename_failed">Bifurcação criada, mas não foi possível renomeá-la.</string>
     <string name="session_chat_pending_prompt_update_failed">Não foi possível atualizar o prompt pendente</string>
     <string name="session_chat_shell_stop_failed">Não foi possível parar o shell. Tente novamente.</string>
     <string name="session_chat_shell_status_running">Em execução</string>
@@ -948,7 +948,7 @@
     <string name="session_chat_sheet_copy_output">Copiar saída</string>
     <string name="session_chat_sheet_message_actions_title">Mensagem</string>
     <string name="session_chat_sheet_message_actions_revert">Reverter mensagem</string>
-    <string name="session_chat_sheet_message_actions_fork">Criar fork daqui</string>
+    <string name="session_chat_sheet_message_actions_fork">Bifurcar a partir daqui</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Copiar bloco de código</string>
     <string name="session_chat_sheet_message_actions_copy_message">Copiar mensagem</string>
     <string name="session_chat_sheet_message_actions_select_text">Selecionar texto</string>
@@ -1404,7 +1404,7 @@
     <string name="feedback_error_unverified">Não foi possível verificar esta cópia do app. Relatórios só podem ser enviados de uma instalação da App Store, do TestFlight ou do Google Play.</string>
     <string name="feedback_error_failed">Não foi possível enviar o relatório.</string>
     <string name="feedback_action_try_again">Tentar novamente</string>
-    <string name="feedback_action_share_instead">Compartilhar</string>
+    <string name="feedback_action_share_instead">Compartilhar em vez disso</string>
     <string name="feedback_undo">Desfazer</string>
     <string name="feedback_done">Concluir</string>
     <string name="feedback_add_attachment">Adicionar anexo</string>
@@ -1645,7 +1645,7 @@
     <string name="session_list_worktree_empty_other_projects">Limpe o filtro para ver sessões de outros projetos.</string>
     <string name="component_attachment_uploading">Enviando…</string>
     <string name="component_composer_deny">Negar</string>
-    <string name="component_composer_deny_options">Mais opções de negar</string>
+    <string name="component_composer_deny_options">Mais opções para negar</string>
     <string name="component_composer_deny_with_note_menu">Negar com uma nota…</string>
     <string name="component_composer_deny_with_note_menu_subtitle">Diga ao agente o que fazer em vez disso</string>
     <string name="component_composer_deny_with_note_title">Negar com uma nota</string>
@@ -1689,7 +1689,7 @@
     <string name="component_composer_select_exactly">Selecione %1$d</string>
     <string name="dictation_action_open_settings">Abrir Configurações</string>
     <string name="component_composer_open_commands">Abrir comandos</string>
-    <string name="component_thinking_ellipsis">Raciocinando…</string>
+    <string name="component_thinking_ellipsis">Pensando…</string>
     <plurals name="relative_time_days_ago">
         <item quantity="one">há %1$dd</item>
         <item quantity="many">há %1$dd</item>
@@ -1847,7 +1847,7 @@
     <string name="component_split_pane_resize_hint">Toque duas vezes para ocultar a barra lateral</string>
     <string name="component_branch_pill_shows_details_hint">Mostra os detalhes da branch</string>
     <string name="component_composer_permission_requested">Permissão solicitada</string>
-    <string name="component_thinking">Raciocinando</string>
+    <string name="component_thinking">Pensando</string>
     <string name="dictation_model_downloading_title">%1$s está baixando o %2$s</string>
     <string name="component_hunk_navigation_expand_context">Expandir contexto</string>
     <string name="dictation_listening_placeholder">Ouvindo…</string>
@@ -1915,11 +1915,11 @@
     <string name="whats_new_version">Versão %1$s</string>
     <string name="whats_new_skipped_one">Você pulou uma atualização, então ela está incluída abaixo.</string>
     <string name="whats_new_skipped_many">Você pulou %1$d atualizações, então elas estão incluídas abaixo.</string>
-    <string name="whats_new_in_version">Na %1$s</string>
+    <string name="whats_new_in_version">Em %1$s</string>
     <string name="whats_new_also_since">Também novo desde a sua última atualização · %1$s</string>
     <string name="whats_new_fixes">Correções</string>
     <string name="whats_new_done">Concluir</string>
     <string name="whats_new_find_again">Veja de novo em Configurações → Novidades</string>
     <string name="whats_new_installed">Instalada</string>
-    <string name="whats_new_settings_subtitle">Notas de versão de cada versão</string>
+    <string name="whats_new_settings_subtitle">Notas de cada versão</string>
 </resources>

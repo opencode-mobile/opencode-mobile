@@ -29,7 +29,7 @@
     <string name="connection_setup_instructions_run">Kör det här på datorn och skanna sedan QR-koden.</string>
     <string name="connection_setup_instructions_first_run">Första körningen tar ungefär en minut. Kräver OpenCode 2.0.25 eller senare. Tjänsten startas om den inte redan körs.</string>
     <string name="connection_setup_instructions_same_wifi_title">Samma Wi-Fi i stället</string>
-    <string name="connection_setup_instructions_same_wifi_body">Vanlig pair visar en QR först när servern går att nå utöver localhost.</string>
+    <string name="connection_setup_instructions_same_wifi_body">Ett vanligt pair-kommando visar en QR först när servern går att nå utanför localhost.</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">Värd</string>
     <string name="connection_setup_host_help">LAN, Tailscale MagicDNS eller tunnel – inte localhost på en telefon.</string>
@@ -38,10 +38,10 @@
     <string name="connection_setup_password_hint">Lösenord (valfritt)</string>
     <string name="connection_setup_password_help">Standardanvändare är opencode. Lösenord är valfritt.</string>
     <string name="connection_setup_pairing_code_hint">Parkopplingskod</string>
-    <string name="connection_setup_pairing_code_help">Från parkopplingslänken. Fungerar en gång och går ut efter 5 minuter.</string>
+    <string name="connection_setup_pairing_code_help">Från parkopplingslänken. Kan bara användas en gång och går ut efter 5 minuter.</string>
     <string name="connection_setup_segment_password">Lösenord</string>
     <string name="connection_setup_segment_pairing_code">Parkopplingskod</string>
-    <string name="connection_setup_addresses_hint_tunnel_only">Fjärrtunnel sparad. Inget annat att välja. Den finns kvar tills du stänger av fjärråtkomst.</string>
+    <string name="connection_setup_addresses_hint_tunnel_only">Fjärrtunnel sparad. Inget annat att välja. Den finns kvar tills du stänger av fjärråtkomsten.</string>
     <string name="connection_setup_addresses_hint_tailscale_fallback">Tailscale används när det svarar. Lokalt nätverk är reserv.</string>
     <string name="connection_setup_addresses_hint_default">Sparade adresser prövas tills en svarar. Tailscale föredras när det svarar.</string>
     <string name="connection_setup_address_tailscale">Tailscale</string>
@@ -59,7 +59,7 @@
     <string name="connection_cleartext_connect_anyway">Anslut ändå</string>
     <string name="connection_error_invalid_qr">Det här är inte en parkopplings-QR för OpenCode 2</string>
     <string name="connection_error_localhost_qr">Den QR-koden har bara en localhost-adress</string>
-    <string name="connection_error_camera_denied">Tillåt kameraåtkomst för att skanna parkoppling-QR</string>
+    <string name="connection_error_camera_denied">Tillåt kameraåtkomst för att skanna parkopplings-QR</string>
     <string name="connection_error_camera_unavailable">Kameran är inte tillgänglig på den här enheten</string>
     <string name="connection_error_enter_host">Ange en värd</string>
     <string name="connection_error_enter_pairing_code">Ange en parkopplingskod</string>
@@ -73,10 +73,10 @@
     <string name="server_error_session_busy">Sessionen är upptagen</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Autentiseringen misslyckades</string>
-    <string name="connection_error_unhealthy">Servern rapporterade fel status</string>
-    <string name="connection_scanner_title">Skanna parkoppling-QR</string>
-    <string name="connection_scanner_card_title">OpenCode-parkoppling-QR</string>
-    <string name="connection_scanner_card_body">Från opencode pair --remote. Vanlig pair visar en QR först när servern går att nå utöver localhost.</string>
+    <string name="connection_error_unhealthy">Servern rapporterade att den inte mår bra</string>
+    <string name="connection_scanner_title">Skanna parkopplings-QR</string>
+    <string name="connection_scanner_card_title">QR-kod för parkoppling med OpenCode</string>
+    <string name="connection_scanner_card_body">Från opencode pair --remote. Ett vanligt pair-kommando visar en QR först när servern går att nå utanför localhost.</string>
     <string name="connection_onboarding_title">Anslut till din server</string>
     <string name="connection_onboarding_body">OpenCode Mobile styr sessioner på en opencode-server som körs på din utvecklingsdator.</string>
     <string name="connection_onboarding_connect">Anslut till server</string>
@@ -95,20 +95,20 @@
     <string name="onboarding_features_chat_title">Chatta och avbryt</string>
     <string name="onboarding_features_chat_detail">Skicka prompter och stoppa pågående arbete</string>
     <string name="onboarding_features_permissions_title">Behörigheter</string>
-    <string name="onboarding_features_permissions_detail">Godkänn eller neka förfrågningar (ingen bestående ihågkomst)</string>
+    <string name="onboarding_features_permissions_detail">Godkänn eller neka förfrågningar (utan att komma ihåg valet)</string>
     <string name="onboarding_features_changes_title">Ändringar</string>
     <string name="onboarding_features_changes_detail">Granska sessionens diffar</string>
     <string name="onboarding_features_live_title">Live medan appen är öppen</string>
     <string name="onboarding_features_live_detail">Händelseström i förgrunden; uppdatera efter återanslutning</string>
     <string name="onboarding_setup_title">Ställ in opencode serve</string>
-    <string name="onboarding_setup_intro">Appen pratar med en opencode-server som du kör själv. Korta vägen nedan – alla detaljer finns i den officiella dokumentationen.</string>
+    <string name="onboarding_setup_intro">Appen pratar med en opencode-server som du kör själv. Här är den korta vägen – alla detaljer finns i den officiella dokumentationen.</string>
     <string name="onboarding_setup_step_number">Steg %1$d</string>
     <string name="onboarding_setup_step1_title">Starta servern på din dator</string>
     <string name="onboarding_setup_step1_body">Kör opencode-servern (headless) i ditt projekt. Låt den vara igång medan du använder telefonen.</string>
     <string name="onboarding_setup_step2_title">Kräv ett lösenord</string>
     <string name="onboarding_setup_step2_body">Ange OPENCODE_SERVER_PASSWORD. Användarnamnet är som standard opencode om du inte anger OPENCODE_SERVER_USERNAME.</string>
     <string name="onboarding_setup_step3_title">Nå den från telefonen</string>
-    <string name="onboarding_setup_step3_body">Rekommenderas: Tailscale – installera Tailscale på datorn och telefonen och använd sedan datorns Tailscale-IP eller MagicDNS-namn som server-URL.\n\nFungerar också: samma LAN, VPN, HTTPS eller en annan tunnel som du hanterar själv. Appen skapar ingen relä åt dig.</string>
+    <string name="onboarding_setup_step3_body">Rekommenderas: Tailscale – installera Tailscale på datorn och telefonen och använd sedan datorns Tailscale-IP eller MagicDNS-namn som server-URL.\n\nFungerar också: samma LAN, VPN, HTTPS eller en annan tunnel som du hanterar själv. Appen skapar inget relä åt dig.</string>
     <string name="onboarding_setup_step4_title">Anslut i appen</string>
     <string name="onboarding_setup_step4_body">Ange bas-URL och lösenord. Appen kontrollerar GET /global/health och sparar sedan en serveranslutning på den här enheten.</string>
     <string name="onboarding_setup_open_docs">Öppna serverdokumentation</string>
@@ -131,14 +131,14 @@
     <string name="server_health_range_day">24 h</string>
     <string name="server_health_range_week">7 d</string>
     <string name="server_health_uptime">Drifttid</string>
-    <string name="server_health_uptime_detail">av %1$s uppmätt</string>
+    <string name="server_health_uptime_detail">av %1$s mätt tid</string>
     <string name="server_health_reconnects">Återanslutningar</string>
-    <string name="server_health_reconnects_detail">tillbaka på %1$s i median</string>
+    <string name="server_health_reconnects_detail">tillbaka efter %1$s (median)</string>
     <string name="server_health_no_drops">inga avbrott</string>
     <string name="server_health_error_rate">Felfrekvens</string>
     <string name="server_health_error_rate_detail">%1$d av %2$d kontroller misslyckades</string>
     <string name="server_health_between_drops">Mellan avbrott</string>
-    <string name="server_health_between_drops_detail">genomsnittlig livetid</string>
+    <string name="server_health_between_drops_detail">genomsnittlig tid med anslutning</string>
     <string name="server_health_latency">Latens</string>
     <string name="server_health_latency_summary">median %1$s · p95 %2$s</string>
     <string name="server_health_legend_median">Median</string>
@@ -166,7 +166,7 @@
     <string name="server_health_error_log_capped">Senaste %1$d av %2$d</string>
     <string name="server_health_category_network">Nätverk</string>
     <string name="server_health_category_timeout">Tidsgräns</string>
-    <string name="server_health_category_heartbeat">Hjärtslagsstopp</string>
+    <string name="server_health_category_heartbeat">Uteblivet heartbeat</string>
     <string name="server_health_category_server">Serverfel</string>
     <string name="server_health_category_auth">Autentisering</string>
     <string name="server_health_category_other">Övrigt</string>
@@ -177,8 +177,8 @@
     <string name="server_health_protocol_v2">API v2</string>
     <string name="server_health_last_restart">Senaste omstart</string>
     <string name="server_health_last_restart_ago">%1$s sedan</string>
-    <string name="server_health_last_restart_none">Ingen sedd</string>
-    <string name="server_health_restarts_seen">Omstarter sedda</string>
+    <string name="server_health_last_restart_none">Ingen registrerad</string>
+    <string name="server_health_restarts_seen">Registrerade omstarter</string>
     <string name="server_health_restarts_seen_value">%1$d</string>
     <string name="server_health_event_streams">Händelseströmmar</string>
     <string name="server_health_event_streams_value">%1$d av %2$d live</string>
@@ -271,8 +271,8 @@
     <string name="home_session_title_hint">Titel</string>
     <string name="home_fork_title">Förgrena session</string>
     <string name="home_fork_confirm">Förgrena</string>
-    <string name="home_fork_result_title">Sessionen förgrenad</string>
-    <string name="home_fork_result_message">”%1$s” är klar.</string>
+    <string name="home_fork_result_title">Sessionen har förgrenats</string>
+    <string name="home_fork_result_message">”%1$s” är redo.</string>
     <string name="home_fork_result_stay">Stanna här</string>
     <string name="home_delete_title">Radera session</string>
     <string name="home_delete_message">Radera sessionen ”%1$s”?</string>
@@ -307,11 +307,11 @@
     <string name="add_project_checking_folder">Kontrollerar mappen</string>
     <string name="add_project_loading_projects">Läser in projekt</string>
     <string name="add_project_loading_folders">Läser in mappar</string>
-    <string name="add_project_list_error_title">Det går inte att lista den här mappen</string>
+    <string name="add_project_list_error_title">Det går inte att visa innehållet i den här mappen</string>
     <string name="add_project_list_error_message">Kontrollera sökvägen och försök igen.</string>
     <string name="add_project_no_other_projects">Inga andra projekt på den här servern.</string>
     <string name="add_project_folder_path">Mappsökväg</string>
-    <string name="add_project_up_one_folder">Upp en mapp</string>
+    <string name="add_project_up_one_folder">Upp en nivå</string>
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Välj en mapp</string>
     <string name="add_project_already_on_home">Redan på startsidan</string>
@@ -334,12 +334,12 @@
     </plurals>
     <string name="add_project_in_folder">I %1$s</string>
     <string name="add_project_root_home">Hem</string>
-    <string name="add_project_error_add_failed">Det går inte att lägga till den här katalogen</string>
+    <string name="add_project_error_add_failed">Det går inte att lägga till den här mappen</string>
     <string name="worktree_new_row">Ny worktree…</string>
     <string name="worktree_run_in_subtitle">Skapa en checkout och börja där</string>
     <string name="worktree_move_subtitle">Skapa en checkout och flytta dit</string>
     <string name="worktree_needs_v2">Kräver en opencode v2-server</string>
-    <string name="worktree_turn_on">Aktivera Worktrees i Inställningar</string>
+    <string name="worktree_turn_on">Aktivera worktrees i Inställningar</string>
     <string name="worktree_not_git">Kräver ett git-repo</string>
     <string name="worktree_no_commit">Kräver ett git-repo med en commit</string>
     <string name="worktree_unsupported">Den här servern kan inte skapa worktrees</string>
@@ -427,7 +427,7 @@
     <string name="terminal_title">Terminal</string>
     <string name="terminal_catalog_title">Terminaler</string>
     <string name="terminal_catalog_loading">Läser in terminaler</string>
-    <string name="terminal_catalog_empty_title">Inga körande shell</string>
+    <string name="terminal_catalog_empty_title">Inga shells körs</string>
     <string name="terminal_catalog_empty_message">Starta en för ett projekt. Den är inte knuten till en chattsession.</string>
     <string name="terminal_select_title">Välj en shell</string>
     <string name="terminal_select_message">Välj en shell i listan.</string>
@@ -473,8 +473,8 @@
     <string name="session_chat_fork_dialog_confirm">Förgrena</string>
     <string name="session_chat_fork_dialog_error_empty_title">Ange en sessionstitel</string>
     <string name="session_chat_fork_dialog_error_failed">Det gick inte att förgrena sessionen.</string>
-    <string name="session_chat_fork_result_title">Sessionen förgrenad</string>
-    <string name="session_chat_fork_result_message_ready">”%1$s” är klar.</string>
+    <string name="session_chat_fork_result_title">Sessionen har förgrenats</string>
+    <string name="session_chat_fork_result_message_ready">”%1$s” är redo.</string>
     <string name="session_chat_fork_result_open">Öppna</string>
     <string name="session_chat_fork_result_stay_here">Stanna här</string>
     <string name="session_chat_attachment_source_title">Lägg till bilaga</string>
@@ -518,10 +518,10 @@
     <string name="session_chat_model_chip_placeholder">Modell</string>
     <string name="session_chat_model_chip_loading">Läser in modell…</string>
     <string name="session_chat_model_notice_load_failed">Det gick inte att läsa in modeller. Tryck på Modell för att försöka igen.</string>
-    <string name="session_chat_model_notice_none_usable">Inga användbara modeller finns. Tryck på Modell för att försöka igen.</string>
+    <string name="session_chat_model_notice_none_usable">Inga användbara modeller är tillgängliga. Tryck på Modell för att försöka igen.</string>
     <string name="session_chat_model_notice_variant_unavailable">Den sparade varianten är inte tillgänglig. Använder Standard.</string>
     <string name="session_chat_model_notice_model_unavailable">Vald modell är inte tillgänglig. Använder %1$s.</string>
-    <string name="session_chat_side_question_unsupported">/btw kräver en opencode v2-server som svarar på sidofrågor. Den här servern kan inte svara utan att lägga till i konversationen.</string>
+    <string name="session_chat_side_question_unsupported">/btw kräver en opencode v2-server som svarar på sidofrågor. Den här servern kan inte svara utan att lägga till något i konversationen.</string>
     <string name="session_chat_side_question_unavailable">/btw kräver en nyare opencode-server.</string>
     <string name="session_chat_side_question_copied">Svaret kopierat</string>
     <string name="session_chat_side_question_failed">/btw misslyckades: ”%1$s”</string>
@@ -602,21 +602,21 @@
     </plurals>
     <string name="session_chat_activity_show_more">Visa %1$d till</string>
     <string name="session_chat_activity_hide_more">Dölj %1$d till</string>
-    <string name="session_chat_navigation_scroll_to_end">Bläddra till slutet</string>
+    <string name="session_chat_navigation_scroll_to_end">Scrolla till slutet</string>
     <plurals name="session_chat_navigation_new_count">
-        <item quantity="one">%1$d ny</item>
+        <item quantity="one">%1$d nytt</item>
         <item quantity="other">%1$d nya</item>
     </plurals>
     <plurals name="session_chat_navigation_scroll_to_end_new_messages">
-        <item quantity="one">Bläddra till slutet, %1$d nytt meddelande</item>
-        <item quantity="other">Bläddra till slutet, %1$d nya meddelanden</item>
+        <item quantity="one">Scrolla till slutet, %1$d nytt meddelande</item>
+        <item quantity="other">Scrolla till slutet, %1$d nya meddelanden</item>
     </plurals>
     <string name="home_error_reconnect_to_create">Anslut igen för att skapa en session</string>
     <string name="timeline_state_creating_title">Startar session…</string>
     <string name="timeline_state_creating_subtitle">Skapar på servern…</string>
     <string name="new_session_title">Ny session</string>
     <string name="new_session_draft_subtitle">Utkast · skapas när du skickar</string>
-    <string name="new_session_discard_draft">Släng utkast</string>
+    <string name="new_session_discard_draft">Förkasta utkast</string>
     <string name="new_session_run_in_caption">Kör session i</string>
     <string name="new_session_project">Projekt</string>
     <string name="new_session_worktree">Worktree</string>
@@ -629,18 +629,18 @@
     <string name="new_session_no_project_matches">Inga matchande projekt</string>
     <string name="new_session_add_project">Lägg till projekt…</string>
     <string name="new_session_run_in_project">Kör i %1$s</string>
-    <string name="new_session_current_checkout">%1$s · aktuell utcheckning</string>
+    <string name="new_session_current_checkout">%1$s · aktuell checkout</string>
     <string name="new_session_new_worktree_subtitle">Isolerad kopia, skapas när du skickar</string>
     <string name="new_session_worktrees_section">Worktrees</string>
     <string name="timeline_state_loading_title">Läser in meddelanden</string>
     <string name="timeline_state_loading_subtitle">Hämtar tidslinjen…</string>
     <string name="timeline_state_error_title">Det gick inte att läsa in meddelanden</string>
-    <string name="timeline_state_error_fallback">Tidslinjen lästes inte in.</string>
+    <string name="timeline_state_error_fallback">Tidslinjen kunde inte läsas in.</string>
     <string name="timeline_state_retry">Försök igen</string>
     <string name="timeline_state_empty">Inga meddelanden än. Skicka en prompt för att börja.</string>
     <string name="timeline_state_refreshing">Uppdaterar meddelanden</string>
     <string name="timeline_message_assistant">Assistentens meddelande</string>
-    <string name="timeline_message_actions_hint_long_press">Tryck länge för att visa meddelandeåtgärder</string>
+    <string name="timeline_message_actions_hint_long_press">Tryck och håll ned för att visa meddelandeåtgärder</string>
     <string name="timeline_message_actions_hint">Visar meddelandeåtgärder</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
     <string name="timeline_failure_copy">Kopiera</string>
@@ -751,12 +751,12 @@
         <item quantity="other">%1$d patchar</item>
     </plurals>
     <plurals name="tool_count_get_issue">
-        <item quantity="one">%1$d Hämta ärende</item>
-        <item quantity="other">%1$d Hämta ärende</item>
+        <item quantity="one">%1$d ärendehämtning</item>
+        <item quantity="other">%1$d ärendehämtningar</item>
     </plurals>
     <plurals name="tool_count_save_issue">
-        <item quantity="one">%1$d Spara ärende</item>
-        <item quantity="other">%1$d Spara ärende</item>
+        <item quantity="one">%1$d ärendesparning</item>
+        <item quantity="other">%1$d ärendesparningar</item>
     </plurals>
     <plurals name="tool_count_tool">
         <item quantity="one">%1$d verktyg</item>
@@ -794,7 +794,7 @@
     <string name="tool_unknown_detail">Verktyget är inte tillgängligt</string>
     <string name="tool_result_pull_request_opened">Pull request öppnad</string>
     <string name="tool_result_file">Fil</string>
-    <string name="tool_result_lines_range">rad %1$d–%2$d</string>
+    <string name="tool_result_lines_range">rader %1$d–%2$d</string>
     <plurals name="tool_result_first_lines">
         <item quantity="one">första %1$d raden</item>
         <item quantity="other">första %1$d raderna</item>
@@ -860,7 +860,7 @@
     <string name="timeline_compaction_title">Kontext komprimerad</string>
     <string name="timeline_compaction_automatic">Automatisk</string>
     <string name="timeline_syncing">Synkar…</string>
-    <string name="timeline_failure_session_work_failed">Sessionens arbete misslyckades</string>
+    <string name="timeline_failure_session_work_failed">Arbetet i sessionen misslyckades</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Välj en modell</string>
     <string name="timeline_failure_compact">Komprimera</string>
@@ -875,9 +875,9 @@
     <string name="session_chat_revert_redo_failed">Det gick inte att göra om.</string>
     <string name="session_chat_revert_cancel_failed">Det gick inte att avbryta återställningen.</string>
     <string name="session_chat_revert_commit_failed">Det gick inte att slutföra återställningen.</string>
-    <string name="session_chat_fork_rename_failed">Grenen skapades, men det gick inte att byta namn på den.</string>
-    <string name="session_chat_pending_prompt_update_failed">Det gick inte att uppdatera väntande prompt</string>
-    <string name="session_chat_shell_stop_failed">Det gick inte att stoppa shellet. Försök igen.</string>
+    <string name="session_chat_fork_rename_failed">Förgreningen skapades, men det gick inte att byta namn på den.</string>
+    <string name="session_chat_pending_prompt_update_failed">Det gick inte att uppdatera den väntande prompten</string>
+    <string name="session_chat_shell_stop_failed">Det gick inte att stoppa shellen. Försök igen.</string>
     <string name="session_chat_shell_status_running">Körs</string>
     <string name="session_chat_shell_status_exited">Avslutad</string>
     <string name="session_chat_shell_status_timed_out">Tidsgränsen överskreds</string>
@@ -950,17 +950,17 @@
     <string name="session_chat_goal_reviewer">Granskare</string>
     <string name="session_chat_goal_reviewer_pending">Kontrollerar arbetet när det här varvet är klart.</string>
     <plurals name="session_chat_goal_stalls">
-        <item quantity="one">Inga framsteg på %1$d omgång; pausar efter %2$d</item>
-        <item quantity="other">Inga framsteg på %1$d omgångar; pausar efter %2$d</item>
+        <item quantity="one">Inga framsteg under %1$d omgång; pausar efter %2$d</item>
+        <item quantity="other">Inga framsteg under %1$d omgångar; pausar efter %2$d</item>
     </plurals>
     <string name="session_chat_goal_waiting">Väntar</string>
-    <string name="session_chat_goal_waiting_shell">På att ett bakgrundsshell ska bli klart: %1$s. Pausar om inget körs på %2$d minuter.</string>
-    <string name="session_chat_goal_waiting_subagent">På att en subagent ska bli klar. Pausar om inget körs på %1$d minuter.</string>
+    <string name="session_chat_goal_waiting_shell">Väntar på att en bakgrundsshell ska avslutas: %1$s. Pausar om inget körs under %2$d minuter.</string>
+    <string name="session_chat_goal_waiting_subagent">Väntar på att en subagent ska bli klar. Pausar om inget körs under %1$d minuter.</string>
     <string name="session_chat_goal_waiting_on_you">Väntar på dig</string>
     <string name="session_chat_goal_waiting_permission">En behörighetsbegäran är öppen. Målet fortsätter när du har svarat.</string>
     <string name="session_chat_goal_waiting_question">En fråga är öppen. Målet fortsätter när du har svarat.</string>
     <string name="session_chat_goal_evidence">Belägg</string>
-    <string name="session_chat_goal_reconnecting">Ansluter igen. Visar senast kända mål.</string>
+    <string name="session_chat_goal_reconnecting">Ansluter igen. Visar det senast kända målet.</string>
     <string name="session_chat_goal_pause">Pausa</string>
     <string name="session_chat_goal_pausing">Pausar…</string>
     <string name="session_chat_goal_resume">Återuppta</string>
@@ -975,20 +975,20 @@
     <string name="session_chat_goal_paused_by_user">Du pausade målet</string>
     <string name="session_chat_goal_paused_stopped">Du stoppade varvet, så målet pausades</string>
     <string name="session_chat_goal_paused_failed">Målet pausades efter ett fel</string>
-    <string name="session_chat_goal_paused_no_progress">Mål pausat: inga framsteg på %1$d omgångar</string>
+    <string name="session_chat_goal_paused_no_progress">Mål pausat: inga framsteg under %1$d omgångar</string>
     <string name="session_chat_goal_paused_round_limit">Målet pausades efter %1$d omgångar</string>
     <string name="session_chat_goal_paused_restart">Mål pausat: servern startades om</string>
     <string name="session_chat_goal_paused_reviewer">Mål pausat: granskaren kunde inte avgöra</string>
-    <string name="session_chat_goal_paused_quiet">Mål pausat: bakgrundsarbetet blev tyst</string>
+    <string name="session_chat_goal_paused_quiet">Mål pausat: bakgrundsarbetet har blivit inaktivt</string>
     <string name="session_chat_goal_met">Mål uppnått</string>
-    <string name="session_chat_goal_set">Mål satt</string>
+    <string name="session_chat_goal_set">Mål angivet</string>
     <string name="session_chat_goal_ended">avslutat</string>
     <string name="session_chat_goal_set_earlier">Ett tidigare mål. Det har rensats eller ersatts.</string>
     <string name="session_chat_goal_bubble_label">Mål</string>
     <string name="session_chat_goal_objective_hint">Beskriv hur ”klart” ser ut…</string>
     <string name="session_chat_goal_resume_placeholder">Svara och återuppta sedan målet…</string>
     <string name="session_chat_goal_count">%1$s / %2$s tecken</string>
-    <string name="session_chat_goal_count_over">%1$s / %2$s tecken · korta ned målet för att skicka</string>
+    <string name="session_chat_goal_count_over">%1$s / %2$s tecken · korta ned målet för att kunna skicka</string>
     <string name="session_chat_goal_command_replaces">Ersätter ditt nuvarande mål</string>
     <string name="session_chat_goal_command_replaces_paused">Ersätter ditt nuvarande mål (pausat)</string>
     <string name="session_chat_goal_command_replaces_met">Ersätter ditt nuvarande mål (uppnått)</string>
@@ -1169,7 +1169,7 @@
         <item quantity="one">%1$d timme</item>
         <item quantity="other">%1$d timmar</item>
     </plurals>
-    <string name="settings_collapse_tool_calls_title">Dölj på varandra följande verktygsanrop</string>
+    <string name="settings_collapse_tool_calls_title">Fäll ihop efterföljande verktygsanrop</string>
     <string name="settings_collapse_tool_calls_subtitle">Gruppera verktyg i följd i ett sammanfattande kort</string>
     <string name="settings_timeline_style_title">Tidslinjestil</string>
     <string name="settings_timeline_style_standard_title">Standard</string>
@@ -1185,7 +1185,7 @@
     <string name="settings_follow_up_subtitle_queue">Kö · endast V2-servrar. V1 stöder inte detta.</string>
     <string name="settings_follow_up_unsupported">Stöds inte på V1. Den här servern skickar alltid direkt.</string>
     <string name="settings_worktrees_title">Worktrees</string>
-    <string name="settings_worktrees_subtitle">Visa varje projekts worktrees och grenar på Hem, och låt Ny session välja en worktree när du håller in.</string>
+    <string name="settings_worktrees_subtitle">Visa varje projekts worktrees och grenar på Hem, och låt Ny session välja en worktree när du håller ned knappen.</string>
     <string name="settings_session_rows_title">Sessionsrader</string>
     <string name="settings_session_rows_compact_title">Kompakt</string>
     <string name="settings_session_rows_compact_subtitle">Två rader: titel och tid, sedan projekt / worktree</string>
@@ -1206,9 +1206,9 @@
     <string name="settings_privacy_policy_title">Integritetspolicy</string>
     <string name="settings_privacy_policy_subtitle">Hur apparna hanterar data</string>
     <string name="settings_analytics_title">Analys och kraschrapporter</string>
-    <string name="settings_analytics_subtitle">Tillåt valfria händelser om produktanvändning och kraschrapporter. Av skickar ingenting till Firebase.</string>
+    <string name="settings_analytics_subtitle">Tillåt valfria händelser om produktanvändning och kraschrapporter. När det är av skickas ingenting till Firebase.</string>
     <string name="settings_analytics_label">Produktanalys</string>
-    <string name="settings_diagnostic_logs_subtitle">Dela ett maskerat rullande körningsloggfönster</string>
+    <string name="settings_diagnostic_logs_subtitle">Dela ett rullande fönster av körningsloggen med maskerade uppgifter</string>
     <string name="settings_clear_all_data_title">Rensa all data</string>
     <string name="settings_clear_all_data_subtitle">Ta bort anslutning och cache</string>
     <string name="settings_clear_all_data_dialog_title">Rensa all data?</string>
@@ -1264,9 +1264,9 @@
     <string name="appearance_theme_blurb_porcelain">Nästan vit / nästan svart</string>
     <string name="appearance_theme_blurb_linen">Varmt papper / espresso</string>
     <string name="appearance_theme_blurb_signal">Äkta vit / äkta svart</string>
-    <string name="appearance_theme_blurb_hotline">Neutralt skal, högljutt rosa</string>
-    <string name="appearance_theme_blurb_phosphor">Neutralt skal, CRT-grönt</string>
-    <string name="appearance_syntax_name_match">Matcha tema</string>
+    <string name="appearance_theme_blurb_hotline">Neutralt gränssnitt, starkt rosa</string>
+    <string name="appearance_theme_blurb_phosphor">Neutralt gränssnitt, CRT-grönt</string>
+    <string name="appearance_syntax_name_match">Följ temat</string>
     <string name="appearance_syntax_blurb_match">Använd gränssnittstemats egna färger</string>
     <string name="appearance_syntax_blurb_nocturne">One Dark-familjen</string>
     <string name="appearance_syntax_blurb_citrus">Solarized-familjen</string>
@@ -1320,7 +1320,7 @@
     <string name="feedback_placeholder_bug">Vad hände? Vad förväntade du dig?</string>
     <string name="feedback_placeholder_idea">Vad skulle göra OpenCode bättre för dig?</string>
     <string name="feedback_privacy_note">Går bara till OpenCode Mobile-teamet. Innehåller aldrig din serveradress, ditt användarnamn eller lösenord. Loggar maskeras på den här telefonen.</string>
-    <string name="feedback_error_offline">Du är offline. Din rapport sparas här — försök igen när du är ansluten.</string>
+    <string name="feedback_error_offline">Du är offline. Din rapport sparas här – försök igen när du är ansluten.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">Du har nyss skickat en rapport. Försök igen om %1$d s.</item>
         <item quantity="other">Du har nyss skickat en rapport. Försök igen om %1$d s.</item>
@@ -1370,7 +1370,7 @@
         <item quantity="one">Inget loggades den senaste %1$d minuten.</item>
         <item quantity="other">Inget loggades de senaste %1$d minuterna.</item>
     </plurals>
-    <string name="feedback_sent_title">Tack — rapporten skickades</string>
+    <string name="feedback_sent_title">Tack – rapporten skickades</string>
     <string name="feedback_sent_bug">Teamet tittar på det.</string>
     <string name="feedback_sent_idea">Tack för idén.</string>
     <string name="feedback_sent_reference">Ref %1$s</string>
@@ -1423,27 +1423,27 @@
     <string name="changes_source_working_tree_name">Git-ändringar</string>
     <string name="changes_source_working_tree_empty_title">Inga Git-ändringar</string>
     <string name="changes_source_working_tree_empty_message">Arbetsträdet har inga ocommittade ändringar.</string>
-    <string name="changes_source_last_turn_name">Senaste turens ändringar</string>
+    <string name="changes_source_last_turn_name">Senaste omgångens ändringar</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">Git-ändringar har %1$d ändrad fil.</item>
         <item quantity="other">Git-ändringar har %1$d ändrade filer.</item>
     </plurals>
     <plurals name="changes_other_source_last_turn">
-        <item quantity="one">Senaste turen ändrade %1$d fil.</item>
-        <item quantity="other">Senaste turen ändrade %1$d filer.</item>
+        <item quantity="one">Senaste omgången ändrade %1$d fil.</item>
+        <item quantity="other">Senaste omgången ändrade %1$d filer.</item>
     </plurals>
     <string name="changes_other_source_show">Visa %1$s</string>
     <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
     <string name="changes_source_last_turn_empty_title">Inga ändringar</string>
-    <string name="changes_source_last_turn_empty_message">Den senast slutförda turen ändrade inga filer.</string>
+    <string name="changes_source_last_turn_empty_message">Den senast slutförda omgången ändrade inga filer.</string>
     <string name="changes_loading_title">Läser in ändringar</string>
-    <string name="changes_loading_message">Hämtar diffen …</string>
-    <string name="changes_no_turn_title">Ingen slutförd tur</string>
+    <string name="changes_loading_message">Hämtar diffen…</string>
+    <string name="changes_no_turn_title">Ingen slutförd omgång</string>
     <string name="changes_no_turn_message">Skicka en prompt, vänta tills den är klar och försök igen.</string>
     <string name="changes_error_title">Det gick inte att läsa in ändringarna</string>
     <string name="changes_error_fallback">Ändringarna lästes inte in.</string>
     <string name="changes_error_request_failed">Begäran misslyckades</string>
-    <string name="changes_error_turn_moved_folders">Den här turen bytte mapp, så ändringarna kan inte visas samlat.</string>
+    <string name="changes_error_turn_moved_folders">Den här omgången bytte mapp, så ändringarna kan inte visas samlat.</string>
     <string name="changes_refresh_failed">Det gick inte att uppdatera: %1$s</string>
     <string name="changes_filter_hint">Filtrera</string>
     <string name="changes_filter_accessibility_label">Filtrera ändrade filer</string>
@@ -1507,7 +1507,7 @@
     <string name="component_floating_pill_state_done">Klart</string>
     <string name="component_floating_pill_accessibility_label">%1$s, %2$s</string>
     <string name="component_floating_pill_dismiss">Stäng %1$s</string>
-    <string name="common_expanded">Expanderad</string>
+    <string name="common_expanded">Utfälld</string>
     <string name="common_collapsed">Hopfälld</string>
     <string name="component_tree_row_loading">Läser in</string>
     <string name="component_timeline_notice_shows_one_line_hint">Visar en rad</string>
@@ -1519,7 +1519,7 @@
     <string name="component_subagent_state_stopped">stoppad</string>
     <string name="component_filter_tabs_unseen">ny</string>
     <string name="component_text_size_slider_sample_letter">A</string>
-    <string name="component_message_time_yesterday">Igår</string>
+    <string name="component_message_time_yesterday">I går</string>
     <string name="component_composer_reverting_title">Återställer det här meddelandet</string>
     <string name="session_new_title">Ny session</string>
     <string name="session_list_dock_add_project">Lägg till projekt</string>
@@ -1545,7 +1545,7 @@
     <string name="component_outgoing_message_shows_actions_hint">Visar meddelandeåtgärder</string>
     <string name="component_activity_status_stopped">stoppad</string>
     <string name="dictation_action_try_again">Försök igen</string>
-    <string name="component_composer_model_effort">Modell %1$s, ansträngning %2$s</string>
+    <string name="component_composer_model_effort">Modell %1$s, resonemangsnivå %2$s</string>
     <string name="component_activity_card_working">Arbetar</string>
     <string name="component_activity_card_opens_activity">%1$s, öppnar aktivitet</string>
     <string name="component_image_loading_label">%1$s, läser in</string>
@@ -1566,7 +1566,7 @@
     </plurals>
     <string name="dictation_stopped">Dikteringen stoppades</string>
     <string name="dictation_microphone_failed">Det gick inte att använda mikrofonen</string>
-    <string name="dictation_busy">Dikteringen är upptagen</string>
+    <string name="dictation_busy">Taligenkänningen är upptagen</string>
     <string name="component_composer_question_position">%1$d av %2$d</string>
     <string name="session_list_status_ready">Klar</string>
     <string name="session_list_dock_hint_swipe">Öppnar projektfiltret. Svep för att byta projekt.</string>
@@ -1594,7 +1594,7 @@
     <string name="session_list_status_failed">Misslyckades</string>
     <string name="component_composer_custom_answer_title">Skriv ett eget svar</string>
     <string name="component_composer_always">Alltid</string>
-    <string name="component_composer_send_side_question">Ställ sidofråga</string>
+    <string name="component_composer_send_side_question">Ställ en sidofråga</string>
     <string name="component_composer_select_exactly">Välj %1$d</string>
     <string name="dictation_action_open_settings">Öppna inställningar</string>
     <string name="component_composer_open_commands">Öppna kommandon</string>
@@ -1603,7 +1603,7 @@
         <item quantity="one">%1$d d sedan</item>
         <item quantity="other">%1$d d sedan</item>
     </plurals>
-    <string name="component_server_address_scheme_button_description">Schema %1$s. Öppnar schemaväljaren</string>
+    <string name="component_server_address_scheme_button_description">Protokoll %1$s. Öppnar protokollväljaren</string>
     <string name="share_diagnostics_subject">Diagnostikloggar för OpenCode</string>
     <string name="component_reorderable_list_move_up">Flytta upp</string>
     <string name="session_list_scope_load_failed_title">Det gick inte att läsa in %1$s</string>
@@ -1629,7 +1629,7 @@
     <string name="theme_error_apply_failed">Det gick inte att tillämpa temat</string>
     <string name="component_unified_diff_summary_deleted">Borttagen fil %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">Körs</string>
-    <string name="component_step_rail_expands">%1$s, expanderar</string>
+    <string name="component_step_rail_expands">%1$s, fälls ut</string>
     <string name="session_list_status_done">Klart</string>
     <string name="session_list_status_idle">Inaktiv</string>
     <string name="component_attachment_kind_file">Fil</string>
@@ -1639,8 +1639,8 @@
     <string name="live_updates_accessibility_label">Liveuppdateringar %1$s</string>
     <string name="component_composer_previous_question">Föregående fråga</string>
     <string name="component_activity_card_agent">Agent</string>
-    <string name="session_list_section_today">Idag</string>
-    <string name="component_composer_child_lockout">Barnsessioner kan inte få prompter.</string>
+    <string name="session_list_section_today">I dag</string>
+    <string name="component_composer_child_lockout">Undersessioner kan inte få prompter.</string>
     <string name="component_attachment_uploading_percent">Laddar upp %1$d %%</string>
     <string name="component_composer_custom_answer_hint">Skriv ett eget svar</string>
     <string name="component_composer_cancel_revert">Avbryt återställning</string>
@@ -1688,9 +1688,9 @@
     <string name="component_image_viewer_loading_full">Läser in hela bilden</string>
     <string name="session_list_worktree_empty_action">Rensa filter</string>
     <string name="dictation_model_download_failed_detail">Kontrollera anslutningen och det lediga lagringsutrymmet på enheten och försök igen.</string>
-    <string name="component_composer_send_queue">Skicka som kö</string>
+    <string name="component_composer_send_queue">Skicka i kö</string>
     <string name="session_list_dock_new_session_hint">Använd Välj projekt eller worktree för att starta någon annanstans.</string>
-    <string name="session_list_section_yesterday">Igår</string>
+    <string name="session_list_section_yesterday">I går</string>
     <string name="component_code_file_line_label">Rad %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">Idérapport för OpenCode Mobile</string>
     <string name="component_hunk_navigation_previous">Föregående hunk</string>
@@ -1732,11 +1732,11 @@
     <string name="component_composer_dictate">Diktera</string>
     <string name="component_composer_side_question_mode_description">Sidofrågeläge. Lämna sidofrågeläget</string>
     <string name="component_composer_abort">Avbryt pågående arbete</string>
-    <string name="component_server_address_scheme_button">Schema %1$s</string>
+    <string name="component_server_address_scheme_button">Protokoll %1$s</string>
     <string name="component_composer_open_subagent_session">Öppna subagentsession</string>
     <string name="component_composer_question_step">Steg %1$d av %2$d</string>
     <string name="share_feedback_subject_bug">Felrapport för OpenCode Mobile</string>
-    <string name="component_activity_card_opens_child_session_hint">Öppnar barnsessionen</string>
+    <string name="component_activity_card_opens_child_session_hint">Öppnar undersessionen</string>
     <string name="component_activity_status_failed">misslyckades</string>
     <string name="dictation_model_not_installed_title">%1$s behöver sin %2$s</string>
     <string name="component_composer_back_to_main_session">Tillbaka till huvudsessionen</string>
@@ -1762,8 +1762,8 @@
         <item quantity="one">%1$d objekt</item>
         <item quantity="other">%1$d objekt</item>
     </plurals>
-    <string name="component_server_address_scheme">Schema</string>
-    <string name="component_server_address_scheme_picker_hint">Öppnar schemaväljaren</string>
+    <string name="component_server_address_scheme">Protokoll</string>
+    <string name="component_server_address_scheme_picker_hint">Öppnar protokollväljaren</string>
     <string name="component_split_pane_hide_sidebar">Dölj sidopanel</string>
     <string name="component_composer_select_range">Välj %1$d till %2$d</string>
     <string name="component_image_viewer_position">%1$d av %2$d</string>
@@ -1776,7 +1776,7 @@
         <item quantity="one">%1$d worktree</item>
         <item quantity="other">%1$d worktrees</item>
     </plurals>
-    <string name="worktrees_main_checkout">Huvudutcheckning</string>
+    <string name="worktrees_main_checkout">Huvudcheckout</string>
     <string name="worktrees_cannot_remove">Kan inte tas bort</string>
     <plurals name="worktrees_changed">
         <item quantity="one">%1$d ändrad</item>
@@ -1786,7 +1786,7 @@
     <string name="worktrees_footer">Att ta bort en worktree raderar dess mapp på servern. Dess sessioner finns kvar men kan inte köras i den igen.</string>
     <string name="worktrees_more">Fler åtgärder för %1$s</string>
     <string name="worktrees_removing">Tar bort…</string>
-    <string name="worktrees_actions_show_on_home">Visa sessioner på startsidan</string>
+    <string name="worktrees_actions_show_on_home">Visa sessioner på Hem</string>
     <string name="worktrees_actions_new_session">Ny session här</string>
     <string name="worktrees_actions_remove">Ta bort worktree…</string>
     <string name="worktrees_remove_title">Ta bort worktreen ”%1$s”?</string>
@@ -1796,8 +1796,8 @@
         <item quantity="other">%1$d ocommittade ändringar går förlorade.</item>
     </plurals>
     <string name="worktrees_remove_changes_unknown">Ocommittade ändringar går förlorade.</string>
-    <string name="worktrees_remove_changes_unchecked">Det gick inte att söka efter ocommittade ändringar. Eventuella ändringar går förlorade.</string>
-    <string name="worktrees_remove_sessions_stay">Sessioner som använder den här worktreen finns kvar på startsidan men kan inte köras här igen.</string>
+    <string name="worktrees_remove_changes_unchecked">Det gick inte att kontrollera om det finns ocommittade ändringar. Eventuella ändringar går förlorade.</string>
+    <string name="worktrees_remove_sessions_stay">Sessioner som använder den här worktreen finns kvar på Hem men kan inte köras här igen.</string>
     <string name="worktrees_remove_confirm_anyway">Ta bort ändå</string>
     <string name="worktrees_blocked_title">”%1$s” kan inte tas bort än</string>
     <string name="worktrees_blocked_message">En session körs i den här worktreen. Stoppa den och ta sedan bort worktreen.</string>
@@ -1815,7 +1815,7 @@
     <string name="whats_new_skipped_many">Du hoppade över %1$d uppdateringar, så de ingår nedan.</string>
     <string name="whats_new_in_version">I %1$s</string>
     <string name="whats_new_also_since">Även nytt sedan din senaste uppdatering · %1$s</string>
-    <string name="whats_new_fixes">Rättningar</string>
+    <string name="whats_new_fixes">Felrättningar</string>
     <string name="whats_new_done">Klar</string>
     <string name="whats_new_find_again">Hitta det här igen under Inställningar → Nytt</string>
     <string name="whats_new_installed">Installerad</string>

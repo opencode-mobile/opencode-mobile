@@ -22,13 +22,13 @@
     <string name="connection_setup_action_scan_new_qr">Σάρωση νέου QR</string>
     <string name="connection_setup_action_enter_pairing_code">Εισαγωγή κωδικού σύζευξης</string>
     <string name="connection_setup_action_use_host_password">Χρήση κεντρικού υπολογιστή και κωδικού</string>
-    <string name="connection_setup_action_scan_qr_instead">Σάρωση QR αντί γι\' αυτό</string>
+    <string name="connection_setup_action_scan_qr_instead">Σάρωση QR αντ\' αυτού</string>
     <string name="connection_setup_scan_qr_instead_hint">Από το opencode pair</string>
     <string name="connection_setup_remove_server">Αφαίρεση διακομιστή</string>
     <string name="connection_setup_remove_dialog_title_unnamed">Αφαίρεση του «διακομιστή»;</string>
     <string name="connection_setup_instructions_run">Στον υπολογιστή σας, εκτελέστε αυτό και μετά σαρώστε το QR.</string>
     <string name="connection_setup_instructions_first_run">Η πρώτη εκτέλεση διαρκεί περίπου ένα λεπτό. Απαιτεί OpenCode 2.0.25 ή νεότερο. Η υπηρεσία ξεκινά αν δεν εκτελείται ήδη.</string>
-    <string name="connection_setup_instructions_same_wifi_title">Ίδιο Wi-Fi αντί γι\' αυτό</string>
+    <string name="connection_setup_instructions_same_wifi_title">Ίδιο Wi-Fi αντ\' αυτού</string>
     <string name="connection_setup_instructions_same_wifi_body">Η απλή σύζευξη εμφανίζει QR μόνο όταν ο διακομιστής είναι προσβάσιμος πέρα από το localhost.</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">Κεντρικός υπολογιστής</string>
@@ -53,10 +53,10 @@
     <string name="connection_setup_pair_again_unreachable">Δεν είναι δυνατή η πρόσβαση στην αποθηκευμένη διεύθυνση. Κάντε ξανά σύζευξη.</string>
     <string name="connection_setup_pair_again_unauthorized">Αυτός ο διακομιστής απέρριψε τα αποθηκευμένα στοιχεία σύνδεσης. Κάντε ξανά σύζευξη. Ένας νέος κωδικός πρόσβασης αποσυνδέει όλες τις συσκευές.</string>
     <string name="connection_cleartext_title">Η σύνδεση δεν είναι κρυπτογραφημένη</string>
-    <string name="connection_cleartext_message_one_host">Ο κεντρικός υπολογιστής %1$s χρησιμοποιεί απλό http εκτός του τοπικού σας δικτύου ή του Tailscale. Ο κωδικός πρόσβασης του διακομιστή και όλα όσα περιέχουν οι συνεδρίες σας θα μεταδίδονταν μη κρυπτογραφημένα. Προτιμήστε https, VPN ή τούνελ.</string>
-    <string name="connection_cleartext_message_hosts">Οι κεντρικοί υπολογιστές %1$s χρησιμοποιούν απλό http εκτός του τοπικού σας δικτύου ή του Tailscale. Ο κωδικός πρόσβασης του διακομιστή και όλα όσα περιέχουν οι συνεδρίες σας θα μεταδίδονταν μη κρυπτογραφημένα. Προτιμήστε https, VPN ή τούνελ.</string>
-    <string name="connection_cleartext_message_this_address">Αυτή η διεύθυνση χρησιμοποιεί απλό http εκτός του τοπικού σας δικτύου ή του Tailscale. Ο κωδικός πρόσβασης του διακομιστή και όλα όσα περιέχουν οι συνεδρίες σας θα μεταδίδονταν μη κρυπτογραφημένα. Προτιμήστε https, VPN ή τούνελ.</string>
-    <string name="connection_cleartext_connect_anyway">Σύνδεση παρ\' όλα αυτά</string>
+    <string name="connection_cleartext_message_one_host">Ο κεντρικός υπολογιστής %1$s χρησιμοποιεί απλό http εκτός του τοπικού σας δικτύου ή του Tailscale. Ο κωδικός πρόσβασης του διακομιστή και όλα όσα περιέχουν οι συνεδρίες σας θα μεταδίδονταν χωρίς κρυπτογράφηση. Προτιμήστε https, VPN ή τούνελ.</string>
+    <string name="connection_cleartext_message_hosts">Οι κεντρικοί υπολογιστές %1$s χρησιμοποιούν απλό http εκτός του τοπικού σας δικτύου ή του Tailscale. Ο κωδικός πρόσβασης του διακομιστή και όλα όσα περιέχουν οι συνεδρίες σας θα μεταδίδονταν χωρίς κρυπτογράφηση. Προτιμήστε https, VPN ή τούνελ.</string>
+    <string name="connection_cleartext_message_this_address">Αυτή η διεύθυνση χρησιμοποιεί απλό http εκτός του τοπικού σας δικτύου ή του Tailscale. Ο κωδικός πρόσβασης του διακομιστή και όλα όσα περιέχουν οι συνεδρίες σας θα μεταδίδονταν χωρίς κρυπτογράφηση. Προτιμήστε https, VPN ή τούνελ.</string>
+    <string name="connection_cleartext_connect_anyway">Σύνδεση ούτως ή άλλως</string>
     <string name="connection_error_invalid_qr">Αυτό δεν είναι QR σύζευξης του OpenCode 2</string>
     <string name="connection_error_localhost_qr">Αυτό το QR περιέχει μόνο διεύθυνση localhost</string>
     <string name="connection_error_camera_denied">Επιτρέψτε την πρόσβαση στην κάμερα για σάρωση του QR σύζευξης</string>
@@ -67,10 +67,10 @@
     <string name="connection_error_duplicate_profile">Υπάρχει ήδη αποθηκευμένος διακομιστής με αυτόν τον κεντρικό υπολογιστή και όνομα χρήστη</string>
     <string name="connection_error_qr_scan_failed">Το QR δεν συνδέθηκε. Το API σύζευξης του OpenCode 2 αλλάζει ακόμη, οπότε η σάρωση μπορεί να αποτύχει ενώ η εφαρμογή λειτουργεί. Εισαγάγετε τον κεντρικό υπολογιστή και συνδεθείτε. Ο κωδικός πρόσβασης είναι προαιρετικός. Λειτουργεί και ένας κωδικός σύζευξης.</string>
     <string name="connection_error_unreachable">Δεν είναι δυνατή η σύνδεση με τον διακομιστή</string>
-    <string name="server_error_pairing_expired">Η σύζευξη έληξε, ξανακάντε σύζευξη</string>
+    <string name="server_error_pairing_expired">Η σύζευξη έχει λήξει, κάντε ξανά σύζευξη</string>
     <string name="server_error_not_found">Ο φάκελος ή το αρχείο δεν βρέθηκε</string>
     <string name="server_error_not_found_path">Ο φάκελος ή το αρχείο δεν βρέθηκε · %1$s</string>
-    <string name="server_error_session_busy">Η συνεδρία είναι απασχολημένη</string>
+    <string name="server_error_session_busy">Η συνεδρία εκτελεί ήδη εργασία</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Αποτυχία ταυτοποίησης</string>
     <string name="connection_error_unhealthy">Ο διακομιστής ανέφερε πρόβλημα λειτουργίας</string>
@@ -87,7 +87,7 @@
     <string name="onboarding_unofficial_body">Το OpenCode Mobile είναι μια εγγενής εφαρμογή-πελάτης για συνεδρίες opencode — υπό ανάπτυξη. Δεν είναι επίσημο προϊόν του OpenCode.</string>
     <string name="onboarding_unofficial_badge">Ανεπίσημο</string>
     <string name="onboarding_connect_page_title">Σύνδεση στους\nδιακομιστές σας</string>
-    <string name="onboarding_connect_page_body">Στρέψτε την εφαρμογή σε έναν διακομιστή opencode στον υπολογιστή σας. Προτείνουμε το Tailscale, ώστε το τηλέφωνό σας να τον προσεγγίζει με ασφάλεια από οπουδήποτε.</string>
+    <string name="onboarding_connect_page_body">Συνδέστε την εφαρμογή με έναν διακομιστή opencode στον υπολογιστή σας. Προτείνουμε το Tailscale, ώστε το τηλέφωνό σας να τον προσεγγίζει με ασφάλεια από οπουδήποτε.</string>
     <string name="onboarding_connect_page_setup_link">Χρειάζεστε πρώτα τον διακομιστή;</string>
     <string name="onboarding_features_title">Τι μπορείτε\nνα κάνετε από εδώ</string>
     <string name="onboarding_features_sessions_title">Συνεδρίες</string>
@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">Συνδεθείτε από το τηλέφωνό σας</string>
     <string name="onboarding_setup_step3_body">Προτείνεται: Tailscale — εγκαταστήστε το Tailscale στον υπολογιστή και στο τηλέφωνο και χρησιμοποιήστε την IP Tailscale ή το όνομα MagicDNS του υπολογιστή ως URL διακομιστή.\n\nΕπίσης κατάλληλα: ίδιο LAN, VPN, HTTPS ή άλλο τούνελ που διαχειρίζεστε εσείς. Η εφαρμογή δεν δημιουργεί relay για εσάς.</string>
     <string name="onboarding_setup_step4_title">Σύνδεση στην εφαρμογή</string>
-    <string name="onboarding_setup_step4_body">Εισαγάγετε το βασικό URL και τον κωδικό πρόσβασης. Η εφαρμογή ελέγχει το GET /global/health και αποθηκεύει μια αποθηκευμένη σύνδεση διακομιστή σε αυτήν τη συσκευή.</string>
+    <string name="onboarding_setup_step4_body">Εισαγάγετε το βασικό URL και τον κωδικό πρόσβασης. Η εφαρμογή ελέγχει το GET /global/health και αποθηκεύει μια σύνδεση διακομιστή σε αυτήν τη συσκευή.</string>
     <string name="onboarding_setup_open_docs">Άνοιγμα τεκμηρίωσης διακομιστή</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">Το OpenCode Mobile είναι κλειδωμένο</string>
@@ -133,10 +133,10 @@
     <string name="server_health_uptime">Χρόνος λειτουργίας</string>
     <string name="server_health_uptime_detail">από %1$s που μετρήθηκαν</string>
     <string name="server_health_reconnects">Επανασυνδέσεις</string>
-    <string name="server_health_reconnects_detail">επαναφορά σε %1$s διάμεσα</string>
+    <string name="server_health_reconnects_detail">διάμεση επαναφορά σε %1$s</string>
     <string name="server_health_no_drops">χωρίς αποσυνδέσεις</string>
     <string name="server_health_error_rate">Ποσοστό σφαλμάτων</string>
-    <string name="server_health_error_rate_detail">%1$d από %2$d έλεγχοι απέτυχαν</string>
+    <string name="server_health_error_rate_detail">Αποτυχία σε %1$d από %2$d ελέγχους</string>
     <string name="server_health_between_drops">Μεταξύ αποσυνδέσεων</string>
     <string name="server_health_between_drops_detail">μέση διάρκεια σύνδεσης</string>
     <string name="server_health_latency">Καθυστέρηση</string>
@@ -157,7 +157,7 @@
     </plurals>
     <string name="server_health_errors">Σφάλματα</string>
     <string name="server_health_errors_empty">Κανένα σφάλμα σε αυτό το διάστημα.</string>
-    <string name="server_health_error_log">Αρχείο σφαλμάτων</string>
+    <string name="server_health_error_log">Καταγραφή σφαλμάτων</string>
     <string name="server_health_error_log_check">Έλεγχος υγείας</string>
     <string name="server_health_error_log_stream">Ζωντανή σύνδεση</string>
     <string name="server_health_error_log_repeated">%1$d στη σειρά σε %2$s</string>
@@ -168,7 +168,7 @@
     <string name="server_health_category_timeout">Λήξη χρονικού ορίου</string>
     <string name="server_health_category_heartbeat">Διακοπή heartbeat</string>
     <string name="server_health_category_server">Σφάλμα διακομιστή</string>
-    <string name="server_health_category_auth">Έλεγχος ταυτότητας</string>
+    <string name="server_health_category_auth">Ταυτοποίηση</string>
     <string name="server_health_category_other">Άλλο</string>
     <string name="server_health_server">Διακομιστής</string>
     <string name="server_health_version">Έκδοση</string>
@@ -182,7 +182,7 @@
     <string name="server_health_restarts_seen_value">%1$d</string>
     <string name="server_health_event_streams">Ροές συμβάντων</string>
     <string name="server_health_event_streams_value">%1$d από %2$d συνδεδεμένες</string>
-    <string name="server_health_footnote">Μετράται μόνο όσο η εφαρμογή είναι ανοιχτή. Διατηρείται σε αυτή τη συσκευή για 7 ημέρες.</string>
+    <string name="server_health_footnote">Μετράται μόνο όσο η εφαρμογή είναι ανοιχτή. Διατηρείται σε αυτήν τη συσκευή για 7 ημέρες.</string>
     <string name="server_health_empty_title">Δεν υπάρχουν μετρήσεις ακόμα</string>
     <string name="server_health_empty_message">Η υγεία μετράται όσο η εφαρμογή είναι ανοιχτή και συνδεδεμένη με αυτόν τον διακομιστή.</string>
     <string name="server_health_status_live">Συνδεδεμένος</string>
@@ -204,8 +204,8 @@
     <string name="servers_status_active">Ενεργός</string>
     <string name="servers_add">Προσθήκη διακομιστή</string>
     <string name="servers_edit_profile">Επεξεργασία %1$s</string>
-    <string name="servers_remove_dialog_title_named">Κατάργηση του «%1$s»;</string>
-    <string name="servers_remove_dialog_message">Αυτή η συσκευή ξεχνά την αποθηκευμένη σύνδεση διακομιστή. Οι συνεδρίες παραμένουν στον διακομιστή. Αν είναι ο ενεργός διακομιστής, θα επιλέξετε άλλον ή θα μεταβείτε στη Σύνδεση αν δεν απομένει κανένας.</string>
+    <string name="servers_remove_dialog_title_named">Αφαίρεση του «%1$s»;</string>
+    <string name="servers_remove_dialog_message">Αυτή η συσκευή θα ξεχάσει την αποθηκευμένη σύνδεση διακομιστή. Οι συνεδρίες παραμένουν στον διακομιστή. Αν είναι ο ενεργός διακομιστής, θα επιλέξετε άλλον ή θα μεταβείτε στη Σύνδεση, αν δεν απομένει κανένας.</string>
     <string name="common_retry">Επανάληψη</string>
     <string name="common_save">Αποθήκευση</string>
     <string name="common_delete">Διαγραφή</string>
@@ -231,9 +231,9 @@
     <string name="home_probe_failed_edit_connection">Επεξεργασία σύνδεσης</string>
     <string name="home_error_load_projects">Αδυναμία φόρτωσης έργων</string>
     <string name="home_error_project_load_failed">Αδυναμία φόρτωσης συνεδριών</string>
-    <string name="home_remove_project_title">Κατάργηση από την αρχική;</string>
-    <string name="home_remove_project_message">Να καταργηθεί το «%1$s» από την αρχική; Οι συνεδρίες του παραμένουν στον διακομιστή.</string>
-    <string name="home_snackbar_removed">Το «%1$s» καταργήθηκε από την αρχική</string>
+    <string name="home_remove_project_title">Αφαίρεση από την αρχική;</string>
+    <string name="home_remove_project_message">Να αφαιρεθεί το «%1$s» από την αρχική; Οι συνεδρίες του παραμένουν στον διακομιστή.</string>
+    <string name="home_snackbar_removed">Το «%1$s» αφαιρέθηκε από την αρχική</string>
     <string name="home_snackbar_already_on_home">Το «%1$s» υπάρχει ήδη στην αρχική</string>
     <string name="home_snackbar_joined_project">Ίδιο repo με το %1$s. Εμφανίζεται εκεί ως worktree.</string>
     <string name="home_all">Όλα</string>
@@ -289,12 +289,12 @@
     <string name="archived_sessions_section_earlier">Παλαιότερα</string>
     <string name="archived_sessions_unarchive">Επαναφορά από το αρχείο</string>
     <string name="archived_sessions_delete">Διαγραφή…</string>
-    <string name="archived_sessions_delete_dialog_message">Η συνεδρία «%1$s» διαγράφεται από τον διακομιστή. Αυτή η ενέργεια δεν μπορεί να αναιρεθεί.</string>
+    <string name="archived_sessions_delete_dialog_message">Η συνεδρία «%1$s» θα διαγραφεί από τον διακομιστή. Η ενέργεια δεν μπορεί να αναιρεθεί.</string>
     <string name="archived_sessions_archived_at">Αρχειοθετήθηκε %1$s</string>
     <string name="archived_sessions_unarchived">Η συνεδρία «%1$s» επανήλθε από το αρχείο</string>
     <string name="archived_sessions_undo">Αναίρεση</string>
     <string name="archived_sessions_empty_title">Καμία αρχειοθετημένη συνεδρία</string>
-    <string name="archived_sessions_empty_message">Οι συνεδρίες που αρχειοθετείτε σε: %1$s εμφανίζονται εδώ.</string>
+    <string name="archived_sessions_empty_message">Οι συνεδρίες που αρχειοθετείτε στο «%1$s» εμφανίζονται εδώ.</string>
     <string name="archived_sessions_show_all_projects">Εμφάνιση όλων των έργων</string>
     <string name="archived_sessions_footer">Πατήστε μια συνεδρία για περισσότερα. Η επαναφορά από το αρχείο την επιστρέφει στην Αρχική.</string>
     <string name="archived_sessions_load_failed">Η φόρτωση των αρχειοθετημένων συνεδριών απέτυχε.</string>
@@ -307,7 +307,7 @@
     <string name="add_project_checking_folder">Έλεγχος φακέλου</string>
     <string name="add_project_loading_projects">Φόρτωση έργων</string>
     <string name="add_project_loading_folders">Φόρτωση φακέλων</string>
-    <string name="add_project_list_error_title">Δεν είναι δυνατή η λίστα αυτού του φακέλου</string>
+    <string name="add_project_list_error_title">Δεν είναι δυνατή η προβολή του περιεχομένου αυτού του φακέλου</string>
     <string name="add_project_list_error_message">Ελέγξτε τη διαδρομή και δοκιμάστε ξανά.</string>
     <string name="add_project_no_other_projects">Δεν υπάρχουν άλλα έργα σε αυτόν τον διακομιστή.</string>
     <string name="add_project_folder_path">Διαδρομή φακέλου</string>
@@ -315,7 +315,7 @@
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Επιλέξτε φάκελο</string>
     <string name="add_project_already_on_home">Ήδη στην Αρχική</string>
-    <string name="add_project_add_home_folder">Προσθήκη αρχικού φακέλου</string>
+    <string name="add_project_add_home_folder">Προσθήκη προσωπικού φακέλου</string>
     <string name="add_project_add_this_folder">Προσθήκη αυτού του φακέλου</string>
     <string name="add_project_path_not_found">Η διαδρομή δεν βρέθηκε</string>
     <string name="add_project_no_folder_named">Δεν υπάρχει φάκελος με όνομα «%1$s»</string>
@@ -326,14 +326,14 @@
         <item quantity="one">%1$d φάκελος</item>
         <item quantity="other">%1$d φάκελοι</item>
     </plurals>
-    <string name="add_project_no_subfolders">Κανένας υποφάκελος</string>
-    <string name="add_project_nothing_starts_with">Τίποτα στο %1$s δεν ξεκινά με «%2$s»</string>
+    <string name="add_project_no_subfolders">Χωρίς υποφακέλους</string>
+    <string name="add_project_nothing_starts_with">Τίποτα στον φάκελο %1$s δεν ξεκινά με «%2$s»</string>
     <plurals name="add_project_truncation_hint">
-        <item quantity="one">Εμφάνιση του πρώτου %1$d φακέλου. Πληκτρολογήστε περισσότερο από το όνομα για να περιορίσετε τη λίστα.</item>
-        <item quantity="other">Εμφάνιση των πρώτων %1$d φακέλων. Πληκτρολογήστε περισσότερο από το όνομα για να περιορίσετε τη λίστα.</item>
+        <item quantity="one">Εμφάνιση του πρώτου %1$d φακέλου. Πληκτρολογήστε περισσότερα από το όνομα για να περιορίσετε τη λίστα.</item>
+        <item quantity="other">Εμφάνιση των πρώτων %1$d φακέλων. Πληκτρολογήστε περισσότερα από το όνομα για να περιορίσετε τη λίστα.</item>
     </plurals>
-    <string name="add_project_in_folder">Στο %1$s</string>
-    <string name="add_project_root_home">Αρχική</string>
+    <string name="add_project_in_folder">Στον φάκελο %1$s</string>
+    <string name="add_project_root_home">Προσωπικός φάκελος</string>
     <string name="add_project_error_add_failed">Δεν είναι δυνατή η προσθήκη αυτού του φακέλου</string>
     <string name="worktree_new_row">Νέο worktree…</string>
     <string name="worktree_run_in_subtitle">Δημιουργία checkout και έναρξη εκεί</string>
@@ -347,7 +347,7 @@
     <string name="worktree_name">Όνομα</string>
     <string name="worktree_branch">Branch</string>
     <string name="worktree_base">Δημιουργία από</string>
-    <string name="worktree_v1_branch_note">Το opencode v1 το ονομάζει σύμφωνα με το worktree</string>
+    <string name="worktree_v1_branch_note">Το opencode v1 το ονομάζει με βάση το worktree</string>
     <string name="worktree_v2_no_branch">Χωρίς branch (detached)</string>
     <string name="worktree_v2_branch_note">Τα checkout του opencode v2 δεν έχουν branch</string>
     <string name="worktree_current_checkout">Τρέχον checkout</string>
@@ -381,10 +381,10 @@
     <string name="files_retry">Επανάληψη</string>
     <string name="files_empty_folder">Κενός φάκελος</string>
     <string name="files_empty_project">Αυτό το έργο δεν έχει αρχεία για εμφάνιση.</string>
-    <string name="files_ignored">αγνοήθηκε</string>
+    <string name="files_ignored">αγνοείται</string>
     <string name="files_finding">Αναζήτηση αρχείων</string>
     <string name="files_find_error">Δεν ήταν δυνατή η αναζήτηση αρχείων</string>
-    <string name="files_find_no_match">Κανένα αρχείο δεν ταιριάζει με «%1$s»</string>
+    <string name="files_find_no_match">Κανένα αρχείο δεν ταιριάζει με το «%1$s»</string>
     <string name="files_find_no_match_detail">Η αναζήτηση στον διακομιστή παραλείπει τους φακέλους που αγνοούνται.</string>
     <string name="files_error_check_server_connection">Ελέγξτε τη σύνδεση με τον διακομιστή και δοκιμάστε ξανά.</string>
     <string name="files_error_server_status">Ο διακομιστής απάντησε με %1$d.</string>
@@ -428,21 +428,21 @@
     <string name="terminal_catalog_title">Τερματικά</string>
     <string name="terminal_catalog_loading">Φόρτωση τερματικών</string>
     <string name="terminal_catalog_empty_title">Δεν υπάρχουν ενεργά shell</string>
-    <string name="terminal_catalog_empty_message">Ξεκινήστε ένα για ένα έργο. Δεν συνδέεται με συνεδρία συνομιλίας.</string>
+    <string name="terminal_catalog_empty_message">Ξεκινήστε ένα για κάποιο έργο. Δεν συνδέεται με συνεδρία συνομιλίας.</string>
     <string name="terminal_select_title">Επιλογή shell</string>
     <string name="terminal_select_message">Επιλέξτε ένα shell από τη λίστα.</string>
     <string name="terminal_new_shell">Νέο shell</string>
     <string name="terminal_close">Κλείσιμο</string>
     <string name="terminal_close_dialog_title">Κλείσιμο αυτού του shell;</string>
     <string name="terminal_close_dialog_title_named">Κλείσιμο του «%1$s»;</string>
-    <string name="terminal_close_dialog_message">Αυτό τερματίζει το shell στον διακομιστή.</string>
+    <string name="terminal_close_dialog_message">Το shell θα τερματιστεί στον διακομιστή.</string>
     <string name="terminal_projects_empty_title">Δεν υπάρχουν έργα ακόμα</string>
     <string name="terminal_projects_empty_message">Προσθέστε ένα έργο στην αρχική και μετά ξεκινήστε ένα shell εδώ.</string>
-    <string name="terminal_error_create">Δεν ήταν δυνατή η εκκίνηση shell.</string>
+    <string name="terminal_error_create">Δεν ήταν δυνατή η εκκίνηση ενός shell.</string>
     <string name="terminal_connecting_title">Σύνδεση</string>
     <string name="terminal_connecting_subtitle">Εκκίνηση shell…</string>
     <string name="terminal_connect_failed_title">Η σύνδεση απέτυχε</string>
-    <string name="terminal_connect_failed_message">Δεν ήταν δυνατή η εκκίνηση shell για αυτό το έργο.</string>
+    <string name="terminal_connect_failed_message">Δεν ήταν δυνατή η εκκίνηση ενός shell για αυτό το έργο.</string>
     <string name="terminal_exited">Το shell τερματίστηκε</string>
     <string name="terminal_retry">Επανάληψη</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
@@ -471,7 +471,7 @@
     <string name="session_chat_title_hint">Τίτλος</string>
     <string name="session_chat_fork_dialog_title">Διακλάδωση συνεδρίας</string>
     <string name="session_chat_fork_dialog_confirm">Διακλάδωση</string>
-    <string name="session_chat_fork_dialog_error_empty_title">Εισάγετε έναν τίτλο συνεδρίας</string>
+    <string name="session_chat_fork_dialog_error_empty_title">Εισαγάγετε τίτλο συνεδρίας</string>
     <string name="session_chat_fork_dialog_error_failed">Η διακλάδωση της συνεδρίας απέτυχε.</string>
     <string name="session_chat_fork_result_title">Η συνεδρία διακλαδώθηκε</string>
     <string name="session_chat_fork_result_message_ready">Η συνεδρία «%1$s» είναι έτοιμη.</string>
@@ -493,7 +493,7 @@
     <string name="session_chat_commands_undo_description">Αναίρεση τελευταίου μηνύματος</string>
     <string name="session_chat_commands_redo_label">Επανάληψη</string>
     <string name="session_chat_commands_redo_description">Επανάληψη αναιρεμένου μηνύματος</string>
-    <string name="session_chat_commands_compact_label">Συμπαγές</string>
+    <string name="session_chat_commands_compact_label">Συμπίεση</string>
     <string name="session_chat_commands_compact_description">Συμπίεση πλαισίου συνεδρίας</string>
     <string name="session_chat_commands_terminal_label">Τερματικό</string>
     <string name="session_chat_commands_terminal_description">Άνοιγμα shell του έργου</string>
@@ -502,7 +502,7 @@
     <string name="session_chat_commands_mcp_label">Διακομιστές MCP</string>
     <string name="session_chat_commands_mcp_description">Εμφάνιση κατάστασης διακομιστών MCP</string>
     <string name="session_chat_commands_btw_label">Btw</string>
-    <string name="session_chat_commands_btw_description">Κάντε μια παράπλευρη ερώτηση</string>
+    <string name="session_chat_commands_btw_description">Κάντε μια δευτερεύουσα ερώτηση</string>
     <string name="session_chat_suggestion_file">Αρχείο</string>
     <string name="session_chat_suggestion_no_matches">Δεν βρέθηκαν αποτελέσματα</string>
     <string name="session_chat_suggestion_no_commands">Δεν υπάρχουν εντολές</string>
@@ -512,7 +512,7 @@
     <string name="session_chat_move_worktree_menu_title">Μετακίνηση σε worktree…</string>
     <string name="session_chat_move_worktree_sheet_title">Μετακίνηση σε worktree</string>
     <string name="session_chat_move_worktree_no_other">Αυτό το έργο δεν έχει άλλα worktree</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Θα μετακινηθεί σε %1$s μετά από αυτήν την αλληλεπίδραση.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Θα μετακινηθεί σε %1$s μετά την τρέχουσα απάντηση.</string>
     <string name="session_chat_move_worktree_failed">Αδυναμία μετακίνησης της συνεδρίας: %1$s</string>
     <string name="session_chat_variant_default">Προεπιλογή</string>
     <string name="session_chat_model_chip_placeholder">Μοντέλο</string>
@@ -521,8 +521,8 @@
     <string name="session_chat_model_notice_none_usable">Δεν υπάρχουν διαθέσιμα μοντέλα προς χρήση. Πατήστε Μοντέλο για επανάληψη.</string>
     <string name="session_chat_model_notice_variant_unavailable">Η αποθηκευμένη παραλλαγή δεν είναι διαθέσιμη. Χρήση της Προεπιλογής.</string>
     <string name="session_chat_model_notice_model_unavailable">Το επιλεγμένο μοντέλο δεν είναι διαθέσιμο. Χρήση του %1$s.</string>
-    <string name="session_chat_side_question_unsupported">Το /btw απαιτεί διακομιστή opencode v2 που απαντά σε πλευρικές ερωτήσεις. Αυτός ο διακομιστής δεν μπορεί να απαντήσει χωρίς να προσθέσει στη συνομιλία.</string>
-    <string name="session_chat_side_question_unavailable">Το /btw απαιτεί νεότερο διακομιστή opencode.</string>
+    <string name="session_chat_side_question_unsupported">Το /btw απαιτεί διακομιστή opencode v2 που απαντά σε δευτερεύουσες ερωτήσεις. Αυτός ο διακομιστής δεν μπορεί να απαντήσει χωρίς να προσθέσει στη συνομιλία.</string>
+    <string name="session_chat_side_question_unavailable">Το /btw απαιτεί έναν νεότερο διακομιστή opencode.</string>
     <string name="session_chat_side_question_copied">Η απάντηση αντιγράφηκε</string>
     <string name="session_chat_side_question_failed">Το /btw απέτυχε: «%1$s»</string>
     <string name="attachment_error_folder">Δεν είναι δυνατή η επισύναψη φακέλων.</string>
@@ -535,7 +535,7 @@
     <string name="attachment_error_unreadable">Δεν ήταν δυνατή η ανάγνωση της επισύναψης.</string>
     <string name="attachment_error_upload_failed">Η μεταφόρτωση απέτυχε</string>
     <string name="attachment_drop_reject_one">Δεν είναι δυνατή η επισύναψη</string>
-    <string name="attachment_drop_reject_many">Δεν είναι δυνατή η επισύναψη αυτών</string>
+    <string name="attachment_drop_reject_many">Δεν είναι δυνατή η επισύναψή τους</string>
     <plurals name="attachment_drop_attach_images_count">
         <item quantity="one">Αφήστε για επισύναψη %1$d εικόνας</item>
         <item quantity="other">Αφήστε για επισύναψη %1$d εικόνων</item>
@@ -633,9 +633,9 @@
     <string name="new_session_new_worktree_subtitle">Απομονωμένο αντίγραφο, δημιουργείται με την αποστολή</string>
     <string name="new_session_worktrees_section">Worktrees</string>
     <string name="timeline_state_loading_title">Φόρτωση μηνυμάτων</string>
-    <string name="timeline_state_loading_subtitle">Ανάκτηση χρονολογίου…</string>
+    <string name="timeline_state_loading_subtitle">Ανάκτηση ιστορικού…</string>
     <string name="timeline_state_error_title">Αδυναμία φόρτωσης μηνυμάτων</string>
-    <string name="timeline_state_error_fallback">Το χρονολόγιο δεν φορτώθηκε.</string>
+    <string name="timeline_state_error_fallback">Το ιστορικό δεν φορτώθηκε.</string>
     <string name="timeline_state_retry">Επανάληψη</string>
     <string name="timeline_state_empty">Δεν υπάρχουν μηνύματα ακόμη. Στείλτε μια προτροπή για να ξεκινήσετε.</string>
     <string name="timeline_state_refreshing">Ανανέωση μηνυμάτων</string>
@@ -657,10 +657,10 @@
     <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
     <string name="timeline_background_work_subagents_and_shells_spoken">%1$s και %2$s</string>
     <string name="timeline_background_work_running_spoken">%1$s σε εκτέλεση</string>
-    <string name="timeline_background_work_agent_needs_input">Ο πράκτορας %1$s χρειάζεται είσοδο</string>
+    <string name="timeline_background_work_agent_needs_input">Ο πράκτορας %1$s χρειάζεται την παρέμβασή σας</string>
     <plurals name="timeline_background_work_subagents_need_input">
-        <item quantity="one">%1$d υποπράκτορας χρειάζεται είσοδο</item>
-        <item quantity="other">%1$d υποπράκτορες χρειάζονται είσοδο</item>
+        <item quantity="one">%1$d υποπράκτορας χρειάζεται την παρέμβασή σας</item>
+        <item quantity="other">%1$d υποπράκτορες χρειάζονται την παρέμβασή σας</item>
     </plurals>
     <string name="timeline_background_work_needs_input_running">%1$s · %2$d σε εκτέλεση</string>
     <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s σε εκτέλεση</string>
@@ -695,8 +695,8 @@
     <string name="tool_title_agent">Πράκτορας</string>
     <string name="tool_title_thought">Σκέψη</string>
     <plurals name="tool_title_asked_questions">
-        <item quantity="one">Έγινε %1$d ερώτηση</item>
-        <item quantity="other">Έγιναν %1$d ερωτήσεις</item>
+        <item quantity="one">Τέθηκε %1$d ερώτηση</item>
+        <item quantity="other">Τέθηκαν %1$d ερωτήσεις</item>
     </plurals>
     <plurals name="tool_count_read">
         <item quantity="one">%1$d ανάγνωση</item>
@@ -744,7 +744,7 @@
     </plurals>
     <plurals name="tool_count_skill">
         <item quantity="one">%1$d ικανότητα</item>
-        <item quantity="other">%1$d δεξιότητες</item>
+        <item quantity="other">%1$d ικανότητες</item>
     </plurals>
     <plurals name="tool_count_patch">
         <item quantity="one">%1$d patch</item>
@@ -784,7 +784,7 @@
     <string name="tool_status_declined">Απορρίφθηκε</string>
     <string name="tool_user_note">Η σημείωσή σας: %1$s</string>
     <string name="tool_status_stopped">Διακόπηκε</string>
-    <string name="tool_placeholder_writing_command">Εγγραφή εντολής…</string>
+    <string name="tool_placeholder_writing_command">Σύνταξη εντολής…</string>
     <string name="tool_placeholder_preparing_read">Προετοιμασία ανάγνωσης…</string>
     <string name="tool_placeholder_preparing_edit">Προετοιμασία επεξεργασίας…</string>
     <string name="tool_placeholder_preparing_write">Προετοιμασία εγγραφής…</string>
@@ -804,7 +804,7 @@
     <string name="timeline_step_searching">Αναζήτηση…</string>
     <string name="timeline_step_searching_named">Αναζήτηση %1$s</string>
     <string name="timeline_step_listing">Εμφάνιση λίστας…</string>
-    <string name="timeline_step_listing_named">Λίστα %1$s</string>
+    <string name="timeline_step_listing_named">Εμφάνιση λίστας %1$s</string>
     <string name="timeline_step_editing">Επεξεργασία…</string>
     <string name="timeline_step_editing_named">Επεξεργασία %1$s</string>
     <string name="timeline_step_writing">Εγγραφή…</string>
@@ -848,28 +848,28 @@
     <string name="timeline_activity_thinking">Σκέψη…</string>
     <string name="timeline_activity_waiting_for_agents">Αναμονή για πράκτορες</string>
     <string name="timeline_activity_waiting_for_you">Αναμονή για εσάς</string>
-    <string name="timeline_notice_moved_to">Μετακίνηση σε</string>
+    <string name="timeline_notice_moved_to">Μετακινήθηκε σε</string>
     <string name="timeline_notice_agent_changed">Ο πράκτορας άλλαξε</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
-    <string name="timeline_notice_switched_to">Εναλλαγή σε</string>
+    <string name="timeline_notice_switched_to">Αλλαγή σε</string>
     <string name="timeline_notice_variant_switched">Η παραλλαγή άλλαξε σε</string>
     <string name="timeline_notice_variant_default">Η παραλλαγή άλλαξε σε Προεπιλογή</string>
     <string name="timeline_notice_instructions_updated">Οι οδηγίες ενημερώθηκαν</string>
     <string name="timeline_notice_restart">Συνέχεια μετά την επανεκκίνηση</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">Το πλαίσιο συμπτύχθηκε</string>
+    <string name="timeline_compaction_title">Το πλαίσιο συμπιέστηκε</string>
     <string name="timeline_compaction_automatic">Αυτόματα</string>
     <string name="timeline_syncing">Συγχρονισμός…</string>
     <string name="timeline_failure_session_work_failed">Η εργασία της συνεδρίας απέτυχε</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Επιλέξτε μοντέλο</string>
-    <string name="timeline_failure_compact">Συμπαγές</string>
-    <string name="session_chat_compact_status">Συμπύκνωση…</string>
+    <string name="timeline_failure_compact">Συμπίεση</string>
+    <string name="session_chat_compact_status">Συμπίεση…</string>
     <string name="session_chat_turn_sending">Αποστολή…</string>
     <string name="session_chat_turn_sending_percent">Αποστολή %1$d%%</string>
-    <string name="session_chat_compact_success">Η συνεδρία συμπυκνώθηκε.</string>
-    <string name="session_chat_compact_success_usage">Το πλαίσιο συμπυκνώθηκε · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">Δεν ήταν δυνατή η συμπύκνωση του πλαισίου της συνεδρίας.</string>
+    <string name="session_chat_compact_success">Η συνεδρία συμπιέστηκε.</string>
+    <string name="session_chat_compact_success_usage">Το πλαίσιο συμπιέστηκε · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">Δεν ήταν δυνατή η συμπίεση του πλαισίου της συνεδρίας.</string>
     <string name="session_chat_revert_undo_failed">Δεν ήταν δυνατή η αναίρεση του τελευταίου μηνύματος.</string>
     <string name="session_chat_revert_failed">Δεν ήταν δυνατή η επαναφορά του μηνύματος.</string>
     <string name="session_chat_revert_redo_failed">Δεν ήταν δυνατή η επανάληψη.</string>
@@ -880,7 +880,7 @@
     <string name="session_chat_shell_stop_failed">Δεν ήταν δυνατή η διακοπή του shell. Δοκιμάστε ξανά.</string>
     <string name="session_chat_shell_status_running">Σε εκτέλεση</string>
     <string name="session_chat_shell_status_exited">Τερματίστηκε</string>
-    <string name="session_chat_shell_status_timed_out">Έληξε ο χρόνος</string>
+    <string name="session_chat_shell_status_timed_out">Λήξη χρονικού ορίου</string>
     <string name="session_chat_shell_duration_seconds">%1$d δ</string>
     <string name="session_chat_shell_duration_minutes">%1$d λ</string>
     <string name="session_chat_shell_duration_minutes_seconds">%1$d λ %2$d δ</string>
@@ -926,14 +926,14 @@
     <string name="session_chat_sheet_pending_prompts_steer_now">Καθοδήγηση τώρα</string>
     <string name="session_chat_sheet_pending_prompts_delete">Διαγραφή</string>
     <string name="session_chat_sheet_side_question_done">Τέλος</string>
-    <string name="session_chat_sheet_side_question_not_added">Δεν προστέθηκε στη συζήτηση</string>
-    <string name="session_chat_sheet_todos_title">Todos συνεδρίας</string>
+    <string name="session_chat_sheet_side_question_not_added">Δεν προστέθηκε στη συνομιλία</string>
+    <string name="session_chat_sheet_todos_title">Λίστα εργασιών συνεδρίας</string>
     <string name="session_chat_sheet_todos_progress">%1$d από %2$d ολοκληρώθηκαν</string>
     <string name="session_chat_goal_pill">Στόχος</string>
-    <string name="session_chat_goal_pill_paused">Ο στόχος σε παύση</string>
+    <string name="session_chat_goal_pill_paused">Στόχος σε παύση</string>
     <string name="session_chat_goal_pill_met">Ο στόχος επιτεύχθηκε</string>
     <string name="session_chat_goal_pill_accessibility_active">Ο στόχος είναι ενεργός, γύρος %1$d από %2$d</string>
-    <string name="session_chat_goal_pill_accessibility_paused">Ο στόχος σε παύση. %1$s</string>
+    <string name="session_chat_goal_pill_accessibility_paused">Ο στόχος είναι σε παύση. %1$s</string>
     <string name="session_chat_goal_sheet_title">Στόχος</string>
     <string name="session_chat_goal_tag_working">Σε εξέλιξη</string>
     <string name="session_chat_goal_tag_waiting">Αναμονή</string>
@@ -959,7 +959,7 @@
     <string name="session_chat_goal_waiting_on_you">Αναμονή για εσάς</string>
     <string name="session_chat_goal_waiting_permission">Υπάρχει ανοιχτό αίτημα άδειας. Ο στόχος συνεχίζεται μόλις απαντήσετε.</string>
     <string name="session_chat_goal_waiting_question">Υπάρχει ανοιχτή ερώτηση. Ο στόχος συνεχίζεται μόλις απαντήσετε.</string>
-    <string name="session_chat_goal_evidence">Τεκμήρια</string>
+    <string name="session_chat_goal_evidence">Αποδεικτικά στοιχεία</string>
     <string name="session_chat_goal_reconnecting">Επανασύνδεση. Εμφανίζεται ο τελευταίος γνωστός στόχος.</string>
     <string name="session_chat_goal_pause">Παύση</string>
     <string name="session_chat_goal_pausing">Παύση…</string>
@@ -971,21 +971,21 @@
     <string name="session_chat_goal_footnote_active">Μετά από κάθε γύρο, ένας αξιολογητής ελέγχει την εργασία με βάση τον στόχο. Ο πράκτορας συνεχίζει μέχρι να επιτευχθεί, να χρειαστεί εσάς ή να περάσουν %1$d γύροι.</string>
     <string name="session_chat_goal_footnote_paused">Η συνέχιση ξεκινά νέο όριο %1$d γύρων.</string>
     <string name="session_chat_goal_footnote_met">Ένας νέος στόχος αντικαθιστά αυτόν.</string>
-    <string name="session_chat_goal_paused">Ο στόχος σε παύση</string>
+    <string name="session_chat_goal_paused">Στόχος σε παύση</string>
     <string name="session_chat_goal_paused_by_user">Θέσατε τον στόχο σε παύση</string>
     <string name="session_chat_goal_paused_stopped">Διακόψατε τον γύρο, οπότε ο στόχος τέθηκε σε παύση</string>
     <string name="session_chat_goal_paused_failed">Ο στόχος τέθηκε σε παύση μετά από σφάλμα</string>
-    <string name="session_chat_goal_paused_no_progress">Ο στόχος σε παύση: καμία πρόοδος για %1$d γύρους</string>
+    <string name="session_chat_goal_paused_no_progress">Στόχος σε παύση: καμία πρόοδος για %1$d γύρους</string>
     <string name="session_chat_goal_paused_round_limit">Ο στόχος τέθηκε σε παύση μετά από %1$d γύρους</string>
-    <string name="session_chat_goal_paused_restart">Ο στόχος σε παύση: ο διακομιστής επανεκκινήθηκε</string>
-    <string name="session_chat_goal_paused_reviewer">Ο στόχος σε παύση: ο αξιολογητής δεν μπόρεσε να αποφασίσει</string>
-    <string name="session_chat_goal_paused_quiet">Ο στόχος σε παύση: η εργασία παρασκηνίου σταμάτησε να δραστηριοποιείται</string>
+    <string name="session_chat_goal_paused_restart">Στόχος σε παύση: ο διακομιστής επανεκκινήθηκε</string>
+    <string name="session_chat_goal_paused_reviewer">Στόχος σε παύση: ο αξιολογητής δεν μπόρεσε να αποφασίσει</string>
+    <string name="session_chat_goal_paused_quiet">Στόχος σε παύση: η εργασία παρασκηνίου δεν έχει δραστηριότητα</string>
     <string name="session_chat_goal_met">Ο στόχος επιτεύχθηκε</string>
     <string name="session_chat_goal_set">Ο στόχος ορίστηκε</string>
     <string name="session_chat_goal_ended">έληξε</string>
     <string name="session_chat_goal_set_earlier">Ένας προηγούμενος στόχος. Εκκαθαρίστηκε ή αντικαταστάθηκε.</string>
     <string name="session_chat_goal_bubble_label">Στόχος</string>
-    <string name="session_chat_goal_objective_hint">Περιγράψτε πώς μοιάζει το «τέλος»…</string>
+    <string name="session_chat_goal_objective_hint">Περιγράψτε τι σημαίνει «ολοκληρώθηκε»…</string>
     <string name="session_chat_goal_resume_placeholder">Απαντήστε και συνεχίστε τον στόχο…</string>
     <string name="session_chat_goal_count">%1$s / %2$s χαρακτήρες</string>
     <string name="session_chat_goal_count_over">%1$s / %2$s χαρακτήρες · συντομεύστε τον στόχο για αποστολή</string>
@@ -1001,7 +1001,7 @@
     <string name="session_chat_timeline_style_notice">Χρονολόγιο: %1$s. Αλλάξτε το όποτε θέλετε στις Ρυθμίσεις.</string>
     <string name="session_chat_branch_copied">Το όνομα του branch αντιγράφηκε</string>
     <string name="session_chat_follow_up_switched_steer">Αλλαγή σε Καθοδήγηση</string>
-    <string name="session_chat_follow_up_switched_queue">Αλλαγή σε Αναμονή</string>
+    <string name="session_chat_follow_up_switched_queue">Αλλαγή σε Ουρά</string>
     <string name="session_chat_failure_retry_after_seconds">Δοκιμάστε ξανά σε %1$d δ.</string>
     <string name="session_chat_failure_retry_after_minutes">Δοκιμάστε ξανά σε %1$d λ.</string>
     <string name="component_outgoing_message_pending_caption">Σε εκκρεμότητα · αποστέλλεται στο επόμενο βήμα</string>
@@ -1033,8 +1033,8 @@
     <string name="session_chat_reply_error_permission_reason">Δεν ήταν δυνατή η αποστολή της απάντησής σας. %1$s.</string>
     <string name="session_chat_reply_error_question">Δεν ήταν δυνατή η αποστολή της απάντησής σας. Δοκιμάστε ξανά.</string>
     <string name="session_chat_reply_error_question_reason">Δεν ήταν δυνατή η αποστολή της απάντησής σας. %1$s.</string>
-    <string name="session_chat_reply_error_dismiss">Δεν ήταν δυνατή η απόρριψη της ερώτησης. Δοκιμάστε ξανά.</string>
-    <string name="session_chat_reply_error_dismiss_reason">Δεν ήταν δυνατή η απόρριψη της ερώτησης. %1$s.</string>
+    <string name="session_chat_reply_error_dismiss">Δεν ήταν δυνατή η παράβλεψη της ερώτησης. Δοκιμάστε ξανά.</string>
+    <string name="session_chat_reply_error_dismiss_reason">Δεν ήταν δυνατή η παράβλεψη της ερώτησης. %1$s.</string>
     <string name="session_chat_permission_unavailable">Το αίτημα άδειας δεν είναι πλέον διαθέσιμο</string>
     <string name="session_chat_question_unavailable">Το αίτημα ερώτησης δεν είναι πλέον διαθέσιμο</string>
     <string name="session_chat_permission_tree_failed">Δεν ήταν δυνατή η ανανέωση του δέντρου συνεδριών για την άδεια</string>
@@ -1086,7 +1086,7 @@
     <string name="session_chat_sheet_background_work_shells">Shells</string>
     <string name="session_chat_sheet_background_work_tab_running">Σε εξέλιξη</string>
     <string name="session_chat_sheet_background_work_tab_done">Ολοκληρώθηκαν</string>
-    <string name="session_chat_sheet_background_work_running_empty">Δεν εκτελείται τίποτα. Οι ολοκληρωμένες εργασίες βρίσκονται στις Ολοκληρώθηκαν.</string>
+    <string name="session_chat_sheet_background_work_running_empty">Δεν εκτελείται τίποτα. Οι ολοκληρωμένες εργασίες βρίσκονται στην καρτέλα «Ολοκληρώθηκαν».</string>
     <string name="session_chat_sheet_background_work_done_empty">Δεν έχει ολοκληρωθεί τίποτα ακόμη.</string>
     <string name="session_chat_sheet_background_work_waiting_for_input">Αναμονή για είσοδο</string>
     <string name="session_chat_sheet_background_work_stopped">Διακόπηκε</string>
@@ -1095,8 +1095,8 @@
         <item quantity="other">%1$d εργαλεία</item>
     </plurals>
     <plurals name="session_chat_sheet_activity_working">
-        <item quantity="one">Εργασία %1$d</item>
-        <item quantity="other">Εργασία %1$d</item>
+        <item quantity="one">Εργασία · %1$d βήμα</item>
+        <item quantity="other">Εργασία · %1$d βήματα</item>
     </plurals>
     <string name="session_chat_sheet_activity_back_to_steps">Πίσω στα βήματα</string>
     <string name="session_chat_sheet_activity_steps">Βήματα</string>
@@ -1156,8 +1156,8 @@
         <item quantity="other">%1$d αποθηκευμένοι</item>
     </plurals>
     <plurals name="settings_servers_summary_saved_active">
-        <item quantity="one">%1$d αποθηκευμένος · %2$s ενεργός</item>
-        <item quantity="other">%1$d αποθηκευμένοι · %2$s ενεργός</item>
+        <item quantity="one">%1$d αποθηκευμένος · ενεργός: %2$s</item>
+        <item quantity="other">%1$d αποθηκευμένοι · ενεργός: %2$s</item>
     </plurals>
     <string name="settings_send_feedback_title">Αποστολή σχολίων</string>
     <string name="settings_send_feedback_subtitle">Αναφέρετε ένα σφάλμα ή μοιραστείτε μια ιδέα</string>
@@ -1172,7 +1172,7 @@
     <string name="settings_collapse_tool_calls_title">Σύμπτυξη διαδοχικών κλήσεων εργαλείων</string>
     <string name="settings_collapse_tool_calls_subtitle">Ομαδοποίηση διαδοχικών εργαλείων σε μία κάρτα σύνοψης</string>
     <string name="settings_timeline_style_title">Στυλ χρονολογίου</string>
-    <string name="settings_timeline_style_standard_title">Στάνταρ</string>
+    <string name="settings_timeline_style_standard_title">Τυπικό</string>
     <string name="settings_timeline_style_standard_subtitle">Κάρτες και ομάδες εργαλείων ανάμεσα στα μηνύματα του πράκτορα</string>
     <string name="settings_timeline_style_step_rail_title">Ράγα βημάτων</string>
     <string name="settings_timeline_style_step_rail_subtitle">Μία γραμμή ανά βήμα σε ράγα, ζωντανά όσο εργάζεται ο πράκτορας</string>
@@ -1205,12 +1205,12 @@
     <string name="settings_app_lock_subtitle_unavailable">Ορίστε κλείδωμα οθόνης σε αυτή τη συσκευή για να χρησιμοποιήσετε το Κλείδωμα εφαρμογής</string>
     <string name="settings_privacy_policy_title">Πολιτική απορρήτου</string>
     <string name="settings_privacy_policy_subtitle">Πώς οι εφαρμογές διαχειρίζονται τα δεδομένα</string>
-    <string name="settings_analytics_title">Αναλύσεις και αναφορές σφαλμάτων</string>
+    <string name="settings_analytics_title">Αναλυτικά στοιχεία και αναφορές σφαλμάτων</string>
     <string name="settings_analytics_subtitle">Επιτρέψτε προαιρετικά συμβάντα χρήσης προϊόντος και αναφορές σφαλμάτων. Όταν είναι ανενεργό, δεν στέλνεται τίποτα στο Firebase.</string>
     <string name="settings_analytics_label">Αναλυτικά στοιχεία προϊόντος</string>
-    <string name="settings_diagnostic_logs_subtitle">Κοινοποίηση ενός απαλειμμένου από ευαίσθητα δεδομένα κυλιόμενου αρχείου καταγραφής</string>
+    <string name="settings_diagnostic_logs_subtitle">Κοινοποίηση κυλιόμενου αρχείου καταγραφής εκτέλεσης με απόκρυψη ευαίσθητων δεδομένων</string>
     <string name="settings_clear_all_data_title">Διαγραφή όλων των δεδομένων</string>
-    <string name="settings_clear_all_data_subtitle">Κατάργηση σύνδεσης και προσωρινής μνήμης</string>
+    <string name="settings_clear_all_data_subtitle">Κατάργηση σύνδεσης και κρυφής μνήμης</string>
     <string name="settings_clear_all_data_dialog_title">Διαγραφή όλων των δεδομένων;</string>
     <string name="settings_clear_all_data_dialog_message">Αυτή η ενέργεια δεν μπορεί να αναιρεθεί.</string>
     <string name="settings_version">Έκδοση</string>
@@ -1219,8 +1219,8 @@
     <string name="settings_source_code_subtitle">GPL-3.0 στο GitHub</string>
     <string name="settings_rate_app_title">Αξιολόγηση στο Google Play</string>
     <string name="settings_rate_app_subtitle">Μια κριτική βοηθά άλλους να βρουν την εφαρμογή</string>
-    <string name="settings_star_on_github_title">Αστέρι στο GitHub</string>
-    <string name="settings_follow_on_x_title">Ακολουθήστε στο X</string>
+    <string name="settings_star_on_github_title">Βάλτε αστέρι στο GitHub</string>
+    <string name="settings_follow_on_x_title">Ακολουθήστε μας στο X</string>
     <string name="diagnostics_title">Αρχεία καταγραφής διαγνωστικών</string>
     <string name="diagnostics_loading">Φόρτωση αρχείων καταγραφής διαγνωστικών</string>
     <string name="diagnostics_entries_title">Καταχωρήσεις</string>
@@ -1242,7 +1242,7 @@
         <item quantity="other">Μέγ. %1$d · καμία απόρριψη</item>
     </plurals>
     <string name="diagnostics_format_title">Μορφή</string>
-    <string name="diagnostics_format_value">JSONL · κωδικοί και σώματα μηνυμάτων αποκρύπτονται</string>
+    <string name="diagnostics_format_value">JSONL · απόκρυψη διαπιστευτηρίων και περιεχομένου μηνυμάτων</string>
     <string name="diagnostics_range_title">Εύρος</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
     <string name="diagnostics_areas_title">Ενότητες</string>
@@ -1274,7 +1274,7 @@
     <string name="appearance_syntax_blurb_neon">Οικογένεια Dracula</string>
     <string name="appearance_preview_light">Φωτεινό</string>
     <string name="appearance_preview_dark">Σκούρο</string>
-    <string name="appearance_preview_sample_message">Διάσχισε το αποθετήριο των tokens.</string>
+    <string name="appearance_preview_sample_message">Διασχίστε το token store.</string>
     <string name="appearance_preview_sample_reply">Ανανέωση μία φορά και μετά επανάληψη.</string>
     <string name="appearance_more_options">Περισσότερες επιλογές</string>
     <string name="appearance_reset_text_sizes">Επαναφορά μεγεθών κειμένου</string>
@@ -1328,7 +1328,7 @@
     <string name="feedback_error_unverified">Δεν ήταν δυνατή η επαλήθευση αυτού του αντιγράφου της εφαρμογής. Οι αναφορές μπορούν να σταλούν μόνο από εγκατάσταση μέσω App Store, TestFlight ή Google Play.</string>
     <string name="feedback_error_failed">Δεν ήταν δυνατή η αποστολή της αναφοράς.</string>
     <string name="feedback_action_try_again">Δοκιμή ξανά</string>
-    <string name="feedback_action_share_instead">Κοινοποίηση</string>
+    <string name="feedback_action_share_instead">Κοινοποίηση αντί αυτού</string>
     <string name="feedback_undo">Αναίρεση</string>
     <string name="feedback_done">Τέλος</string>
     <string name="feedback_add_attachment">Προσθήκη συνημμένου</string>
@@ -1337,12 +1337,12 @@
     <string name="feedback_sending">Αποστολή αναφοράς</string>
     <string name="feedback_attachment_screenshot">Στιγμιότυπο οθόνης</string>
     <plurals name="feedback_attachment_screenshot_hidden">
-        <item quantity="one">Στιγμιότυπο οθόνης · %1$d κρυμμένο</item>
-        <item quantity="other">Στιγμιότυπο οθόνης · %1$d κρυμμένα</item>
+        <item quantity="one">Στιγμιότυπο οθόνης · %1$d κρυμμένη</item>
+        <item quantity="other">Στιγμιότυπο οθόνης · %1$d κρυμμένες</item>
     </plurals>
     <plurals name="feedback_attachment_hidden_count">
-        <item quantity="one">%1$d κρυμμένο</item>
-        <item quantity="other">%1$d κρυμμένα</item>
+        <item quantity="one">%1$d κρυμμένη</item>
+        <item quantity="other">%1$d κρυμμένες</item>
     </plurals>
     <string name="feedback_attachment_tap_to_hide">Πατήστε για απόκρυψη τμημάτων</string>
     <string name="feedback_attachment_tap_to_preview">Πατήστε για προεπισκόπηση</string>
@@ -1381,7 +1381,7 @@
     <string name="session_search_title">Αναζήτηση συνεδριών</string>
     <string name="session_search_clear">Εκκαθάριση αναζήτησης</string>
     <string name="session_search_placeholder">Αναζήτηση σε %1$s</string>
-    <string name="session_search_hint">Αντιστοιχεί σε τίτλους συνεδριών σε %1$s.</string>
+    <string name="session_search_hint">Αναζητά στους τίτλους συνεδριών (%1$s).</string>
     <string name="session_search_searching">Αναζήτηση…</string>
     <plurals name="session_search_results">
         <item quantity="one">%1$d αποτέλεσμα</item>
@@ -1422,7 +1422,7 @@
     <string name="changes_source_menu_selected">%1$s, επιλεγμένο</string>
     <string name="changes_source_working_tree_name">Αλλαγές Git</string>
     <string name="changes_source_working_tree_empty_title">Δεν υπάρχουν αλλαγές Git</string>
-    <string name="changes_source_working_tree_empty_message">Το working tree δεν έχει μη υποβεβλημένες αλλαγές.</string>
+    <string name="changes_source_working_tree_empty_message">Το working tree δεν έχει αλλαγές χωρίς commit.</string>
     <string name="changes_source_last_turn_name">Αλλαγές τελευταίου γύρου</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">Οι αλλαγές Git έχουν %1$d αλλαγμένο αρχείο.</item>
@@ -1440,7 +1440,7 @@
     <string name="changes_loading_message">Λήψη του diff…</string>
     <string name="changes_no_turn_title">Δεν υπάρχει ολοκληρωμένος γύρος</string>
     <string name="changes_no_turn_message">Στείλτε μια προτροπή, περιμένετε να ολοκληρωθεί και δοκιμάστε ξανά.</string>
-    <string name="changes_error_title">Αδυναμία φόρτωσης αλλαγών</string>
+    <string name="changes_error_title">Δεν ήταν δυνατή η φόρτωση των αλλαγών</string>
     <string name="changes_error_fallback">Οι αλλαγές δεν φορτώθηκαν.</string>
     <string name="changes_error_request_failed">Το αίτημα απέτυχε</string>
     <string name="changes_error_turn_moved_folders">Αυτός ο γύρος άλλαξε φακέλους, επομένως οι αλλαγές του δεν μπορούν να εμφανιστούν μαζί.</string>
@@ -1448,8 +1448,8 @@
     <string name="changes_filter_hint">Φίλτρο</string>
     <string name="changes_filter_accessibility_label">Φιλτράρισμα αλλαγμένων αρχείων</string>
     <string name="changes_no_matches_title">Δεν βρέθηκαν αρχεία</string>
-    <string name="changes_no_matches_message">Δοκιμάστε άλλη διαδρομή ή καθαρίστε το φίλτρο.</string>
-    <string name="changes_no_matches_clear_filter">Καθαρισμός φίλτρου</string>
+    <string name="changes_no_matches_message">Δοκιμάστε άλλη διαδρομή ή εκκαθαρίστε το φίλτρο.</string>
+    <string name="changes_no_matches_clear_filter">Εκκαθάριση φίλτρου</string>
     <string name="changes_select_file_title">Επιλέξτε αρχείο</string>
     <string name="changes_select_file_message">Επιλέξτε ένα αλλαγμένο αρχείο για να δείτε το diff.</string>
     <string name="changes_preview_unavailable_title">Η προεπισκόπηση δεν είναι διαθέσιμη</string>
@@ -1506,7 +1506,7 @@
     <string name="component_floating_pill_state_error">Σφάλμα</string>
     <string name="component_floating_pill_state_done">Ολοκληρώθηκε</string>
     <string name="component_floating_pill_accessibility_label">%1$s, %2$s</string>
-    <string name="component_floating_pill_dismiss">Απόρριψη: %1$s</string>
+    <string name="component_floating_pill_dismiss">Κλείσιμο: %1$s</string>
     <string name="common_expanded">Ανεπτυγμένο</string>
     <string name="common_collapsed">Συμπτυγμένο</string>
     <string name="component_tree_row_loading">Φόρτωση</string>
@@ -1529,7 +1529,7 @@
     <string name="component_unified_diff_summary_modified">Τροποποιημένο αρχείο %1$s, %2$s, %3$s</string>
     <string name="component_hunk_navigation_collapse_context">Σύμπτυξη πλαισίου</string>
     <string name="component_top_bar_project_subtitle">Έργο %1$s %2$s</string>
-    <string name="component_composer_dismiss">Απόρριψη</string>
+    <string name="component_composer_dismiss">Παράβλεψη</string>
     <string name="dictation_model_downloading_detail">Πρόκειται για λήψη συστήματος. Συνεχίζεται αν κλείσετε αυτή την κάρτα.</string>
     <string name="session_list_scope_load_loading">Φόρτωση συνεδριών…</string>
     <string name="dictation_insert">Εισαγωγή</string>
@@ -1539,20 +1539,20 @@
     <string name="dictation_status_line">%1$s · %2$s</string>
     <string name="component_attachment_kind_image">Εικόνα</string>
     <string name="component_composer_hide_question">Απόκρυψη ερώτησης</string>
-    <string name="live_updates_status_connecting">σύνδεση</string>
+    <string name="live_updates_status_connecting">γίνεται σύνδεση</string>
     <string name="dictation_model_queued_detail">Το %1$s έβαλε τη λήψη σε αναμονή. Μπορεί να περιμένει Wi-Fi, φόρτιση ή ελεύθερο χώρο. Ελέγξτε ξανά σε λίγα λεπτά.</string>
     <string name="dictation_model_not_installed_detail">Η υπαγόρευση εκτελείται στη συσκευή, οπότε η φωνή σας δεν ανεβαίνει ποτέ. Το %1$s κατεβάζει το μοντέλο μία φορά και το διατηρεί για όλες τις εφαρμογές.</string>
     <string name="component_outgoing_message_shows_actions_hint">Εμφανίζει ενέργειες μηνύματος</string>
-    <string name="component_activity_status_stopped">σταμάτησε</string>
+    <string name="component_activity_status_stopped">διακόπηκε</string>
     <string name="dictation_action_try_again">Δοκιμή ξανά</string>
-    <string name="component_composer_model_effort">Μοντέλο %1$s, προσπάθεια %2$s</string>
+    <string name="component_composer_model_effort">Μοντέλο %1$s, επίπεδο συλλογισμού %2$s</string>
     <string name="component_activity_card_working">Σε εξέλιξη</string>
     <string name="component_activity_card_opens_activity">%1$s, ανοίγει τη δραστηριότητα</string>
     <string name="component_image_loading_label">%1$s, φόρτωση</string>
     <string name="session_list_dock_new_session">Νέα συνεδρία</string>
     <string name="component_composer_always_allows">Επιτρέπεται πάντα: %1$s</string>
     <string name="component_composer_leave_side_question_mode">Έξοδος από τη λειτουργία πλαϊνής ερώτησης</string>
-    <string name="session_list_worktree_empty_other_projects">Καθαρίστε το φίλτρο για να δείτε συνεδρίες σε άλλα έργα.</string>
+    <string name="session_list_worktree_empty_other_projects">Εκκαθαρίστε το φίλτρο για να δείτε συνεδρίες σε άλλα έργα.</string>
     <string name="component_attachment_uploading">Μεταφόρτωση…</string>
     <string name="component_composer_deny">Απόρριψη</string>
     <string name="component_composer_deny_options">Περισσότερες επιλογές απόρριψης</string>
@@ -1564,9 +1564,9 @@
         <item quantity="one">Απορρίπτει επίσης %1$d άλλο αίτημα σε αναμονή.</item>
         <item quantity="other">Απορρίπτει επίσης %1$d άλλα αιτήματα σε αναμονή.</item>
     </plurals>
-    <string name="dictation_stopped">Η υπαγόρευση σταμάτησε</string>
+    <string name="dictation_stopped">Η υπαγόρευση διακόπηκε</string>
     <string name="dictation_microphone_failed">Δεν ήταν δυνατή η χρήση του μικροφώνου</string>
-    <string name="dictation_busy">Η υπαγόρευση είναι απασχολημένη</string>
+    <string name="dictation_busy">Η υπαγόρευση είναι ήδη σε χρήση</string>
     <string name="component_composer_question_position">%1$d από %2$d</string>
     <string name="session_list_status_ready">Έτοιμο</string>
     <string name="session_list_dock_hint_swipe">Ανοίγει το φίλτρο έργων. Σύρετε για εναλλαγή έργων.</string>
@@ -1583,7 +1583,7 @@
     <string name="component_image_could_not_load_label">%1$s, δεν ήταν δυνατή η φόρτωση</string>
     <string name="component_composer_question">Ερώτηση</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Καταργήστε το φίλτρο για να δείτε συνεδρίες σε άλλα worktree.</string>
+    <string name="session_list_worktree_empty_other_worktrees">Εκκαθαρίστε το φίλτρο για να δείτε συνεδρίες σε άλλα worktree.</string>
     <string name="component_composer_side_question_mode">Λειτουργία δευτερεύουσας ερώτησης</string>
     <string name="component_page_indicator_label">Σελίδα %1$d από %2$d</string>
     <string name="component_composer_next">Επόμενο</string>
@@ -1594,22 +1594,22 @@
     <string name="session_list_status_failed">Απέτυχε</string>
     <string name="component_composer_custom_answer_title">Πληκτρολογήστε τη δική σας απάντηση</string>
     <string name="component_composer_always">Πάντα</string>
-    <string name="component_composer_send_side_question">Δευτερεύουσα ερώτηση</string>
+    <string name="component_composer_send_side_question">Υποβολή δευτερεύουσας ερώτησης</string>
     <string name="component_composer_select_exactly">Επιλέξτε %1$d</string>
     <string name="dictation_action_open_settings">Άνοιγμα Ρυθμίσεων</string>
     <string name="component_composer_open_commands">Άνοιγμα εντολών</string>
     <string name="component_thinking_ellipsis">Σκέψη…</string>
     <plurals name="relative_time_days_ago">
-        <item quantity="one">πριν από %1$dημ.</item>
-        <item quantity="other">πριν από %1$dημ.</item>
+        <item quantity="one">πριν από %1$d ημ.</item>
+        <item quantity="other">πριν από %1$d ημ.</item>
     </plurals>
     <string name="component_server_address_scheme_button_description">Πρωτόκολλο %1$s. Ανοίγει την επιλογή πρωτοκόλλου</string>
     <string name="share_diagnostics_subject">Αρχεία καταγραφής διαγνωστικών του OpenCode</string>
-    <string name="component_reorderable_list_move_up">Μετακίνηση πάνω</string>
+    <string name="component_reorderable_list_move_up">Μετακίνηση προς τα πάνω</string>
     <string name="session_list_scope_load_failed_title">Αποτυχία φόρτωσης: %1$s</string>
     <string name="dictation_status_listening">Ακρόαση</string>
     <string name="dictation_downloading_model">Λήψη μοντέλου ομιλίας</string>
-    <string name="session_list_worktree_empty_every_worktree">Καταργήστε το φίλτρο για να δείτε όλα τα worktree.</string>
+    <string name="session_list_worktree_empty_every_worktree">Εκκαθαρίστε το φίλτρο για να δείτε όλα τα worktree.</string>
     <string name="component_overflow_menu_more_options">Περισσότερες επιλογές</string>
     <string name="session_list_status_retrying_attempt">Επανάληψη · %1$d</string>
     <string name="live_updates_status_offline">εκτός σύνδεσης</string>
@@ -1644,7 +1644,7 @@
     <string name="component_attachment_uploading_percent">Μεταφόρτωση %1$d%%</string>
     <string name="component_composer_custom_answer_hint">Εισάγετε μια προσαρμοσμένη απάντηση</string>
     <string name="component_composer_cancel_revert">Ακύρωση επαναφοράς</string>
-    <string name="session_list_scope_load_slow_caption">Φόρτωση ακόμα — τα μεγάλα έργα μπορεί να αργήσουν λίγο</string>
+    <string name="session_list_scope_load_slow_caption">Η φόρτωση συνεχίζεται — τα μεγάλα έργα μπορεί να αργήσουν λίγο</string>
     <string name="component_outgoing_message_label_with_actions">Εξερχόμενο μήνυμα. Εμφανίζει ενέργειες μηνύματος</string>
     <string name="session_list_scope_load_failed_subtitle">Η φόρτωση των συνεδριών απέτυχε</string>
     <plurals name="component_activity_card_more_running">
@@ -1656,9 +1656,9 @@
         <item quantity="other">%1$d πράκτορες</item>
     </plurals>
     <string name="theme_error_syntax_preset_not_found">Η προεπιλογή επισήμανσης σύνταξης δεν βρέθηκε</string>
-    <string name="session_list_scope_load_slow">Φόρτωση ακόμα…</string>
+    <string name="session_list_scope_load_slow">Η φόρτωση συνεχίζεται…</string>
     <string name="session_list_dock_hint">Ανοίγει το φίλτρο έργων.</string>
-    <string name="component_hunk_navigation_next">Επόμενο hunk</string>
+    <string name="component_hunk_navigation_next">Επόμενο τμήμα αλλαγών</string>
     <string name="session_list_scope_load_failed_message">Ο διακομιστής δεν επέστρεψε τις συνεδρίες αυτού του έργου.</string>
     <string name="component_drop_overlay_accessibility_label">%1$s. %2$s</string>
     <string name="component_image_view_full_screen">Προβολή σε πλήρη οθόνη</string>
@@ -1678,7 +1678,7 @@
     </plurals>
     <string name="component_composer_request_position">%1$d από %2$d</string>
     <string name="component_composer_side_question_placeholder">Δευτερεύουσα ερώτηση, δεν προστίθεται στη συνομιλία</string>
-    <string name="session_list_worktree_empty_every_project">Καθαρίστε το φίλτρο για να δείτε όλα τα έργα.</string>
+    <string name="session_list_worktree_empty_every_project">Εκκαθαρίστε το φίλτρο για να δείτε όλα τα έργα.</string>
     <string name="component_image_viewer_could_not_load_named">Αδυναμία φόρτωσης του %1$s</string>
     <string name="component_composer_select_up_to">Επιλέξτε έως %1$d</string>
     <string name="live_updates_status_live">ζωντανά</string>
@@ -1686,14 +1686,14 @@
     <string name="component_image_viewer_could_not_load_full">Αδυναμία φόρτωσης πλήρους εικόνας</string>
     <string name="component_image_viewer_retry">Επανάληψη</string>
     <string name="component_image_viewer_loading_full">Φόρτωση πλήρους εικόνας</string>
-    <string name="session_list_worktree_empty_action">Καθαρισμός φίλτρου</string>
+    <string name="session_list_worktree_empty_action">Εκκαθάριση φίλτρου</string>
     <string name="dictation_model_download_failed_detail">Ελέγξτε τη σύνδεση και τον ελεύθερο χώρο αποθήκευσης στη συσκευή και δοκιμάστε ξανά.</string>
     <string name="component_composer_send_queue">Αποστολή ως Ουρά</string>
     <string name="session_list_dock_new_session_hint">Χρησιμοποιήστε την επιλογή έργου ή worktree για να ξεκινήσετε αλλού.</string>
     <string name="session_list_section_yesterday">Χθες</string>
     <string name="component_code_file_line_label">Γραμμή %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">Αναφορά ιδέας για το OpenCode Mobile</string>
-    <string name="component_hunk_navigation_previous">Προηγούμενο hunk</string>
+    <string name="component_hunk_navigation_previous">Προηγούμενο τμήμα αλλαγών</string>
     <string name="session_list_section_week_of">Εβδομάδα %1$s – %2$s</string>
     <string name="dictation_model_download_failed_title">Το %1$s δεν μπόρεσε να κατεβάσει το %2$s</string>
     <string name="component_activity_status_pending">σε αναμονή</string>
@@ -1720,7 +1720,7 @@
     <string name="component_composer_shell_mode_description">Λειτουργία shell. Έξοδος από τη λειτουργία shell</string>
     <string name="component_branch_pill_based_on">Βασισμένο στο %1$s</string>
     <string name="component_composer_add_attachment">Προσθήκη συνημμένου</string>
-    <string name="dictation_microphone_off">Η πρόσβαση στο μικρόφωνο είναι ανενεργή</string>
+    <string name="dictation_microphone_off">Η πρόσβαση στο μικρόφωνο είναι απενεργοποιημένη</string>
     <string name="component_composer_shell">Shell</string>
     <string name="live_updates_status_auth_failed">Αποτυχία ταυτοποίησης</string>
     <string name="component_branch_pill_view_all_changes">Προβολή όλων των αλλαγών</string>
@@ -1740,7 +1740,7 @@
     <string name="component_activity_status_failed">απέτυχε</string>
     <string name="dictation_model_not_installed_title">Το %1$s χρειάζεται το %2$s</string>
     <string name="component_composer_back_to_main_session">Πίσω στην κύρια συνεδρία</string>
-    <string name="component_activity_sheet_working_count">Σε εξέλιξη %1$d</string>
+    <string name="component_activity_sheet_working_count">Σε εξέλιξη · βήματα: %1$d</string>
     <string name="session_list_status_retrying">Επανάληψη</string>
     <string name="component_attachment_remove">Αφαίρεση του %1$s</string>
     <string name="component_composer_send_steer">Αποστολή ως Καθοδήγηση</string>
@@ -1757,7 +1757,7 @@
     <string name="dictation_status_ready">Έτοιμο για εισαγωγή</string>
     <string name="dictation_starting">Εκκίνηση…</string>
     <string name="dictation_language_speech_model">Μοντέλο ομιλίας %1$s</string>
-    <string name="component_reorderable_list_move_down">Μετακίνηση κάτω</string>
+    <string name="component_reorderable_list_move_down">Μετακίνηση προς τα κάτω</string>
     <plurals name="component_section_header_item_count">
         <item quantity="one">%1$d στοιχείο</item>
         <item quantity="other">%1$d στοιχεία</item>
@@ -1779,8 +1779,8 @@
     <string name="worktrees_main_checkout">Κύριο checkout</string>
     <string name="worktrees_cannot_remove">Δεν μπορεί να αφαιρεθεί</string>
     <plurals name="worktrees_changed">
-        <item quantity="one">%1$d άλλαξε</item>
-        <item quantity="other">%1$d άλλαξαν</item>
+        <item quantity="one">%1$d αλλαγμένο</item>
+        <item quantity="other">%1$d αλλαγμένα</item>
     </plurals>
     <string name="worktrees_none_in_project">Δεν υπάρχουν worktrees. Επιλέξτε Νέα συνεδρία → Επιλογή έργου ή worktree για να δημιουργήσετε ένα.</string>
     <string name="worktrees_footer">Η αφαίρεση ενός worktree διαγράφει τον φάκελό του στον διακομιστή. Οι συνεδρίες του παραμένουν, αλλά δεν μπορούν να εκτελεστούν ξανά σε αυτό.</string>
@@ -1792,13 +1792,13 @@
     <string name="worktrees_remove_title">Αφαίρεση του worktree «%1$s»;</string>
     <string name="worktrees_remove_message">Διαγράφει το %1$s στον διακομιστή.</string>
     <plurals name="worktrees_remove_changes">
-        <item quantity="one">%1$d μη υποβληθείσα αλλαγή θα χαθεί.</item>
-        <item quantity="other">%1$d μη υποβληθείσες αλλαγές θα χαθούν.</item>
+        <item quantity="one">%1$d αλλαγή χωρίς commit θα χαθεί.</item>
+        <item quantity="other">%1$d αλλαγές χωρίς commit θα χαθούν.</item>
     </plurals>
-    <string name="worktrees_remove_changes_unknown">Οι μη υποβληθείσες αλλαγές θα χαθούν.</string>
-    <string name="worktrees_remove_changes_unchecked">Ο έλεγχος για μη υποβληθείσες αλλαγές απέτυχε. Όσες υπάρχουν θα χαθούν.</string>
+    <string name="worktrees_remove_changes_unknown">Οι αλλαγές χωρίς commit θα χαθούν.</string>
+    <string name="worktrees_remove_changes_unchecked">Ο έλεγχος για αλλαγές χωρίς commit απέτυχε. Όσες υπάρχουν θα χαθούν.</string>
     <string name="worktrees_remove_sessions_stay">Οι συνεδρίες που χρησιμοποιούν αυτό το worktree παραμένουν στην Αρχική, αλλά δεν μπορούν να εκτελεστούν ξανά εδώ.</string>
-    <string name="worktrees_remove_confirm_anyway">Αφαίρεση ούτως ή άλλως</string>
+    <string name="worktrees_remove_confirm_anyway">Αφαίρεση παρ’ όλα αυτά</string>
     <string name="worktrees_blocked_title">Δεν είναι δυνατή ακόμη η αφαίρεση του «%1$s»</string>
     <string name="worktrees_blocked_message">Μια συνεδρία εκτελείται σε αυτό το worktree. Διακόψτε την και μετά αφαιρέστε το worktree.</string>
     <string name="worktrees_blocked_ok">OK</string>
@@ -1813,7 +1813,7 @@
     <string name="whats_new_version">Έκδοση %1$s</string>
     <string name="whats_new_skipped_one">Παραλείψατε μία ενημέρωση, οπότε περιλαμβάνεται παρακάτω.</string>
     <string name="whats_new_skipped_many">Παραλείψατε %1$d ενημερώσεις, οπότε περιλαμβάνονται παρακάτω.</string>
-    <string name="whats_new_in_version">Στην %1$s</string>
+    <string name="whats_new_in_version">Στην έκδοση %1$s</string>
     <string name="whats_new_also_since">Επίσης νέο από την τελευταία ενημέρωση · %1$s</string>
     <string name="whats_new_fixes">Διορθώσεις</string>
     <string name="whats_new_done">Τέλος</string>

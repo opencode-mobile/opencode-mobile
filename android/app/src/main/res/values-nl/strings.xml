@@ -29,7 +29,7 @@
     <string name="connection_setup_instructions_run">Voer dit uit op je computer en scan daarna de QR.</string>
     <string name="connection_setup_instructions_first_run">De eerste keer duurt ongeveer een minuut. Vereist OpenCode 2.0.25 of nieuwer. De service start als die nog niet draait.</string>
     <string name="connection_setup_instructions_same_wifi_title">Of via hetzelfde Wi-Fi</string>
-    <string name="connection_setup_instructions_same_wifi_body">Gewoon pair toont pas een QR als de server bereikbaar is buiten localhost.</string>
+    <string name="connection_setup_instructions_same_wifi_body">Zonder opties toont pair pas een QR zodra de server buiten localhost bereikbaar is.</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">Host</string>
     <string name="connection_setup_host_help">LAN, Tailscale MagicDNS of tunnel — niet localhost op een telefoon.</string>
@@ -42,8 +42,8 @@
     <string name="connection_setup_segment_password">Wachtwoord</string>
     <string name="connection_setup_segment_pairing_code">Koppelcode</string>
     <string name="connection_setup_addresses_hint_tunnel_only">Externe tunnel opgeslagen. Verder valt er niets te kiezen. Blijft staan tot je externe toegang uitzet.</string>
-    <string name="connection_setup_addresses_hint_tailscale_fallback">Tailscale wordt gebruikt als het antwoordt. Het lokale netwerk is de terugval.</string>
-    <string name="connection_setup_addresses_hint_default">Opgeslagen adressen worden geprobeerd tot er één antwoordt. Tailscale heeft de voorkeur als het antwoordt.</string>
+    <string name="connection_setup_addresses_hint_tailscale_fallback">Tailscale wordt gebruikt zodra het reageert. Het lokale netwerk is de terugval.</string>
+    <string name="connection_setup_addresses_hint_default">Opgeslagen adressen worden geprobeerd tot er één reageert. Tailscale heeft de voorkeur als het reageert.</string>
     <string name="connection_setup_address_tailscale">Tailscale</string>
     <string name="connection_setup_address_remote_tunnel">Externe tunnel</string>
     <string name="connection_setup_address_local_network">Lokaal netwerk</string>
@@ -53,9 +53,9 @@
     <string name="connection_setup_pair_again_unreachable">Kan het opgeslagen adres niet bereiken. Koppel opnieuw.</string>
     <string name="connection_setup_pair_again_unauthorized">Deze server heeft de opgeslagen aanmelding geweigerd. Koppel opnieuw. Een nieuw wachtwoord logt alle apparaten uit.</string>
     <string name="connection_cleartext_title">Verbinding is niet versleuteld</string>
-    <string name="connection_cleartext_message_one_host">%1$s gebruikt gewoon http buiten je lokale netwerk of Tailscale. Je serverwachtwoord en alles in je sessies zou onversleuteld worden verstuurd. Kies liever https, een VPN of een tunnel.</string>
-    <string name="connection_cleartext_message_hosts">%1$s gebruiken gewoon http buiten je lokale netwerk of Tailscale. Je serverwachtwoord en alles in je sessies zou onversleuteld worden verstuurd. Kies liever https, een VPN of een tunnel.</string>
-    <string name="connection_cleartext_message_this_address">Dit adres gebruikt gewoon http buiten je lokale netwerk of Tailscale. Je serverwachtwoord en alles in je sessies zou onversleuteld worden verstuurd. Kies liever https, een VPN of een tunnel.</string>
+    <string name="connection_cleartext_message_one_host">%1$s gebruikt onversleuteld http buiten je lokale netwerk of Tailscale. Je serverwachtwoord en alles in je sessies zou onversleuteld worden verstuurd. Kies liever https, een VPN of een tunnel.</string>
+    <string name="connection_cleartext_message_hosts">%1$s gebruiken onversleuteld http buiten je lokale netwerk of Tailscale. Je serverwachtwoord en alles in je sessies zou onversleuteld worden verstuurd. Kies liever https, een VPN of een tunnel.</string>
+    <string name="connection_cleartext_message_this_address">Dit adres gebruikt onversleuteld http buiten je lokale netwerk of Tailscale. Je serverwachtwoord en alles in je sessies zou onversleuteld worden verstuurd. Kies liever https, een VPN of een tunnel.</string>
     <string name="connection_cleartext_connect_anyway">Toch verbinden</string>
     <string name="connection_error_invalid_qr">Dit is geen OpenCode 2-koppel-QR</string>
     <string name="connection_error_localhost_qr">Deze QR bevat alleen een localhost-adres</string>
@@ -65,7 +65,7 @@
     <string name="connection_error_enter_pairing_code">Voer een koppelcode in</string>
     <string name="connection_error_pairing_link_expired">Deze koppellink is verlopen of al gebruikt</string>
     <string name="connection_error_duplicate_profile">Een server met deze host en gebruikersnaam is al opgeslagen</string>
-    <string name="connection_error_qr_scan_failed">QR kon niet verbinden. De koppel-API van OpenCode 2 verandert nog, dus een scan kan mislukken terwijl deze app werkt. Voer de host in en verbind. Wachtwoord is optioneel. Een koppelcode werkt ook.</string>
+    <string name="connection_error_qr_scan_failed">Verbinden via QR is mislukt. De koppel-API van OpenCode 2 verandert nog, dus een scan kan mislukken terwijl deze app werkt. Voer de host in en verbind. Wachtwoord is optioneel. Een koppelcode werkt ook.</string>
     <string name="connection_error_unreachable">Kan de server niet bereiken</string>
     <string name="server_error_pairing_expired">Koppeling verlopen, koppel opnieuw</string>
     <string name="server_error_not_found">Map of bestand niet gevonden</string>
@@ -76,7 +76,7 @@
     <string name="connection_error_unhealthy">Server meldt een storing</string>
     <string name="connection_scanner_title">Koppel-QR scannen</string>
     <string name="connection_scanner_card_title">OpenCode-koppel-QR</string>
-    <string name="connection_scanner_card_body">Van opencode pair --remote. Gewoon pair toont pas een QR als de server bereikbaar is buiten localhost.</string>
+    <string name="connection_scanner_card_body">Van opencode pair --remote. Zonder opties toont pair pas een QR zodra de server buiten localhost bereikbaar is.</string>
     <string name="connection_onboarding_title">Verbind met je server</string>
     <string name="connection_onboarding_body">OpenCode Mobile bestuurt sessies op een opencode-server die op je ontwikkelmachine draait.</string>
     <string name="connection_onboarding_connect">Verbinden met server</string>
@@ -98,14 +98,14 @@
     <string name="onboarding_features_permissions_detail">Verzoeken goedkeuren of weigeren (zonder blijvend onthouden)</string>
     <string name="onboarding_features_changes_title">Wijzigingen</string>
     <string name="onboarding_features_changes_detail">Diffs van sessies bekijken</string>
-    <string name="onboarding_features_live_title">Live terwijl open</string>
+    <string name="onboarding_features_live_title">Live zolang de app open is</string>
     <string name="onboarding_features_live_detail">Gebeurtenisstroom op de voorgrond; verversen na opnieuw verbinden</string>
     <string name="onboarding_setup_title">opencode serve instellen</string>
-    <string name="onboarding_setup_intro">De app praat met een opencode-server die je zelf draait. Hieronder de korte weg — alle details staan in de officiële documentatie.</string>
+    <string name="onboarding_setup_intro">De app praat met een opencode-server die je zelf draait. Hieronder de korte route — alle details staan in de officiële documentatie.</string>
     <string name="onboarding_setup_step_number">Stap %1$d</string>
     <string name="onboarding_setup_step1_title">Start de server op je machine</string>
     <string name="onboarding_setup_step1_body">Draai de opencode-server (headless) in je project. Laat hem draaien zolang je de telefoon gebruikt.</string>
-    <string name="onboarding_setup_step2_title">Vereis een wachtwoord</string>
+    <string name="onboarding_setup_step2_title">Stel een wachtwoord verplicht</string>
     <string name="onboarding_setup_step2_body">Stel OPENCODE_SERVER_PASSWORD in. De gebruikersnaam is standaard opencode, tenzij je OPENCODE_SERVER_USERNAME instelt.</string>
     <string name="onboarding_setup_step3_title">Bereik hem vanaf je telefoon</string>
     <string name="onboarding_setup_step3_body">Aanbevolen: Tailscale — installeer Tailscale op de machine en de telefoon en gebruik daarna het Tailscale-IP of de MagicDNS-naam van de machine als server-URL.\n\nOok prima: hetzelfde LAN, VPN, HTTPS of een andere tunnel die je zelf beheert. De app maakt geen relay voor je aan.</string>
@@ -133,7 +133,7 @@
     <string name="server_health_uptime">Uptime</string>
     <string name="server_health_uptime_detail">van %1$s gemeten</string>
     <string name="server_health_reconnects">Heraansluitingen</string>
-    <string name="server_health_reconnects_detail">mediaan %1$s terug</string>
+    <string name="server_health_reconnects_detail">mediaan %1$s tot herstel</string>
     <string name="server_health_no_drops">geen onderbrekingen</string>
     <string name="server_health_error_rate">Foutpercentage</string>
     <string name="server_health_error_rate_detail">%1$d van %2$d controles mislukt</string>
@@ -160,13 +160,13 @@
     <string name="server_health_error_log">Foutenlogboek</string>
     <string name="server_health_error_log_check">Statuscontrole</string>
     <string name="server_health_error_log_stream">Live verbinding</string>
-    <string name="server_health_error_log_repeated">%1$d op rij over %2$s</string>
+    <string name="server_health_error_log_repeated">%1$d achter elkaar over %2$s</string>
     <string name="server_health_error_log_show_all">Alle %1$d tonen</string>
     <string name="server_health_error_log_show_less">Minder tonen</string>
     <string name="server_health_error_log_capped">Laatste %1$d van %2$d</string>
     <string name="server_health_category_network">Netwerk</string>
     <string name="server_health_category_timeout">Time-out</string>
-    <string name="server_health_category_heartbeat">Heartbeat valt weg</string>
+    <string name="server_health_category_heartbeat">Heartbeat stokt</string>
     <string name="server_health_category_server">Serverfout</string>
     <string name="server_health_category_auth">Authenticatie</string>
     <string name="server_health_category_other">Overig</string>
@@ -177,8 +177,8 @@
     <string name="server_health_protocol_v2">API v2</string>
     <string name="server_health_last_restart">Laatste herstart</string>
     <string name="server_health_last_restart_ago">%1$s geleden</string>
-    <string name="server_health_last_restart_none">Geen gezien</string>
-    <string name="server_health_restarts_seen">Herstarts gezien</string>
+    <string name="server_health_last_restart_none">Geen waargenomen</string>
+    <string name="server_health_restarts_seen">Waargenomen herstarts</string>
     <string name="server_health_restarts_seen_value">%1$d</string>
     <string name="server_health_event_streams">Gebeurtenisstromen</string>
     <string name="server_health_event_streams_value">%1$d van %2$d live</string>
@@ -190,7 +190,7 @@
     <string name="server_health_status_reconnecting">Opnieuw verbinden</string>
     <string name="server_health_status_offline">Offline</string>
     <string name="server_health_status_auth_failed">Aanmelden mislukt</string>
-    <string name="server_health_status_stopped">Meet niet</string>
+    <string name="server_health_status_stopped">Niet aan het meten</string>
     <plurals name="server_health_quick_view_summary">
         <item quantity="one">Uptime %1$s · %2$d heraansluiting vandaag</item>
         <item quantity="other">Uptime %1$s · %2$d heraansluitingen vandaag</item>
@@ -235,7 +235,7 @@
     <string name="home_remove_project_message">\"%1$s\" van home verwijderen? De sessies blijven op de server.</string>
     <string name="home_snackbar_removed">\"%1$s\" van home verwijderd</string>
     <string name="home_snackbar_already_on_home">\"%1$s\" staat al op home</string>
-    <string name="home_snackbar_joined_project">Zelfde repo als %1$s. Daar getoond als worktree.</string>
+    <string name="home_snackbar_joined_project">Dezelfde repo als %1$s. Wordt daar getoond als worktree.</string>
     <string name="home_all">Alles</string>
     <string name="home_all_projects">Alle projecten</string>
     <plurals name="home_project_count">
@@ -294,14 +294,14 @@
     <string name="archived_sessions_unarchived">“%1$s” uit archief gehaald</string>
     <string name="archived_sessions_undo">Ongedaan maken</string>
     <string name="archived_sessions_empty_title">Geen gearchiveerde sessies</string>
-    <string name="archived_sessions_empty_message">Sessies die je archiveert in %1$s verschijnen hier.</string>
+    <string name="archived_sessions_empty_message">Sessies die je in %1$s archiveert, verschijnen hier.</string>
     <string name="archived_sessions_show_all_projects">Alle projecten tonen</string>
     <string name="archived_sessions_footer">Tik op een sessie voor meer. Uit archief halen zet de sessie terug op Home.</string>
     <string name="archived_sessions_load_failed">Kan gearchiveerde sessies niet laden.</string>
     <string name="archived_sessions_unarchive_failed">Kan sessie niet uit archief halen.</string>
     <string name="session_chat_archived_banner">Gearchiveerd %1$s</string>
     <string name="add_project_title">Project toevoegen</string>
-    <string name="add_project_browse_folders">Mappen bladeren</string>
+    <string name="add_project_browse_folders">Door mappen bladeren</string>
     <string name="add_project_browse_folders_subtitle">Kies een willekeurige map op deze server</string>
     <string name="add_project_on_this_server">Op deze server</string>
     <string name="add_project_checking_folder">Map controleren</string>
@@ -347,7 +347,7 @@
     <string name="worktree_name">Naam</string>
     <string name="worktree_branch">Branch</string>
     <string name="worktree_base">Maken vanuit</string>
-    <string name="worktree_v1_branch_note">opencode v1 noemt de branch naar de worktree</string>
+    <string name="worktree_v1_branch_note">opencode v1 geeft de branch dezelfde naam als de worktree</string>
     <string name="worktree_v2_no_branch">Geen branch (detached)</string>
     <string name="worktree_v2_branch_note">opencode v2-checkouts hebben geen branch</string>
     <string name="worktree_current_checkout">Huidige checkout</string>
@@ -387,7 +387,7 @@
     <string name="files_find_no_match">Geen bestanden gevonden voor “%1$s”</string>
     <string name="files_find_no_match_detail">Zoeken op de server slaat genegeerde mappen over.</string>
     <string name="files_error_check_server_connection">Controleer de verbinding met de server en probeer het opnieuw.</string>
-    <string name="files_error_server_status">De server antwoordde met %1$d.</string>
+    <string name="files_error_server_status">De server reageerde met %1$d.</string>
     <string name="files_no_file_title">Open een bestand uit de boomstructuur</string>
     <string name="files_no_file_message">Geopende bestanden blijven als tabbladen staan</string>
     <string name="files_path_copied">Pad gekopieerd</string>
@@ -512,14 +512,14 @@
     <string name="session_chat_move_worktree_menu_title">Verplaatsen naar worktree…</string>
     <string name="session_chat_move_worktree_sheet_title">Verplaatsen naar worktree</string>
     <string name="session_chat_move_worktree_no_other">Dit project heeft geen andere worktrees</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Verplaatst naar %1$s na deze beurt.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Wordt na deze beurt verplaatst naar %1$s.</string>
     <string name="session_chat_move_worktree_failed">Kan de sessie niet verplaatsen: %1$s</string>
     <string name="session_chat_variant_default">Standaard</string>
     <string name="session_chat_model_chip_placeholder">Model</string>
     <string name="session_chat_model_chip_loading">Model laden…</string>
     <string name="session_chat_model_notice_load_failed">Kan modellen niet laden. Tik op Model om opnieuw te proberen.</string>
     <string name="session_chat_model_notice_none_usable">Geen bruikbare modellen beschikbaar. Tik op Model om opnieuw te proberen.</string>
-    <string name="session_chat_model_notice_variant_unavailable">De onthouden variant is niet beschikbaar. Standaard wordt gebruikt.</string>
+    <string name="session_chat_model_notice_variant_unavailable">De onthouden variant is niet beschikbaar. De standaardinstelling wordt gebruikt.</string>
     <string name="session_chat_model_notice_model_unavailable">Het gekozen model is niet beschikbaar. %1$s wordt gebruikt.</string>
     <string name="session_chat_side_question_unsupported">/btw vereist een opencode v2-server die zijvragen beantwoordt. Deze server kan niet antwoorden zonder iets aan het gesprek toe te voegen.</string>
     <string name="session_chat_side_question_unavailable">/btw vereist een nieuwere opencode-server.</string>
@@ -528,9 +528,9 @@
     <string name="attachment_error_folder">Mappen kunnen niet worden bijgevoegd.</string>
     <string name="attachment_error_duplicate">Dit bestand is al geüpload</string>
     <string name="attachment_error_too_large">Dit bestand is groter dan %1$d MB.</string>
-    <string name="attachment_error_unsupported_type">Hier kunnen alleen afbeeldingen, pdf\'s of tekstbestanden worden bijgevoegd.</string>
+    <string name="attachment_error_unsupported_type">Hier kunnen alleen afbeeldingen, PDF\'s of tekstbestanden worden bijgevoegd.</string>
     <string name="attachment_error_model_no_images">Dit model ondersteunt geen afbeeldingen als bijlage.</string>
-    <string name="attachment_error_model_no_pdf">Dit model ondersteunt geen pdf\'s als bijlage.</string>
+    <string name="attachment_error_model_no_pdf">Dit model ondersteunt geen PDF\'s als bijlage.</string>
     <string name="attachment_error_model_some">Dit model ondersteunt een deel van de gekozen bijlagen niet.</string>
     <string name="attachment_error_unreadable">De bijlage kon niet worden gelezen.</string>
     <string name="attachment_error_upload_failed">Uploaden mislukt</string>
@@ -602,14 +602,14 @@
     </plurals>
     <string name="session_chat_activity_show_more">%1$d meer tonen</string>
     <string name="session_chat_activity_hide_more">%1$d minder tonen</string>
-    <string name="session_chat_navigation_scroll_to_end">Naar einde scrollen</string>
+    <string name="session_chat_navigation_scroll_to_end">Naar het einde scrollen</string>
     <plurals name="session_chat_navigation_new_count">
         <item quantity="one">%1$d nieuw</item>
         <item quantity="other">%1$d nieuw</item>
     </plurals>
     <plurals name="session_chat_navigation_scroll_to_end_new_messages">
-        <item quantity="one">Naar einde scrollen, %1$d nieuw bericht</item>
-        <item quantity="other">Naar einde scrollen, %1$d nieuwe berichten</item>
+        <item quantity="one">Naar het einde scrollen, %1$d nieuw bericht</item>
+        <item quantity="other">Naar het einde scrollen, %1$d nieuwe berichten</item>
     </plurals>
     <string name="home_error_reconnect_to_create">Maak opnieuw verbinding om een sessie te maken</string>
     <string name="timeline_state_creating_title">Sessie starten…</string>
@@ -620,7 +620,7 @@
     <string name="new_session_run_in_caption">Sessie uitvoeren in</string>
     <string name="new_session_project">Project</string>
     <string name="new_session_worktree">Worktree</string>
-    <string name="new_session_starts_from">Begint bij</string>
+    <string name="new_session_starts_from">Start vanaf</string>
     <string name="new_session_local">Lokaal</string>
     <string name="new_session_new_worktree">Nieuwe worktree</string>
     <string name="new_session_not_git">Geen · geen Git-repo</string>
@@ -638,7 +638,7 @@
     <string name="timeline_state_error_fallback">De tijdlijn kon niet worden geladen.</string>
     <string name="timeline_state_retry">Opnieuw proberen</string>
     <string name="timeline_state_empty">Nog geen berichten. Stuur een prompt om te beginnen.</string>
-    <string name="timeline_state_refreshing">Berichten vernieuwen</string>
+    <string name="timeline_state_refreshing">Berichten verversen</string>
     <string name="timeline_message_assistant">Bericht van assistent</string>
     <string name="timeline_message_actions_hint_long_press">Houd ingedrukt voor berichtacties</string>
     <string name="timeline_message_actions_hint">Toont berichtacties</string>
@@ -780,11 +780,11 @@
     </plurals>
     <string name="tool_error_malformed">Niet uitgevoerd: onjuiste toolaanroep</string>
     <string name="tool_error_failed">Mislukt</string>
-    <string name="tool_error_exit_code">Beëindigd met code %1$d</string>
+    <string name="tool_error_exit_code">Afgesloten met code %1$d</string>
     <string name="tool_status_declined">Geweigerd</string>
     <string name="tool_user_note">Jouw notitie: %1$s</string>
     <string name="tool_status_stopped">Gestopt</string>
-    <string name="tool_placeholder_writing_command">Opdracht schrijven…</string>
+    <string name="tool_placeholder_writing_command">Commando schrijven…</string>
     <string name="tool_placeholder_preparing_read">Lezen voorbereiden…</string>
     <string name="tool_placeholder_preparing_edit">Bewerking voorbereiden…</string>
     <string name="tool_placeholder_preparing_write">Schrijven voorbereiden…</string>
@@ -814,7 +814,7 @@
     <string name="timeline_step_running">Uitvoeren…</string>
     <string name="timeline_step_running_named">%1$s uitvoeren</string>
     <string name="timeline_step_ran_named">%1$s uitgevoerd</string>
-    <string name="timeline_step_ran_command">Opdracht uitgevoerd</string>
+    <string name="timeline_step_ran_command">Commando uitgevoerd</string>
     <string name="timeline_step_loading_skill">Vaardigheid laden…</string>
     <string name="timeline_step_loading_skill_named">Vaardigheid %1$s laden</string>
     <string name="timeline_step_skill_named">Vaardigheid %1$s</string>
@@ -851,7 +851,7 @@
     <string name="timeline_notice_moved_to">Verplaatst naar</string>
     <string name="timeline_notice_agent_changed">Agent gewijzigd</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
-    <string name="timeline_notice_switched_to">Gewisseld naar</string>
+    <string name="timeline_notice_switched_to">Overgeschakeld naar</string>
     <string name="timeline_notice_variant_switched">Variant gewijzigd naar</string>
     <string name="timeline_notice_variant_default">Variant gewijzigd naar Standaard</string>
     <string name="timeline_notice_instructions_updated">Instructies bijgewerkt</string>
@@ -860,7 +860,7 @@
     <string name="timeline_compaction_title">Context gecomprimeerd</string>
     <string name="timeline_compaction_automatic">Automatisch</string>
     <string name="timeline_syncing">Synchroniseren…</string>
-    <string name="timeline_failure_session_work_failed">Sessiewerk mislukt</string>
+    <string name="timeline_failure_session_work_failed">Werk in de sessie mislukt</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Kies een model</string>
     <string name="timeline_failure_compact">Comprimeren</string>
@@ -879,7 +879,7 @@
     <string name="session_chat_pending_prompt_update_failed">Wachtende prompt bijwerken mislukt</string>
     <string name="session_chat_shell_stop_failed">Shell stoppen mislukt. Probeer het opnieuw.</string>
     <string name="session_chat_shell_status_running">Actief</string>
-    <string name="session_chat_shell_status_exited">Beëindigd</string>
+    <string name="session_chat_shell_status_exited">Afgesloten</string>
     <string name="session_chat_shell_status_timed_out">Time-out</string>
     <string name="session_chat_shell_duration_seconds">%1$d s</string>
     <string name="session_chat_shell_duration_minutes">%1$d min</string>
@@ -901,7 +901,7 @@
     <string name="session_chat_copy_too_long">Te lang om te kopiëren. Selecteer in plaats daarvan een deel.</string>
     <string name="session_chat_sheet_message_actions_clip_label_code">Code</string>
     <string name="session_chat_sheet_mcp_loading_title">MCP-servers controleren</string>
-    <string name="session_chat_sheet_mcp_loading_subtitle">Status lezen van de opencode-server</string>
+    <string name="session_chat_sheet_mcp_loading_subtitle">Status ophalen van de opencode-server</string>
     <string name="session_chat_sheet_mcp_error_title">MCP-servers laden mislukt</string>
     <string name="session_chat_sheet_mcp_error_message">De lijst met MCP-servers is niet geladen.</string>
     <string name="session_chat_sheet_mcp_empty_title">Geen MCP-servers</string>
@@ -954,10 +954,10 @@
         <item quantity="other">Geen voortgang gedurende %1$d rondes; pauzeert na %2$d</item>
     </plurals>
     <string name="session_chat_goal_waiting">Wachten</string>
-    <string name="session_chat_goal_waiting_shell">Op een achtergrondshell die klaar moet zijn: %1$s. Pauzeert als er %2$d minuten niets draait.</string>
-    <string name="session_chat_goal_waiting_subagent">Op een subagent die klaar moet zijn. Pauzeert als er %1$d minuten niets draait.</string>
+    <string name="session_chat_goal_waiting_shell">Wacht op een achtergrondshell: %1$s. Pauzeert als er %2$d minuten niets draait.</string>
+    <string name="session_chat_goal_waiting_subagent">Wacht tot een subagent klaar is. Pauzeert als er %1$d minuten niets draait.</string>
     <string name="session_chat_goal_waiting_on_you">Wacht op jou</string>
-    <string name="session_chat_goal_waiting_permission">Er staat een toestemmingsverzoek open. Het doel gaat verder zodra je antwoordt.</string>
+    <string name="session_chat_goal_waiting_permission">Er staat een machtigingsverzoek open. Het doel gaat verder zodra je antwoordt.</string>
     <string name="session_chat_goal_waiting_question">Er staat een vraag open. Het doel gaat verder zodra je antwoordt.</string>
     <string name="session_chat_goal_evidence">Bewijs</string>
     <string name="session_chat_goal_reconnecting">Opnieuw verbinden. Het laatst bekende doel wordt getoond.</string>
@@ -1000,8 +1000,8 @@
     <string name="session_chat_goal_clear_failed_reason">Doel wissen mislukt: %1$s</string>
     <string name="session_chat_timeline_style_notice">Tijdlijn: %1$s. Je kunt dit altijd wijzigen in Instellingen.</string>
     <string name="session_chat_branch_copied">Branchnaam gekopieerd</string>
-    <string name="session_chat_follow_up_switched_steer">Gewisseld naar Bijsturen</string>
-    <string name="session_chat_follow_up_switched_queue">Gewisseld naar Wachtrij</string>
+    <string name="session_chat_follow_up_switched_steer">Overgeschakeld naar Bijsturen</string>
+    <string name="session_chat_follow_up_switched_queue">Overgeschakeld naar Wachtrij</string>
     <string name="session_chat_failure_retry_after_seconds">Probeer het opnieuw over %1$d s</string>
     <string name="session_chat_failure_retry_after_minutes">Probeer het opnieuw over %1$d min</string>
     <string name="component_outgoing_message_pending_caption">In afwachting · wordt verzonden bij de volgende stap</string>
@@ -1026,9 +1026,9 @@
     <string name="session_chat_archive_failed">Sessie archiveren mislukt.</string>
     <string name="session_chat_delete_failed">Sessie verwijderen mislukt.</string>
     <string name="session_chat_mcp_load_failed">MCP-servers laden mislukt. Controleer de verbinding en probeer het opnieuw.</string>
-    <string name="session_chat_create_failed">Sessie maken mislukt</string>
+    <string name="session_chat_create_failed">Sessie aanmaken mislukt</string>
     <string name="session_chat_send_timed_out">Verzenden mislukt. Probeer het opnieuw.</string>
-    <string name="session_chat_shell_cannot_queue">Shell-opdrachten kunnen niet in de wachtrij. Wissel naar Bijsturen om het nu uit te voeren.</string>
+    <string name="session_chat_shell_cannot_queue">Shell-commando\'s kunnen niet in de wachtrij. Schakel over naar Bijsturen om het commando nu uit te voeren.</string>
     <string name="session_chat_reply_error_permission">Je antwoord kon niet worden verzonden. Probeer het opnieuw.</string>
     <string name="session_chat_reply_error_permission_reason">Je antwoord kon niet worden verzonden. %1$s.</string>
     <string name="session_chat_reply_error_question">Je antwoord kon niet worden verzonden. Probeer het opnieuw.</string>
@@ -1076,7 +1076,7 @@
     <string name="session_chat_sheet_tool_result_copies_link_hint">Kopieert de link</string>
     <string name="session_chat_sheet_tool_result_line_accessibility">Regel %1$d, %2$s</string>
     <string name="session_chat_sheet_shell_title">Shell</string>
-    <string name="session_chat_sheet_shell_command_accessibility">Opdracht, %1$s</string>
+    <string name="session_chat_sheet_shell_command_accessibility">Commando, %1$s</string>
     <string name="session_chat_sheet_shell_no_output">Nog geen uitvoer</string>
     <string name="session_chat_sheet_shell_truncated">Laatste uitvoer wordt getoond</string>
     <string name="session_chat_sheet_shell_stop">Shell stoppen</string>
@@ -1131,7 +1131,7 @@
     <string name="session_context_stat_user_messages">Gebruikersberichten</string>
     <string name="session_context_stat_assistant_messages">Assistentberichten</string>
     <string name="session_context_stat_total_cost">Totale kosten</string>
-    <string name="session_context_stat_created">Sessie gemaakt</string>
+    <string name="session_context_stat_created">Sessie aangemaakt</string>
     <string name="session_context_stat_last_activity">Laatste activiteit</string>
     <string name="session_context_breakdown_title">Contextverdeling</string>
     <string name="session_context_breakdown_system">Systeem</string>
@@ -1149,7 +1149,7 @@
     <string name="settings_section_home">Start</string>
     <string name="settings_section_session_cache">Sessiecache</string>
     <string name="settings_section_privacy">Privacy</string>
-    <string name="settings_section_about">Over</string>
+    <string name="settings_section_about">Info</string>
     <string name="settings_servers_summary_none">Geen servers opgeslagen</string>
     <plurals name="settings_servers_summary_saved">
         <item quantity="one">%1$d opgeslagen</item>
@@ -1208,7 +1208,7 @@
     <string name="settings_analytics_title">Analyse en crashrapporten</string>
     <string name="settings_analytics_subtitle">Sta optionele gebruiksgegevens van het product en crashrapporten toe. Uit betekent dat er niets naar Firebase wordt verzonden.</string>
     <string name="settings_analytics_label">Productanalyse</string>
-    <string name="settings_diagnostic_logs_subtitle">Deel een geredigeerd, doorlopend logvenster van de runtime</string>
+    <string name="settings_diagnostic_logs_subtitle">Deel een doorlopend logvenster van de runtime, zonder gevoelige gegevens</string>
     <string name="settings_clear_all_data_title">Alle gegevens wissen</string>
     <string name="settings_clear_all_data_subtitle">Verbinding en cache verwijderen</string>
     <string name="settings_clear_all_data_dialog_title">Alle gegevens wissen?</string>
@@ -1225,8 +1225,8 @@
     <string name="diagnostics_loading">Diagnostische logs laden</string>
     <string name="diagnostics_entries_title">Items</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d geredigeerde regel in het bewaarde venster</item>
-        <item quantity="other">%1$d geredigeerde regels in het bewaarde venster</item>
+        <item quantity="one">%1$d geanonimiseerde regel in het bewaarde venster</item>
+        <item quantity="other">%1$d geanonimiseerde regels in het bewaarde venster</item>
     </plurals>
     <string name="diagnostics_entries_empty">Nog geen items in het bewaarde venster</string>
     <string name="diagnostics_kept_title">Bewaard</string>
@@ -1242,7 +1242,7 @@
         <item quantity="other">max. %1$d · niets verwijderd</item>
     </plurals>
     <string name="diagnostics_format_title">Indeling</string>
-    <string name="diagnostics_format_value">JSONL · geheimen en berichtinhoud geredigeerd</string>
+    <string name="diagnostics_format_value">JSONL · geheimen en berichtinhoud verborgen</string>
     <string name="diagnostics_range_title">Bereik</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
     <string name="diagnostics_areas_title">Onderdelen</string>
@@ -1254,13 +1254,13 @@
     <string name="diagnostics_save_to_files">Opslaan in Bestanden</string>
     <string name="diagnostics_clear_dialog_title">Diagnostische logs wissen?</string>
     <string name="diagnostics_clear_dialog_message">Hiermee wordt het opgeslagen diagnostische log verwijderd.</string>
-    <string name="diagnostics_error_share">Diagnostisch log voorbereiden om te delen mislukt.</string>
-    <string name="diagnostics_error_save">Diagnostisch log opslaan mislukt.</string>
+    <string name="diagnostics_error_share">Het diagnostische log kon niet worden voorbereid om te delen.</string>
+    <string name="diagnostics_error_save">Het diagnostische log kon niet worden opgeslagen.</string>
     <string name="diagnostics_saved">Diagnostisch log opgeslagen.</string>
     <string name="appearance_title">Uiterlijk</string>
     <string name="appearance_theme_title">Thema</string>
     <string name="appearance_theme_subtitle">%1$s · %2$s</string>
-    <string name="appearance_code_highlight_title">Codemarkering</string>
+    <string name="appearance_code_highlight_title">Syntaxiskleuring</string>
     <string name="appearance_theme_blurb_porcelain">Bijna wit / bijna zwart</string>
     <string name="appearance_theme_blurb_linen">Warm papier / espresso</string>
     <string name="appearance_theme_blurb_signal">Zuiver wit / zuiver zwart</string>
@@ -1303,23 +1303,23 @@
     <string name="appearance_sample_session_two">Instellingen migreren naar de nieuwe store</string>
     <string name="appearance_sample_time_now">nu</string>
     <string name="appearance_sample_time_minutes">12m</string>
-    <string name="appearance_sample_user_message">Waarom faalt de login-redirecttest een keer op de vijf runs?</string>
+    <string name="appearance_sample_user_message">Waarom mislukt de login-redirecttest bij een op de vijf runs?</string>
     <string name="appearance_sample_assistant_message">De test leest de sessiecookie direct nadat `login()` is afgerond, maar de cookie wordt één tick later geschreven.</string>
     <string name="appearance_sample_tool_title">Bewerkt</string>
     <string name="feature_flags_title">Feature flags</string>
-    <string name="feature_flags_clear_overrides">Overschrijvingen wissen</string>
+    <string name="feature_flags_clear_overrides">Overrides wissen</string>
     <string name="feature_flags_more_options">Meer opties</string>
-    <string name="feature_flags_intro">Een flag omzetten stelt een overschrijving op dit apparaat in die voorrang heeft op de waarde op afstand. Waarden op afstand worden bij het opstarten opgehaald en bij de volgende start toegepast.</string>
+    <string name="feature_flags_intro">Een flag omzetten stelt een override op dit apparaat in die voorrang heeft op de externe waarde. Externe waarden worden bij het opstarten opgehaald en bij de volgende start toegepast.</string>
     <string name="feature_flags_section_flags">Flags</string>
     <string name="feedback_title_report">Een probleem melden</string>
-    <string name="feedback_title_hide_parts">Delen verbergen</string>
+    <string name="feedback_title_hide_parts">Gedeelten verbergen</string>
     <string name="feedback_title_log_preview">Diagnostisch log</string>
     <string name="feedback_title_listening">Luisteren</string>
     <string name="feedback_kind_bug">Bug</string>
     <string name="feedback_kind_idea">Idee</string>
     <string name="feedback_placeholder_bug">Wat gebeurde er? Wat had je verwacht?</string>
     <string name="feedback_placeholder_idea">Wat zou OpenCode beter voor je maken?</string>
-    <string name="feedback_privacy_note">Gaat alleen naar het OpenCode Mobile-team. Bevat nooit je serveradres, gebruikersnaam of wachtwoord. Logs worden op deze telefoon geredigeerd.</string>
+    <string name="feedback_privacy_note">Gaat alleen naar het OpenCode Mobile-team. Bevat nooit je serveradres, gebruikersnaam of wachtwoord. Gevoelige gegevens worden op deze telefoon uit logs verwijderd.</string>
     <string name="feedback_error_offline">Je bent offline. Je melding blijft hier bewaard — probeer het opnieuw zodra je verbonden bent.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">Je hebt zojuist een melding verstuurd. Probeer het opnieuw over %1$d s.</item>
@@ -1328,13 +1328,13 @@
     <string name="feedback_error_unverified">Deze kopie van de app kon niet worden geverifieerd. Meldingen kunnen alleen worden verstuurd vanuit een installatie via de App Store, TestFlight of Google Play.</string>
     <string name="feedback_error_failed">Melding verzenden mislukt.</string>
     <string name="feedback_action_try_again">Opnieuw proberen</string>
-    <string name="feedback_action_share_instead">Liever delen</string>
+    <string name="feedback_action_share_instead">In plaats daarvan delen</string>
     <string name="feedback_undo">Ongedaan maken</string>
     <string name="feedback_done">Klaar</string>
     <string name="feedback_add_attachment">Bijlage toevoegen</string>
     <string name="feedback_dictate">Dicteren</string>
     <string name="feedback_send">Melding verzenden</string>
-    <string name="feedback_sending">Melding verzenden</string>
+    <string name="feedback_sending">Melding wordt verzonden</string>
     <string name="feedback_attachment_screenshot">Schermafbeelding</string>
     <plurals name="feedback_attachment_screenshot_hidden">
         <item quantity="one">Schermafbeelding · %1$d verborgen</item>
@@ -1344,7 +1344,7 @@
         <item quantity="one">%1$d verborgen</item>
         <item quantity="other">%1$d verborgen</item>
     </plurals>
-    <string name="feedback_attachment_tap_to_hide">Tik om delen te verbergen</string>
+    <string name="feedback_attachment_tap_to_hide">Tik om gedeelten te verbergen</string>
     <string name="feedback_attachment_tap_to_preview">Tik voor voorbeeld</string>
     <string name="feedback_attachment_logs">Logs</string>
     <plurals name="feedback_attachment_logs_minutes">
@@ -1361,8 +1361,8 @@
         <item quantity="other">Schermafbeelding, %1$d gebieden verborgen</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">Laatste %1$d minuut · gzip bij uploaden. Geredigeerd op deze telefoon.</item>
-        <item quantity="other">Laatste %1$d minuten · gzip bij uploaden. Geredigeerd op deze telefoon.</item>
+        <item quantity="one">Laatste %1$d minuut · gzip bij uploaden. Gevoelige gegevens verwijderd op deze telefoon.</item>
+        <item quantity="other">Laatste %1$d minuten · gzip bij uploaden. Gevoelige gegevens verwijderd op deze telefoon.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Laden…</string>
     <string name="feedback_log_preview_empty_title">Geen logregels</string>
@@ -1381,17 +1381,17 @@
     <string name="session_search_title">Sessies zoeken</string>
     <string name="session_search_clear">Zoekopdracht wissen</string>
     <string name="session_search_placeholder">Zoeken in %1$s</string>
-    <string name="session_search_hint">Zoekt in sessietitels in %1$s.</string>
+    <string name="session_search_hint">Doorzoekt sessietitels in %1$s.</string>
     <string name="session_search_searching">Zoeken…</string>
     <plurals name="session_search_results">
         <item quantity="one">%1$d resultaat</item>
         <item quantity="other">%1$d resultaten</item>
     </plurals>
-    <string name="session_search_no_match_title">Geen sessies gevonden voor „%1$s”</string>
+    <string name="session_search_no_match_title">Geen sessies gevonden voor “%1$s”</string>
     <string name="session_search_no_match_message">in %1$s</string>
     <string name="session_search_search_all_projects">Alle projecten doorzoeken</string>
-    <string name="session_search_include_archived">Gearchiveerde meenemen</string>
-    <string name="session_search_include_archived_count">Gearchiveerde meenemen · %1$d</string>
+    <string name="session_search_include_archived">Inclusief gearchiveerde</string>
+    <string name="session_search_include_archived_count">Inclusief gearchiveerde · %1$d</string>
     <string name="session_search_archived_section">Gearchiveerd</string>
     <string name="session_search_archived_tag">Gearchiveerd</string>
     <string name="session_search_scope_selected">%1$s, geselecteerd</string>
@@ -1399,12 +1399,12 @@
     <string name="keyboard_shortcuts_group_prompt">Prompt</string>
     <string name="keyboard_shortcuts_group_go">Ga naar</string>
     <string name="keyboard_shortcuts_new_session">Nieuwe sessie</string>
-    <string name="keyboard_shortcuts_command_palette">Opdrachtenpalet</string>
+    <string name="keyboard_shortcuts_command_palette">Commandopalet</string>
     <string name="keyboard_shortcuts_choose_model">Model kiezen</string>
     <string name="keyboard_shortcuts_settings">Instellingen</string>
     <string name="keyboard_shortcuts_project">Project %1$d</string>
     <string name="keyboard_shortcuts_show_project">%1$s tonen</string>
-    <string name="keyboard_shortcuts_allow_once">Eenmaal toestaan</string>
+    <string name="keyboard_shortcuts_allow_once">Eenmalig toestaan</string>
     <string name="keyboard_shortcuts_always_allow">Altijd toestaan</string>
     <string name="keyboard_shortcuts_deny">Weigeren</string>
     <string name="keyboard_shortcuts_deny_with_note">Weigeren met notitie</string>
@@ -1423,7 +1423,7 @@
     <string name="changes_source_working_tree_name">Git-wijzigingen</string>
     <string name="changes_source_working_tree_empty_title">Geen Git-wijzigingen</string>
     <string name="changes_source_working_tree_empty_message">De werkmap heeft geen niet-gecommitte wijzigingen.</string>
-    <string name="changes_source_last_turn_name">Wijzigingen van laatste beurt</string>
+    <string name="changes_source_last_turn_name">Wijzigingen van de laatste beurt</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">Git-wijzigingen bevat %1$d gewijzigd bestand.</item>
         <item quantity="other">Git-wijzigingen bevat %1$d gewijzigde bestanden.</item>
@@ -1443,7 +1443,7 @@
     <string name="changes_error_title">Wijzigingen laden mislukt</string>
     <string name="changes_error_fallback">De wijzigingen zijn niet geladen.</string>
     <string name="changes_error_request_failed">Verzoek mislukt</string>
-    <string name="changes_error_turn_moved_folders">Deze beurt is naar andere mappen verhuisd, dus de wijzigingen kunnen niet samen worden getoond.</string>
+    <string name="changes_error_turn_moved_folders">In deze beurt is van map gewisseld, dus de wijzigingen kunnen niet samen worden getoond.</string>
     <string name="changes_refresh_failed">Vernieuwen mislukt: %1$s</string>
     <string name="changes_filter_hint">Filter</string>
     <string name="changes_filter_accessibility_label">Gewijzigde bestanden filteren</string>
@@ -1477,7 +1477,7 @@
         <item quantity="other">%1$d bestanden</item>
     </plurals>
     <string name="component_review_changes_pill_title">Wijzigingen bekijken</string>
-    <string name="component_unified_diff_summary_added">Bestand toegevoegd %1$s, %2$s, %3$s</string>
+    <string name="component_unified_diff_summary_added">Toegevoegd bestand %1$s, %2$s, %3$s</string>
     <string name="component_activity_status_running">bezig</string>
     <string name="component_subagent_state_running">bezig</string>
     <string name="component_todo_item_accessibility_label">%1$s, %2$s</string>
@@ -1501,10 +1501,10 @@
     <string name="component_unified_diff_old_line">oude regel %1$d</string>
     <string name="component_unified_diff_new_line">nieuwe regel %1$d</string>
     <string name="component_floating_pill_state_live">Bezig</string>
-    <string name="component_floating_pill_state_ready">Klaar</string>
+    <string name="component_floating_pill_state_ready">Gereed</string>
     <string name="component_floating_pill_state_needs_attention">Aandacht nodig</string>
     <string name="component_floating_pill_state_error">Fout</string>
-    <string name="component_floating_pill_state_done">Gereed</string>
+    <string name="component_floating_pill_state_done">Klaar</string>
     <string name="component_floating_pill_accessibility_label">%1$s, %2$s</string>
     <string name="component_floating_pill_dismiss">%1$s sluiten</string>
     <string name="common_expanded">Uitgevouwen</string>
@@ -1526,7 +1526,7 @@
     <string name="theme_error_preset_not_found">Themavoorinstelling niet gevonden</string>
     <string name="component_composer_submit">Verzenden</string>
     <string name="component_composer_select_all_that_apply">Selecteer alles wat van toepassing is</string>
-    <string name="component_unified_diff_summary_modified">Bestand gewijzigd %1$s, %2$s, %3$s</string>
+    <string name="component_unified_diff_summary_modified">Gewijzigd bestand %1$s, %2$s, %3$s</string>
     <string name="component_hunk_navigation_collapse_context">Context inklappen</string>
     <string name="component_top_bar_project_subtitle">Project %1$s %2$s</string>
     <string name="component_composer_dismiss">Sluiten</string>
@@ -1539,16 +1539,16 @@
     <string name="dictation_status_line">%1$s · %2$s</string>
     <string name="component_attachment_kind_image">Afbeelding</string>
     <string name="component_composer_hide_question">Vraag verbergen</string>
-    <string name="live_updates_status_connecting">verbinden</string>
+    <string name="live_updates_status_connecting">verbinding maken</string>
     <string name="dictation_model_queued_detail">%1$s heeft de download in de wachtrij gezet. Mogelijk wacht die op Wi-Fi, opladen of vrije opslagruimte. Controleer over een paar minuten opnieuw.</string>
     <string name="dictation_model_not_installed_detail">Dictatie draait op dit apparaat, dus je stem wordt nooit geüpload. %1$s downloadt het model één keer en bewaart het voor alle apps.</string>
     <string name="component_outgoing_message_shows_actions_hint">Toont berichtacties</string>
     <string name="component_activity_status_stopped">gestopt</string>
     <string name="dictation_action_try_again">Opnieuw proberen</string>
-    <string name="component_composer_model_effort">Model %1$s, inspanning %2$s</string>
+    <string name="component_composer_model_effort">Model %1$s, redeneerniveau %2$s</string>
     <string name="component_activity_card_working">Bezig</string>
     <string name="component_activity_card_opens_activity">%1$s, opent activiteit</string>
-    <string name="component_image_loading_label">%1$s, laden</string>
+    <string name="component_image_loading_label">%1$s, wordt geladen</string>
     <string name="session_list_dock_new_session">Nieuwe sessie</string>
     <string name="component_composer_always_allows">Staat altijd toe: %1$s</string>
     <string name="component_composer_leave_side_question_mode">Zijvraagmodus verlaten</string>
@@ -1568,7 +1568,7 @@
     <string name="dictation_microphone_failed">Kan de microfoon niet gebruiken</string>
     <string name="dictation_busy">Dictatie is bezig</string>
     <string name="component_composer_question_position">%1$d van %2$d</string>
-    <string name="session_list_status_ready">Klaar</string>
+    <string name="session_list_status_ready">Gereed</string>
     <string name="session_list_dock_hint_swipe">Opent het projectfilter. Veeg om van project te wisselen.</string>
     <string name="component_composer_select_one">Kies er één</string>
     <string name="component_session_list_skeleton_row">Sessie laden</string>
@@ -1580,7 +1580,7 @@
     <string name="dictation_model_queued_title">%1$s downloadt %2$s later</string>
     <string name="session_list_dock_choose_project_or_worktree">Kies project of worktree</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
-    <string name="component_image_could_not_load_label">%1$s, kan niet laden</string>
+    <string name="component_image_could_not_load_label">%1$s, laden mislukt</string>
     <string name="component_composer_question">Vraag</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">Wis het filter om sessies in andere worktrees te zien.</string>
@@ -1603,7 +1603,7 @@
         <item quantity="one">%1$dd geleden</item>
         <item quantity="other">%1$dd geleden</item>
     </plurals>
-    <string name="component_server_address_scheme_button_description">Schema %1$s. Opent schemakeuze</string>
+    <string name="component_server_address_scheme_button_description">Protocol %1$s. Opent protocolkeuze</string>
     <string name="share_diagnostics_subject">OpenCode diagnostische logs</string>
     <string name="component_reorderable_list_move_up">Omhoog</string>
     <string name="session_list_scope_load_failed_title">%1$s laden mislukt</string>
@@ -1611,7 +1611,7 @@
     <string name="dictation_downloading_model">Spraakmodel downloaden</string>
     <string name="session_list_worktree_empty_every_worktree">Wis het filter om alle worktrees te zien.</string>
     <string name="component_overflow_menu_more_options">Meer opties</string>
-    <string name="session_list_status_retrying_attempt">Opnieuw proberen · %1$d</string>
+    <string name="session_list_status_retrying_attempt">Nieuwe poging · %1$d</string>
     <string name="live_updates_status_offline">offline</string>
     <string name="component_attachment_kind_text">Tekst</string>
     <string name="component_composer_next_question">Volgende vraag</string>
@@ -1627,14 +1627,14 @@
         <item quantity="other">%1$d stappen</item>
     </plurals>
     <string name="theme_error_apply_failed">Themavoorinstelling toepassen mislukt</string>
-    <string name="component_unified_diff_summary_deleted">Bestand verwijderd %1$s, %2$s, %3$s</string>
+    <string name="component_unified_diff_summary_deleted">Verwijderd bestand %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">Bezig</string>
     <string name="component_step_rail_expands">%1$s, vouwt uit</string>
     <string name="session_list_status_done">Klaar</string>
     <string name="session_list_status_idle">Inactief</string>
     <string name="component_attachment_kind_file">Bestand</string>
     <string name="component_composer_run_shell_command">Shellcommando uitvoeren</string>
-    <string name="component_image_could_not_load">Kan niet laden</string>
+    <string name="component_image_could_not_load">Laden mislukt</string>
     <string name="component_outgoing_message_show_actions">Berichtacties tonen</string>
     <string name="live_updates_accessibility_label">Live-updates %1$s</string>
     <string name="component_composer_previous_question">Vorige vraag</string>
@@ -1688,7 +1688,7 @@
     <string name="component_image_viewer_loading_full">Volledige afbeelding laden</string>
     <string name="session_list_worktree_empty_action">Filter wissen</string>
     <string name="dictation_model_download_failed_detail">Controleer de verbinding en de vrije opslagruimte op dit apparaat en probeer het opnieuw.</string>
-    <string name="component_composer_send_queue">Verzenden als wachtrij</string>
+    <string name="component_composer_send_queue">In de wachtrij plaatsen</string>
     <string name="session_list_dock_new_session_hint">Gebruik Kies project of worktree om elders te beginnen.</string>
     <string name="session_list_section_yesterday">Gisteren</string>
     <string name="component_code_file_line_label">Regel %1$d, %2$s</string>
@@ -1732,7 +1732,7 @@
     <string name="component_composer_dictate">Dicteren</string>
     <string name="component_composer_side_question_mode_description">Zijvraagmodus. Zijvraagmodus verlaten</string>
     <string name="component_composer_abort">Lopend werk afbreken</string>
-    <string name="component_server_address_scheme_button">Schema %1$s</string>
+    <string name="component_server_address_scheme_button">Protocol %1$s</string>
     <string name="component_composer_open_subagent_session">Subagent-sessie openen</string>
     <string name="component_composer_question_step">Stap %1$d van %2$d</string>
     <string name="share_feedback_subject_bug">OpenCode Mobile-bugmelding</string>
@@ -1741,7 +1741,7 @@
     <string name="dictation_model_not_installed_title">%1$s heeft %2$s nodig</string>
     <string name="component_composer_back_to_main_session">Terug naar hoofdsessie</string>
     <string name="component_activity_sheet_working_count">Bezig %1$d</string>
-    <string name="session_list_status_retrying">Opnieuw proberen</string>
+    <string name="session_list_status_retrying">Nieuwe poging</string>
     <string name="component_attachment_remove">%1$s verwijderen</string>
     <string name="component_composer_send_steer">Verzenden als bijsturing</string>
     <string name="component_composer_next_permission">Volgend toestemmingsverzoek</string>
@@ -1762,8 +1762,8 @@
         <item quantity="one">%1$d item</item>
         <item quantity="other">%1$d items</item>
     </plurals>
-    <string name="component_server_address_scheme">Schema</string>
-    <string name="component_server_address_scheme_picker_hint">Opent schemakeuze</string>
+    <string name="component_server_address_scheme">Protocol</string>
+    <string name="component_server_address_scheme_picker_hint">Opent protocolkeuze</string>
     <string name="component_split_pane_hide_sidebar">Zijbalk verbergen</string>
     <string name="component_composer_select_range">Kies %1$d tot %2$d</string>
     <string name="component_image_viewer_position">%1$d van %2$d</string>
@@ -1782,15 +1782,15 @@
         <item quantity="one">%1$d gewijzigd</item>
         <item quantity="other">%1$d gewijzigd</item>
     </plurals>
-    <string name="worktrees_none_in_project">Geen worktrees. Nieuwe sessie → Kies project of worktree maakt er een.</string>
-    <string name="worktrees_footer">Een worktree verwijderen wist de map op de server. De sessies blijven bestaan, maar kunnen er niet meer in draaien.</string>
+    <string name="worktrees_none_in_project">Geen worktrees. Kies bij Nieuwe sessie → Kies project of worktree om er een te maken.</string>
+    <string name="worktrees_footer">Als je een worktree verwijdert, wordt de map op de server gewist. De sessies blijven bestaan, maar kunnen er niet meer in draaien.</string>
     <string name="worktrees_more">Meer acties voor %1$s</string>
-    <string name="worktrees_removing">Verwijderen…</string>
+    <string name="worktrees_removing">Wordt verwijderd…</string>
     <string name="worktrees_actions_show_on_home">Sessies op Start tonen</string>
     <string name="worktrees_actions_new_session">Nieuwe sessie hier</string>
     <string name="worktrees_actions_remove">Worktree verwijderen…</string>
     <string name="worktrees_remove_title">Worktree “%1$s” verwijderen?</string>
-    <string name="worktrees_remove_message">Wist %1$s op de server.</string>
+    <string name="worktrees_remove_message">%1$s wordt op de server verwijderd.</string>
     <plurals name="worktrees_remove_changes">
         <item quantity="one">%1$d niet-gecommitte wijziging gaat verloren.</item>
         <item quantity="other">%1$d niet-gecommitte wijzigingen gaan verloren.</item>
@@ -1811,13 +1811,13 @@
     <string name="session_list_worktree_removed">worktree verwijderd</string>
     <string name="whats_new_title">Wat is er nieuw</string>
     <string name="whats_new_version">Versie %1$s</string>
-    <string name="whats_new_skipped_one">Je hebt één update overgeslagen, die staat hieronder.</string>
-    <string name="whats_new_skipped_many">Je hebt %1$d updates overgeslagen, die staan hieronder.</string>
+    <string name="whats_new_skipped_one">Je hebt één update overgeslagen. Die staat hieronder.</string>
+    <string name="whats_new_skipped_many">Je hebt %1$d updates overgeslagen. Die staan hieronder.</string>
     <string name="whats_new_in_version">In %1$s</string>
     <string name="whats_new_also_since">Ook nieuw sinds je laatste update · %1$s</string>
-    <string name="whats_new_fixes">Oplossingen</string>
+    <string name="whats_new_fixes">Opgeloste problemen</string>
     <string name="whats_new_done">Klaar</string>
-    <string name="whats_new_find_again">Vind dit terug via Instellingen → Wat is er nieuw</string>
+    <string name="whats_new_find_again">Je vindt dit later terug via Instellingen → Wat is er nieuw</string>
     <string name="whats_new_installed">Geïnstalleerd</string>
     <string name="whats_new_settings_subtitle">Releasenotities van elke versie</string>
 </resources>

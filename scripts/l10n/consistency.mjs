@@ -20,7 +20,8 @@ const TERMS = [
   "fork", "revert", "undo", "retry", "dismiss", "queue", "steer", "home", "uptime", "reconnect",
   "hunk", "uncommitted", "diff", "changes", "shell", "terminal", "command", "subagent", "todo",
   "skill", "prompt", "context", "token", "usage", "connection profile", "app lock", "dictation",
-  "server health", "side question", "notification", "theme", "appearance",
+  "server health", "side question", "notification", "theme", "appearance", "allow", "deny",
+  "reject", "always allow", "clear", "remove", "delete", "stop", "send", "share", "copy", "settings",
 ];
 const PER_TERM = 30;
 
@@ -50,9 +51,15 @@ for (const language of resolveLanguages(codes)) {
     const matches = rows.filter((r) => pattern.test(englishText(r.english))).slice(0, PER_TERM);
     if (matches.length >= 2) groups.push({ term, strings: matches });
   }
+  // Form of address: strings that speak to the user, so one register (formal or informal) wins.
+  const addressing = /\byou(r|rs|'re|'ll|'ve)?\b|^(Try|Select|Choose|Tap|Enter|Pick|Add|Open|Check|Set|Use|Allow|Turn|Make|Keep|Type|Say|Tell|Describe|Scan|Run|Connect|Sign|Grant|Wait|Retry)\b/i;
+  const register = rows.filter((r) => addressing.test(englishText(r.english))).slice(0, 120);
+  if (register.length) groups.push({ term: "FORM OF ADDRESS (formal vs informal you, imperatives)", strings: register });
   const prompt = `You are a native ${language.name} (${language.ios}) localization reviewer for OpenCode Mobile, a phone app that remotely controls OpenCode, an AI coding agent. Several translators worked on this app, so the same English term may have been translated with different ${language.name} words.
 
-For each term group below, decide the one ${language.name} word or phrase this app should use for that term (as noun, verb or adjective as the English needs, inflected correctly), then fix every string in the group that uses a different word for the same meaning. Keep a different word only where the English uses the term in a different sense. Also fix any grammar or wording you break or notice in those strings. Do not restyle otherwise.
+For each term group below, decide the one ${language.name} word or phrase a native ${language.name} app would use for that term. The current strings may follow the OpenCode desktop app's word lists, which contain some mistakes (an English word transliterated instead of translated, a calque, a word in the wrong sense); do not keep a word just because it is used often, choose the correct one (as noun, verb or adjective as the English needs, inflected correctly), then fix every string in the group that uses a different word for the same meaning. Keep a different word only where the English uses the term in a different sense. Also fix any grammar or wording you break or notice in those strings. Do not restyle otherwise.
+
+The last group, "FORM OF ADDRESS", holds strings that speak to the user. Choose the one form of address (formal or informal "you", and the matching imperative form) that ${language.name} developer apps normally use, and rewrite every string in that group that uses the other form. Report the choice in "terms" under "form of address".
 
 Product terms (what they mean in this app):
 ${Object.entries(glossary.terms).map(([t, d]) => `- ${t}: ${d}`).join("\n")}

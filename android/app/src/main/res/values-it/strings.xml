@@ -29,7 +29,7 @@
     <string name="connection_setup_instructions_run">Sul computer, esegui questo comando, poi scansiona il QR.</string>
     <string name="connection_setup_instructions_first_run">La prima esecuzione richiede circa un minuto. Serve OpenCode 2.0.25 o successivo. Il servizio si avvia se non è già in esecuzione.</string>
     <string name="connection_setup_instructions_same_wifi_title">Oppure stessa rete Wi-Fi</string>
-    <string name="connection_setup_instructions_same_wifi_body">Il semplice pair mostra un QR solo quando il server è raggiungibile oltre localhost.</string>
+    <string name="connection_setup_instructions_same_wifi_body">Il comando pair semplice mostra un QR solo quando il server è raggiungibile oltre localhost.</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">Host</string>
     <string name="connection_setup_host_help">LAN, Tailscale MagicDNS o tunnel, non localhost su un telefono.</string>
@@ -53,9 +53,9 @@
     <string name="connection_setup_pair_again_unreachable">Impossibile raggiungere l\'indirizzo salvato. Abbina di nuovo.</string>
     <string name="connection_setup_pair_again_unauthorized">Questo server ha rifiutato l\'accesso salvato. Abbina di nuovo. Una nuova password disconnette tutti i dispositivi.</string>
     <string name="connection_cleartext_title">La connessione non è cifrata</string>
-    <string name="connection_cleartext_message_one_host">%1$s usa http semplice fuori dalla tua rete locale o da Tailscale. La password del server e tutto ciò che c\'è nelle tue sessioni viaggerebbero non cifrati. Meglio https, una VPN o un tunnel.</string>
-    <string name="connection_cleartext_message_hosts">%1$s usano http semplice fuori dalla tua rete locale o da Tailscale. La password del server e tutto ciò che c\'è nelle tue sessioni viaggerebbero non cifrati. Meglio https, una VPN o un tunnel.</string>
-    <string name="connection_cleartext_message_this_address">Questo indirizzo usa http semplice fuori dalla tua rete locale o da Tailscale. La password del server e tutto ciò che c\'è nelle tue sessioni viaggerebbero non cifrati. Meglio https, una VPN o un tunnel.</string>
+    <string name="connection_cleartext_message_one_host">%1$s usa http non cifrato fuori dalla tua rete locale o da Tailscale. La password del server e tutto ciò che c\'è nelle tue sessioni viaggerebbero senza cifratura. Meglio https, una VPN o un tunnel.</string>
+    <string name="connection_cleartext_message_hosts">%1$s usano http non cifrato fuori dalla tua rete locale o da Tailscale. La password del server e tutto ciò che c\'è nelle tue sessioni viaggerebbero senza cifratura. Meglio https, una VPN o un tunnel.</string>
+    <string name="connection_cleartext_message_this_address">Questo indirizzo usa http non cifrato fuori dalla tua rete locale o da Tailscale. La password del server e tutto ciò che c\'è nelle tue sessioni viaggerebbero senza cifratura. Meglio https, una VPN o un tunnel.</string>
     <string name="connection_cleartext_connect_anyway">Connetti comunque</string>
     <string name="connection_error_invalid_qr">Questo non è un QR di abbinamento di OpenCode 2</string>
     <string name="connection_error_localhost_qr">Questo QR contiene solo un indirizzo localhost</string>
@@ -65,7 +65,7 @@
     <string name="connection_error_enter_pairing_code">Inserisci un codice di abbinamento</string>
     <string name="connection_error_pairing_link_expired">Questo link di abbinamento è scaduto o è già stato usato</string>
     <string name="connection_error_duplicate_profile">Esiste già un server salvato con questo host e nome utente</string>
-    <string name="connection_error_qr_scan_failed">Il QR non si è connesso. L\'API di abbinamento di OpenCode 2 è ancora in evoluzione, quindi una scansione può fallire anche se l\'app funziona. Inserisci l\'host e connettiti. La password è facoltativa. Funziona anche un codice di abbinamento.</string>
+    <string name="connection_error_qr_scan_failed">Connessione con il QR non riuscita. L\'API di abbinamento di OpenCode 2 è ancora in evoluzione, quindi una scansione può fallire anche se l\'app funziona. Inserisci l\'host e connettiti. La password è facoltativa. Funziona anche un codice di abbinamento.</string>
     <string name="connection_error_unreachable">Impossibile raggiungere il server</string>
     <string name="server_error_pairing_expired">Abbinamento scaduto, abbina di nuovo</string>
     <string name="server_error_not_found">Cartella o file non trovato</string>
@@ -73,10 +73,10 @@
     <string name="server_error_session_busy">La sessione è occupata</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Autenticazione non riuscita</string>
-    <string name="connection_error_unhealthy">Il server segnala di non essere in salute</string>
+    <string name="connection_error_unhealthy">Il server segnala di non essere funzionante</string>
     <string name="connection_scanner_title">Scansiona QR di abbinamento</string>
     <string name="connection_scanner_card_title">QR di abbinamento OpenCode</string>
-    <string name="connection_scanner_card_body">Da opencode pair --remote. Il semplice pair mostra un QR solo quando il server è raggiungibile oltre localhost.</string>
+    <string name="connection_scanner_card_body">Da opencode pair --remote. Il comando pair semplice mostra un QR solo quando il server è raggiungibile oltre localhost.</string>
     <string name="connection_onboarding_title">Connettiti al tuo server</string>
     <string name="connection_onboarding_body">OpenCode Mobile controlla le sessioni su un server opencode in esecuzione sul tuo computer di sviluppo.</string>
     <string name="connection_onboarding_connect">Connettiti al server</string>
@@ -98,11 +98,11 @@
     <string name="onboarding_features_permissions_detail">Approva o nega le richieste (nessuna memoria permanente)</string>
     <string name="onboarding_features_changes_title">Modifiche</string>
     <string name="onboarding_features_changes_detail">Esamina i diff della sessione</string>
-    <string name="onboarding_features_live_title">Live ad app aperta</string>
+    <string name="onboarding_features_live_title">Live con l\'app aperta</string>
     <string name="onboarding_features_live_detail">Flusso di eventi in primo piano; aggiornamento dopo la riconnessione</string>
     <string name="onboarding_setup_title">Configura opencode serve</string>
     <string name="onboarding_setup_intro">L\'app dialoga con un server opencode che gestisci tu. Qui sotto il percorso breve; i dettagli completi sono nella documentazione ufficiale.</string>
-    <string name="onboarding_setup_step_number">Passo %1$d</string>
+    <string name="onboarding_setup_step_number">Passaggio %1$d</string>
     <string name="onboarding_setup_step1_title">Avvia il server sul tuo computer</string>
     <string name="onboarding_setup_step1_body">Nel tuo progetto, esegui il server opencode (headless). Tienilo attivo mentre usi il telefono.</string>
     <string name="onboarding_setup_step2_title">Richiedi una password</string>
@@ -135,10 +135,10 @@
     <string name="server_health_uptime_detail">su %1$s misurati</string>
     <string name="server_health_reconnects">Riconnessioni</string>
     <string name="server_health_reconnects_detail">ripristino in %1$s (mediana)</string>
-    <string name="server_health_no_drops">nessuna caduta</string>
+    <string name="server_health_no_drops">nessuna interruzione</string>
     <string name="server_health_error_rate">Tasso di errore</string>
     <string name="server_health_error_rate_detail">%1$d controlli su %2$d falliti</string>
-    <string name="server_health_between_drops">Tra una caduta e l\'altra</string>
+    <string name="server_health_between_drops">Tra un\'interruzione e l\'altra</string>
     <string name="server_health_between_drops_detail">durata media online</string>
     <string name="server_health_latency">Latenza</string>
     <string name="server_health_latency_summary">mediana %1$s · p95 %2$s</string>
@@ -191,7 +191,7 @@
     <string name="server_health_status_connecting">Connessione</string>
     <string name="server_health_status_reconnecting">Riconnessione</string>
     <string name="server_health_status_offline">Offline</string>
-    <string name="server_health_status_auth_failed">Autenticazione fallita</string>
+    <string name="server_health_status_auth_failed">Autenticazione non riuscita</string>
     <string name="server_health_status_stopped">Misurazione ferma</string>
     <plurals name="server_health_quick_view_summary">
         <item quantity="one">Uptime %1$s · %2$d riconnessione oggi</item>
@@ -235,9 +235,9 @@
     <string name="home_error_load_projects">Impossibile caricare i progetti</string>
     <string name="home_error_project_load_failed">Impossibile caricare le sessioni</string>
     <string name="home_remove_project_title">Rimuovere dalla home?</string>
-    <string name="home_remove_project_message">Rimuovere \"%1$s\" dalla home? Le sue sessioni restano sul server.</string>
-    <string name="home_snackbar_removed">\"%1$s\" rimosso dalla home</string>
-    <string name="home_snackbar_already_on_home">\"%1$s\" è già nella home</string>
+    <string name="home_remove_project_message">Rimuovere “%1$s” dalla home? Le sue sessioni restano sul server.</string>
+    <string name="home_snackbar_removed">“%1$s” rimosso dalla home</string>
+    <string name="home_snackbar_already_on_home">“%1$s” è già nella home</string>
     <string name="home_snackbar_joined_project">Stesso repository di %1$s. Mostrato lì come worktree.</string>
     <string name="home_all">Tutti</string>
     <string name="home_all_projects">Tutti i progetti</string>
@@ -319,7 +319,7 @@
     <string name="add_project_list_error_message">Controlla il percorso e riprova.</string>
     <string name="add_project_no_other_projects">Nessun altro progetto su questo server.</string>
     <string name="add_project_folder_path">Percorso della cartella</string>
-    <string name="add_project_up_one_folder">Su di una cartella</string>
+    <string name="add_project_up_one_folder">Cartella superiore</string>
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Scegli una cartella</string>
     <string name="add_project_already_on_home">Già nella Home</string>
@@ -338,9 +338,9 @@
     <string name="add_project_no_subfolders">Nessuna sottocartella</string>
     <string name="add_project_nothing_starts_with">Niente in %1$s inizia con “%2$s”</string>
     <plurals name="add_project_truncation_hint">
-        <item quantity="one">Mostrata la prima cartella (%1$d). Digita più parti del nome per restringere l\'elenco.</item>
-        <item quantity="many">Mostrate le prime %1$d di cartelle. Digita più parti del nome per restringere l\'elenco.</item>
-        <item quantity="other">Mostrate le prime %1$d cartelle. Digita più parti del nome per restringere l\'elenco.</item>
+        <item quantity="one">Mostrata la prima cartella (%1$d). Digita più caratteri del nome per restringere l\'elenco.</item>
+        <item quantity="many">Mostrate le prime %1$d di cartelle. Digita più caratteri del nome per restringere l\'elenco.</item>
+        <item quantity="other">Mostrate le prime %1$d cartelle. Digita più caratteri del nome per restringere l\'elenco.</item>
     </plurals>
     <string name="add_project_in_folder">In %1$s</string>
     <string name="add_project_root_home">Home</string>
@@ -396,7 +396,7 @@
     <string name="files_finding">Ricerca dei file</string>
     <string name="files_find_error">Impossibile cercare i file</string>
     <string name="files_find_no_match">Nessun file corrisponde a “%1$s”</string>
-    <string name="files_find_no_match_detail">La ricerca sul server salta le cartelle ignorate.</string>
+    <string name="files_find_no_match_detail">La ricerca sul server esclude le cartelle ignorate.</string>
     <string name="files_error_check_server_connection">Controlla la connessione al server e riprova.</string>
     <string name="files_error_server_status">Il server ha risposto con %1$d.</string>
     <string name="files_no_file_title">Apri un file dall\'albero</string>
@@ -408,12 +408,12 @@
     <string name="file_viewer_wrap_lines_off">A capo automatico, disattivo</string>
     <string name="file_viewer_loading">Caricamento file</string>
     <string name="file_viewer_loading_image">Caricamento immagine</string>
-    <string name="file_viewer_rendering_preview">Creazione anteprima</string>
+    <string name="file_viewer_rendering_preview">Generazione dell\'anteprima</string>
     <string name="file_viewer_image_preview">Anteprima immagine</string>
     <string name="file_viewer_error_title">Impossibile aprire il file</string>
     <string name="file_viewer_empty_title">File vuoto</string>
     <string name="file_viewer_empty_message">Questo file non ha contenuto.</string>
-    <string name="file_viewer_truncated">Mostrato il primo 1 MB di questo file.</string>
+    <string name="file_viewer_truncated">Mostrato solo il primo 1 MB di questo file.</string>
     <string name="file_viewer_tab_preview">Anteprima</string>
     <string name="file_viewer_tab_source">Sorgente</string>
     <string name="file_viewer_binary_title">File binario</string>
@@ -448,7 +448,7 @@
     <string name="terminal_close">Chiudi</string>
     <string name="terminal_close_dialog_title">Chiudere questa shell?</string>
     <string name="terminal_close_dialog_title_named">Chiudere “%1$s”?</string>
-    <string name="terminal_close_dialog_message">Questo termina la shell sul server.</string>
+    <string name="terminal_close_dialog_message">La shell sul server verrà terminata.</string>
     <string name="terminal_projects_empty_title">Ancora nessun progetto</string>
     <string name="terminal_projects_empty_message">Aggiungi un progetto nella home, poi avvia qui una shell.</string>
     <string name="terminal_error_create">Impossibile avviare una shell.</string>
@@ -525,16 +525,16 @@
     <string name="session_chat_move_worktree_menu_title">Sposta in un worktree…</string>
     <string name="session_chat_move_worktree_sheet_title">Sposta in un worktree</string>
     <string name="session_chat_move_worktree_no_other">Questo progetto non ha altri worktree</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Passa a %1$s dopo questo turno.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Si sposta in %1$s dopo questo turno.</string>
     <string name="session_chat_move_worktree_failed">Impossibile spostare la sessione: %1$s</string>
     <string name="session_chat_variant_default">Predefinita</string>
     <string name="session_chat_model_chip_placeholder">Modello</string>
     <string name="session_chat_model_chip_loading">Caricamento modello…</string>
     <string name="session_chat_model_notice_load_failed">Impossibile caricare i modelli. Tocca Modello per riprovare.</string>
-    <string name="session_chat_model_notice_none_usable">Nessun modello utilizzabile disponibile. Tocca Modello per riprovare.</string>
-    <string name="session_chat_model_notice_variant_unavailable">La variante memorizzata non è disponibile. Uso Predefinita.</string>
-    <string name="session_chat_model_notice_model_unavailable">Il modello selezionato non è disponibile. Uso %1$s.</string>
-    <string name="session_chat_side_question_unsupported">/btw richiede un server opencode v2 che risponda alle domande a margine. Questo server non può rispondere senza aggiungere alla conversazione.</string>
+    <string name="session_chat_model_notice_none_usable">Nessun modello utilizzabile. Tocca Modello per riprovare.</string>
+    <string name="session_chat_model_notice_variant_unavailable">La variante memorizzata non è disponibile. Verrà usata quella predefinita.</string>
+    <string name="session_chat_model_notice_model_unavailable">Il modello selezionato non è disponibile. Verrà usato %1$s.</string>
+    <string name="session_chat_side_question_unsupported">/btw richiede un server opencode v2 che risponda alle domande a margine. Questo server non può rispondere senza aggiungere messaggi alla conversazione.</string>
     <string name="session_chat_side_question_unavailable">/btw richiede un server opencode più recente.</string>
     <string name="session_chat_side_question_copied">Risposta copiata</string>
     <string name="session_chat_side_question_failed">/btw non riuscito: “%1$s”</string>
@@ -563,11 +563,11 @@
     <string name="attachment_drop_attach_files">Rilascia per allegare file</string>
     <string name="attachment_drop_adds_to_draft">Li aggiunge al messaggio che stai scrivendo</string>
     <plurals name="attachment_drop_skipped_count">
-        <item quantity="one">%1$d verrà saltato</item>
-        <item quantity="many">%1$d verranno saltati</item>
-        <item quantity="other">%1$d verranno saltati</item>
+        <item quantity="one">%1$d verrà ignorato</item>
+        <item quantity="many">%1$d verranno ignorati</item>
+        <item quantity="other">%1$d verranno ignorati</item>
     </plurals>
-    <string name="attachment_drop_some_skipped">Alcuni verranno saltati</string>
+    <string name="attachment_drop_some_skipped">Alcuni verranno ignorati</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
     <string name="session_chat_activity_review_permission">Rivedi autorizzazione</string>
     <string name="session_chat_activity_review_permission_request">Rivedi richiesta di autorizzazione</string>
@@ -660,7 +660,7 @@
     <string name="timeline_state_loading_title">Caricamento dei messaggi</string>
     <string name="timeline_state_loading_subtitle">Recupero della cronologia…</string>
     <string name="timeline_state_error_title">Impossibile caricare i messaggi</string>
-    <string name="timeline_state_error_fallback">La cronologia non si è caricata.</string>
+    <string name="timeline_state_error_fallback">Impossibile caricare la cronologia.</string>
     <string name="timeline_state_retry">Riprova</string>
     <string name="timeline_state_empty">Ancora nessun messaggio. Invia un prompt per iniziare.</string>
     <string name="timeline_state_refreshing">Aggiornamento dei messaggi</string>
@@ -796,14 +796,14 @@
         <item quantity="other">%1$d patch</item>
     </plurals>
     <plurals name="tool_count_get_issue">
-        <item quantity="one">%1$d Leggi issue</item>
-        <item quantity="many">%1$d di Leggi issue</item>
-        <item quantity="other">%1$d Leggi issue</item>
+        <item quantity="one">%1$d × Leggi issue</item>
+        <item quantity="many">%1$d × Leggi issue</item>
+        <item quantity="other">%1$d × Leggi issue</item>
     </plurals>
     <plurals name="tool_count_save_issue">
-        <item quantity="one">%1$d Salva issue</item>
-        <item quantity="many">%1$d di Salva issue</item>
-        <item quantity="other">%1$d Salva issue</item>
+        <item quantity="one">%1$d × Salva issue</item>
+        <item quantity="many">%1$d × Salva issue</item>
+        <item quantity="other">%1$d × Salva issue</item>
     </plurals>
     <plurals name="tool_count_tool">
         <item quantity="one">%1$d strumento</item>
@@ -917,7 +917,7 @@
     <string name="timeline_compaction_title">Contesto compattato</string>
     <string name="timeline_compaction_automatic">Automatico</string>
     <string name="timeline_syncing">Sincronizzazione…</string>
-    <string name="timeline_failure_session_work_failed">Lavoro della sessione non riuscito</string>
+    <string name="timeline_failure_session_work_failed">Operazione della sessione non riuscita</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Scegli un modello</string>
     <string name="timeline_failure_compact">Compatta</string>
@@ -948,19 +948,19 @@
     <string name="session_chat_sheet_copy_output">Copia output</string>
     <string name="session_chat_sheet_message_actions_title">Messaggio</string>
     <string name="session_chat_sheet_message_actions_revert">Ripristina messaggio</string>
-    <string name="session_chat_sheet_message_actions_fork">Crea fork da qui</string>
+    <string name="session_chat_sheet_message_actions_fork">Duplica da qui</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Copia blocco di codice</string>
     <string name="session_chat_sheet_message_actions_copy_message">Copia messaggio</string>
     <string name="session_chat_sheet_message_actions_select_text">Seleziona testo</string>
     <string name="session_chat_sheet_select_text_title">Seleziona testo</string>
     <string name="session_chat_sheet_select_text_copy_all">Copia tutto</string>
     <string name="session_chat_sheet_select_text_full_message_title">Messaggio completo</string>
-    <string name="session_chat_copy_too_long">Troppo lungo da copiare. Seleziona invece una parte.</string>
+    <string name="session_chat_copy_too_long">Troppo lungo per essere copiato. Seleziona invece una parte.</string>
     <string name="session_chat_sheet_message_actions_clip_label_code">Codice</string>
     <string name="session_chat_sheet_mcp_loading_title">Controllo dei server MCP</string>
     <string name="session_chat_sheet_mcp_loading_subtitle">Lettura dello stato dal server opencode</string>
     <string name="session_chat_sheet_mcp_error_title">Impossibile caricare i server MCP</string>
-    <string name="session_chat_sheet_mcp_error_message">L\'elenco dei server MCP non si è caricato.</string>
+    <string name="session_chat_sheet_mcp_error_message">Impossibile caricare l\'elenco dei server MCP.</string>
     <string name="session_chat_sheet_mcp_empty_title">Nessun server MCP</string>
     <string name="session_chat_sheet_mcp_empty_message">Nessuno è configurato su questo server opencode.</string>
     <plurals name="session_chat_sheet_mcp_headline">
@@ -1014,8 +1014,8 @@
         <item quantity="other">Nessun progresso da %1$d round; va in pausa dopo %2$d</item>
     </plurals>
     <string name="session_chat_goal_waiting">In attesa</string>
-    <string name="session_chat_goal_waiting_shell">Che una shell in background finisca: %1$s. Va in pausa se nulla è in esecuzione per %2$d minuti.</string>
-    <string name="session_chat_goal_waiting_subagent">Che un subagent finisca. Va in pausa se nulla è in esecuzione per %1$d minuti.</string>
+    <string name="session_chat_goal_waiting_shell">In attesa che finisca una shell in background: %1$s. Va in pausa se nulla è in esecuzione per %2$d minuti.</string>
+    <string name="session_chat_goal_waiting_subagent">In attesa che finisca un subagent. Va in pausa se nulla è in esecuzione per %1$d minuti.</string>
     <string name="session_chat_goal_waiting_on_you">In attesa di te</string>
     <string name="session_chat_goal_waiting_permission">C\'è una richiesta di autorizzazione aperta. L\'obiettivo prosegue quando rispondi.</string>
     <string name="session_chat_goal_waiting_question">C\'è una domanda aperta. L\'obiettivo prosegue quando rispondi.</string>
@@ -1029,7 +1029,7 @@
     <string name="session_chat_goal_clearing">Rimozione…</string>
     <string name="session_chat_goal_new">Nuovo obiettivo…</string>
     <string name="session_chat_goal_footnote_active">Dopo ogni turno un revisore controlla il lavoro rispetto all\'obiettivo. L\'agente prosegue finché non è raggiunto, ha bisogno di te o passano %1$d round.</string>
-    <string name="session_chat_goal_footnote_paused">Riprendi avvia un nuovo budget di %1$d round.</string>
+    <string name="session_chat_goal_footnote_paused">Con Riprendi riparte un nuovo budget di %1$d round.</string>
     <string name="session_chat_goal_footnote_met">Un nuovo obiettivo sostituisce questo.</string>
     <string name="session_chat_goal_paused">Obiettivo in pausa</string>
     <string name="session_chat_goal_paused_by_user">Hai messo in pausa l\'obiettivo</string>
@@ -1045,7 +1045,7 @@
     <string name="session_chat_goal_ended">terminato</string>
     <string name="session_chat_goal_set_earlier">Un obiettivo precedente. È stato rimosso o sostituito.</string>
     <string name="session_chat_goal_bubble_label">Obiettivo</string>
-    <string name="session_chat_goal_objective_hint">Descrivi com\'è un lavoro «finito»…</string>
+    <string name="session_chat_goal_objective_hint">Descrivi cosa significa «finito»…</string>
     <string name="session_chat_goal_resume_placeholder">Rispondi, poi riprendi l\'obiettivo…</string>
     <string name="session_chat_goal_count">%1$s / %2$s caratteri</string>
     <string name="session_chat_goal_count_over">%1$s / %2$s caratteri · accorcia l\'obiettivo per inviare</string>
@@ -1083,14 +1083,14 @@
     <string name="component_branch_pill_a11y_worktree_branch">Branch del worktree %1$s</string>
     <string name="component_branch_pill_a11y_no_changes">%1$s, nessuna modifica</string>
     <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
-    <string name="component_branch_pill_a11y_added">%1$s, %2$d aggiunte</string>
-    <string name="component_branch_pill_a11y_removed">%1$s, %2$d rimosse</string>
+    <string name="component_branch_pill_a11y_added">%1$s, aggiunte: %2$d</string>
+    <string name="component_branch_pill_a11y_removed">%1$s, rimosse: %2$d</string>
     <string name="session_chat_archive_failed">Impossibile archiviare la sessione.</string>
     <string name="session_chat_delete_failed">Impossibile eliminare la sessione.</string>
     <string name="session_chat_mcp_load_failed">Impossibile caricare i server MCP. Controlla la connessione e riprova.</string>
     <string name="session_chat_create_failed">Impossibile creare la sessione</string>
     <string name="session_chat_send_timed_out">Impossibile inviare. Riprova.</string>
-    <string name="session_chat_shell_cannot_queue">I comandi shell non possono essere messi in coda. Passa a Guida per eseguirlo subito.</string>
+    <string name="session_chat_shell_cannot_queue">I comandi shell non possono essere messi in coda. Passa a Guida per eseguirli subito.</string>
     <string name="session_chat_reply_error_permission">Impossibile inviare la risposta. Riprova.</string>
     <string name="session_chat_reply_error_permission_reason">Impossibile inviare la risposta. %1$s.</string>
     <string name="session_chat_reply_error_question">Impossibile inviare la risposta. Riprova.</string>
@@ -1317,7 +1317,7 @@
         <item quantity="other">max %1$d · nessuna scartata</item>
     </plurals>
     <string name="diagnostics_format_title">Formato</string>
-    <string name="diagnostics_format_value">JSONL · segreti e corpi dei messaggi oscurati</string>
+    <string name="diagnostics_format_value">JSONL · segreti e contenuto dei messaggi oscurati</string>
     <string name="diagnostics_range_title">Intervallo</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
     <string name="diagnostics_areas_title">Aree</string>
@@ -1464,7 +1464,7 @@
     <string name="session_search_title">Cerca sessioni</string>
     <string name="session_search_clear">Cancella ricerca</string>
     <string name="session_search_placeholder">Cerca in %1$s</string>
-    <string name="session_search_hint">Corrisponde ai titoli delle sessioni in %1$s.</string>
+    <string name="session_search_hint">Cerca tra i titoli delle sessioni in %1$s.</string>
     <string name="session_search_searching">Ricerca…</string>
     <plurals name="session_search_results">
         <item quantity="one">%1$d risultato</item>
@@ -1540,7 +1540,7 @@
     <string name="changes_select_file_message">Scegli un file modificato per vedere il diff.</string>
     <string name="changes_preview_unavailable_title">Anteprima non disponibile</string>
     <string name="changes_preview_unavailable_message">Per questo file non è disponibile un\'anteprima di testo.</string>
-    <string name="changes_file_viewer_truncated">Mostrato il primo 1 MB delle modifiche di questo file.</string>
+    <string name="changes_file_viewer_truncated">Viene mostrato il primo 1 MB delle modifiche di questo file.</string>
     <plurals name="changes_summary_changed_files">
         <item quantity="one">%1$d file modificato</item>
         <item quantity="many">%1$d di file modificati</item>
@@ -1577,7 +1577,7 @@
     <string name="component_todo_item_status_cancelled">annullato</string>
     <string name="component_todos_pill_accessibility_label">Todo della sessione, %1$d di %2$d completati</string>
     <string name="component_todos_pill_accessibility_label_active">Todo della sessione, %1$d di %2$d completati, %3$s</string>
-    <string name="component_reasoning_row_thought_duration">Ragionato · %1$s</string>
+    <string name="component_reasoning_row_thought_duration">Ragionamento · %1$s</string>
     <string name="component_reasoning_row_duration_seconds">%1$ss</string>
     <string name="component_reasoning_row_duration_ms">%1$dms</string>
     <string name="component_reasoning_row_duration_minutes_seconds">%1$dm %2$ds</string>
@@ -1629,16 +1629,16 @@
     <string name="dictation_status_line">%1$s · %2$s</string>
     <string name="component_attachment_kind_image">Immagine</string>
     <string name="component_composer_hide_question">Nascondi domanda</string>
-    <string name="live_updates_status_connecting">connessione</string>
+    <string name="live_updates_status_connecting">connessione in corso</string>
     <string name="dictation_model_queued_detail">%1$s ha messo in coda il download. Potrebbe attendere il Wi-Fi, la ricarica o spazio libero. Ricontrolla tra qualche minuto.</string>
     <string name="dictation_model_not_installed_detail">La dettatura funziona su questo dispositivo, quindi la tua voce non viene mai caricata. %1$s scarica il modello una sola volta e lo conserva per tutte le app.</string>
     <string name="component_outgoing_message_shows_actions_hint">Mostra le azioni del messaggio</string>
     <string name="component_activity_status_stopped">interrotto</string>
     <string name="dictation_action_try_again">Riprova</string>
-    <string name="component_composer_model_effort">Modello %1$s, impegno %2$s</string>
+    <string name="component_composer_model_effort">Modello %1$s, ragionamento %2$s</string>
     <string name="component_activity_card_working">In lavorazione</string>
     <string name="component_activity_card_opens_activity">%1$s, apre l\'attività</string>
-    <string name="component_image_loading_label">%1$s, caricamento</string>
+    <string name="component_image_loading_label">%1$s, in caricamento</string>
     <string name="session_list_dock_new_session">Nuova sessione</string>
     <string name="component_composer_always_allows">Consenti sempre: %1$s</string>
     <string name="component_composer_leave_side_question_mode">Esci dalla modalità domanda a parte</string>
@@ -1647,9 +1647,9 @@
     <string name="component_composer_deny">Nega</string>
     <string name="component_composer_deny_options">Altre opzioni per negare</string>
     <string name="component_composer_deny_with_note_menu">Nega con una nota…</string>
-    <string name="component_composer_deny_with_note_menu_subtitle">Dì all\'agente cosa fare invece</string>
+    <string name="component_composer_deny_with_note_menu_subtitle">Di\' all\'agente cosa fare invece</string>
     <string name="component_composer_deny_with_note_title">Nega con una nota</string>
-    <string name="component_composer_deny_note_placeholder">Dì a OpenCode cosa fare diversamente</string>
+    <string name="component_composer_deny_note_placeholder">Di\' a OpenCode cosa fare diversamente</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="one">Nega anche %1$d altra richiesta in attesa.</item>
         <item quantity="many">Nega anche %1$d di altre richieste in attesa.</item>
@@ -1657,7 +1657,7 @@
     </plurals>
     <string name="dictation_stopped">Dettatura interrotta</string>
     <string name="dictation_microphone_failed">Impossibile usare il microfono</string>
-    <string name="dictation_busy">La dettatura è occupata</string>
+    <string name="dictation_busy">Dettatura già in uso</string>
     <string name="component_composer_question_position">%1$d di %2$d</string>
     <string name="session_list_status_ready">Pronto</string>
     <string name="session_list_dock_hint_swipe">Apre il filtro dei progetti. Scorri per cambiare progetto.</string>
@@ -1665,10 +1665,10 @@
     <string name="component_session_list_skeleton_row">Caricamento sessione</string>
     <string name="component_split_pane_resize_sidebar">Ridimensiona barra laterale</string>
     <string name="session_list_section_recent">Recenti</string>
-    <string name="session_list_section_recent_hint">Da dare un\'occhiata</string>
+    <string name="session_list_section_recent_hint">Da controllare</string>
     <string name="component_activity_status_completed">completato</string>
     <string name="share_diagnostics_chooser_title">Condividi log diagnostici</string>
-    <string name="dictation_model_queued_title">%1$s scaricherà %2$s più tardi</string>
+    <string name="dictation_model_queued_title">%1$s scaricherà il %2$s più tardi</string>
     <string name="session_list_dock_choose_project_or_worktree">Scegli progetto o worktree</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
     <string name="component_image_could_not_load_label">%1$s, impossibile caricare</string>
@@ -1680,7 +1680,7 @@
     <string name="component_composer_next">Avanti</string>
     <string name="component_message_image_label">Immagine %1$s</string>
     <string name="component_composer_leave_shell_mode">Esci dalla modalità shell</string>
-    <string name="dictation_action_downloading">Download…</string>
+    <string name="dictation_action_downloading">Download in corso…</string>
     <string name="component_image_viewer_share">Condividi</string>
     <string name="session_list_status_failed">Non riuscito</string>
     <string name="component_composer_custom_answer_title">Scrivi la tua risposta</string>
@@ -1700,7 +1700,7 @@
     <string name="component_reorderable_list_move_up">Sposta su</string>
     <string name="session_list_scope_load_failed_title">Impossibile caricare %1$s</string>
     <string name="dictation_status_listening">In ascolto</string>
-    <string name="dictation_downloading_model">Download del modello vocale</string>
+    <string name="dictation_downloading_model">Download del modello vocale in corso</string>
     <string name="session_list_worktree_empty_every_worktree">Cancella il filtro per vedere tutti i worktree.</string>
     <string name="component_overflow_menu_more_options">Altre opzioni</string>
     <string name="session_list_status_retrying_attempt">Nuovo tentativo · %1$d</string>
@@ -1738,7 +1738,7 @@
     <string name="component_attachment_uploading_percent">Caricamento %1$d%%</string>
     <string name="component_composer_custom_answer_hint">Scrivi una risposta personalizzata</string>
     <string name="component_composer_cancel_revert">Annulla ripristino</string>
-    <string name="session_list_scope_load_slow_caption">Caricamento ancora in corso — i progetti grandi possono richiedere un po\'</string>
+    <string name="session_list_scope_load_slow_caption">Caricamento ancora in corso — i progetti grandi possono richiedere un po\' di tempo</string>
     <string name="component_outgoing_message_label_with_actions">Messaggio in uscita. Mostra le azioni del messaggio</string>
     <string name="session_list_scope_load_failed_subtitle">Impossibile caricare le sessioni</string>
     <plurals name="component_activity_card_more_running">
@@ -1791,8 +1791,8 @@
     <string name="component_code_file_line_label">Riga %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">Segnalazione di idea per OpenCode Mobile</string>
     <string name="component_hunk_navigation_previous">Hunk precedente</string>
-    <string name="session_list_section_week_of">Settimana %1$s – %2$s</string>
-    <string name="dictation_model_download_failed_title">%1$s non è riuscito a scaricare %2$s</string>
+    <string name="session_list_section_week_of">Settimana dal %1$s al %2$s</string>
+    <string name="dictation_model_download_failed_title">%1$s non è riuscito a scaricare il %2$s</string>
     <string name="component_activity_status_pending">in attesa</string>
     <string name="component_composer_revert_tag">Ripristina</string>
     <string name="component_composer_model">Modello %1$s</string>
@@ -1803,7 +1803,7 @@
     </plurals>
     <string name="component_outgoing_message_long_press_hint">Tieni premuto per mostrare le azioni del messaggio</string>
     <string name="component_composer_hide_permission">Nascondi richiesta di autorizzazione</string>
-    <string name="dictation_downloading_model_progress">Download del modello vocale, %1$s</string>
+    <string name="dictation_downloading_model_progress">Download del modello vocale in corso, %1$s</string>
     <string name="component_branch_pill_copy_branch_name">Copia nome del branch</string>
     <string name="component_truncation_row_full_message_title">Mostra messaggio completo</string>
     <string name="component_truncation_row_full_message_caption">%1$s di %2$s caratteri mostrati</string>
@@ -1836,7 +1836,7 @@
     <string name="share_feedback_subject_bug">Segnalazione di bug per OpenCode Mobile</string>
     <string name="component_activity_card_opens_child_session_hint">Apre la sessione figlia</string>
     <string name="component_activity_status_failed">non riuscito</string>
-    <string name="dictation_model_not_installed_title">%1$s richiede %2$s</string>
+    <string name="dictation_model_not_installed_title">%1$s richiede il %2$s</string>
     <string name="component_composer_back_to_main_session">Torna alla sessione principale</string>
     <string name="component_activity_sheet_working_count">In lavorazione %1$d</string>
     <string name="session_list_status_retrying">Nuovo tentativo</string>
@@ -1848,7 +1848,7 @@
     <string name="component_branch_pill_shows_details_hint">Mostra i dettagli del branch</string>
     <string name="component_composer_permission_requested">Autorizzazione richiesta</string>
     <string name="component_thinking">Ragionamento</string>
-    <string name="dictation_model_downloading_title">%1$s sta scaricando %2$s</string>
+    <string name="dictation_model_downloading_title">%1$s sta scaricando il %2$s</string>
     <string name="component_hunk_navigation_expand_context">Espandi contesto</string>
     <string name="dictation_listening_placeholder">In ascolto…</string>
     <string name="component_skeleton_illustration_unofficial">Non ufficiale</string>
@@ -1898,7 +1898,7 @@
         <item quantity="other">%1$d modifiche non committate andranno perse.</item>
     </plurals>
     <string name="worktrees_remove_changes_unknown">Le modifiche non committate andranno perse.</string>
-    <string name="worktrees_remove_changes_unchecked">Impossibile controllare le modifiche non committate. Quelle eventuali andranno perse.</string>
+    <string name="worktrees_remove_changes_unchecked">Impossibile controllare le modifiche non committate. Eventuali modifiche andranno perse.</string>
     <string name="worktrees_remove_sessions_stay">Le sessioni che usano questo worktree restano nella Home ma non possono più essere eseguite qui.</string>
     <string name="worktrees_remove_confirm_anyway">Rimuovi comunque</string>
     <string name="worktrees_blocked_title">Impossibile rimuovere “%1$s” per ora</string>

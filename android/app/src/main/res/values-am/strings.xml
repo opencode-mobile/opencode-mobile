@@ -27,7 +27,7 @@
     <string name="connection_setup_remove_server">አገልጋይን አስወግድ</string>
     <string name="connection_setup_remove_dialog_title_unnamed">“አገልጋይ”ን ይወገድ?</string>
     <string name="connection_setup_instructions_run">በኮምፒውተርዎ ላይ ይህን ያሂዱ፣ ከዚያ QR ን ይቃኙ።</string>
-    <string name="connection_setup_instructions_first_run">የመጀመሪያው ጊዜ ሩጫ ወደ አንድ ደቂቃ ይወስዳል። OpenCode 2.0.25 ወይም ከዚያ በላይ ያስፈልጋል። አገልግሎቱ ካልሄደ ይጀምራል።</string>
+    <string name="connection_setup_instructions_first_run">የመጀመሪያው ጊዜ ማስኬድ ወደ አንድ ደቂቃ ይወስዳል። OpenCode 2.0.25 ወይም ከዚያ በላይ ያስፈልጋል። አገልግሎቱ ገና ካልሰራ ይጀምራል።</string>
     <string name="connection_setup_instructions_same_wifi_title">በምትኩ ተመሳሳይ Wi-Fi</string>
     <string name="connection_setup_instructions_same_wifi_body">ተራ pair QR የሚያሳየው አገልጋዩ ከlocalhost ውጭ ሲደረስ ብቻ ነው።</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
@@ -47,10 +47,10 @@
     <string name="connection_setup_address_tailscale">Tailscale</string>
     <string name="connection_setup_address_remote_tunnel">የርቀት ቱኔል</string>
     <string name="connection_setup_address_local_network">የአካባቢ አውታረ መረብ</string>
-    <string name="connection_setup_address_not_reachable">%1$s · አይደረስም</string>
+    <string name="connection_setup_address_not_reachable">%1$s · ሊደረስበት አይችልም</string>
     <string name="connection_setup_address_using_now">አሁን በጥቅም ላይ</string>
     <string name="connection_setup_address_saved">ተቀምጧል</string>
-    <string name="connection_setup_pair_again_unreachable">የተቀመጠው አድራሻ ሊደረስ አልቻለም። እንደገና ያጣምሩ።</string>
+    <string name="connection_setup_pair_again_unreachable">የተቀመጠውን አድራሻ ማግኘት አልተቻለም። እንደገና ያጣምሩ።</string>
     <string name="connection_setup_pair_again_unauthorized">ይህ አገልጋይ የተቀመጠውን መግቢያ ውድቅ አደረገው። እንደገና ያጣምሩ። አዲስ የይለፍ ቃል ሁሉንም መሣሪያዎች ያስወጣል።</string>
     <string name="connection_cleartext_title">ግንኙነቱ የተመሰጠረ አይደለም</string>
     <string name="connection_cleartext_message_one_host">%1$s ከአካባቢዎ አውታረ መረብ ወይም ከTailscale ውጭ ተራ http ይጠቀማል። የአገልጋይዎ የይለፍ ቃል እና በክፍለ-ጊዜዎችዎ ውስጥ ያለው ሁሉ ሳይመሰጠር ይጓዛል። https፣ VPN ወይም ቱኔል ይምረጡ።</string>
@@ -65,7 +65,7 @@
     <string name="connection_error_enter_pairing_code">የማጣመሪያ ኮድ ያስገቡ</string>
     <string name="connection_error_pairing_link_expired">ይህ የማጣመሪያ አገናኝ ጊዜው አልፎበታል ወይም ቀድሞ ጥቅም ላይ ውሏል</string>
     <string name="connection_error_duplicate_profile">ይህ አስተናጋጅ እና የተጠቃሚ ስም ያለው አገልጋይ አስቀድሞ ተቀምጧል</string>
-    <string name="connection_error_qr_scan_failed">QR አልተገናኘም። የOpenCode 2 የማጣመሪያ API አሁንም እየተቀየረ ነው፣ ስለዚህ መተግበሪያው በትክክል እየሰራ ሳለ ስካን ሊከሽፍ ይችላል። አስተናጋጁን ያስገቡና ያገናኙ። የይለፍ ቃል አማራጭ ነው። የማጣመሪያ ኮድም ይሰራል።</string>
+    <string name="connection_error_qr_scan_failed">QR አልተገናኘም። የOpenCode 2 የማጣመሪያ API አሁንም እየተቀየረ ነው፣ ስለዚህ መተግበሪያው በትክክል እየሰራ ሳለ መቃኘት ሊከሽፍ ይችላል። አስተናጋጁን ያስገቡና ያገናኙ። የይለፍ ቃል አማራጭ ነው። የማጣመሪያ ኮድም ይሰራል።</string>
     <string name="connection_error_unreachable">አገልጋዩን ማግኘት አልተቻለም</string>
     <string name="server_error_pairing_expired">ማጣመሩ ጊዜው አልፎበታል፣ እንደገና ያጣምሩ</string>
     <string name="server_error_not_found">አቃፊ ወይም ፋይል አልተገኘም</string>
@@ -74,7 +74,7 @@
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">ማረጋገጥ አልተሳካም</string>
     <string name="connection_error_unhealthy">አገልጋዩ ጤናማ አይደለም ብሏል</string>
-    <string name="connection_scanner_title">የማጣመሪያ QR ስካን ያድርጉ</string>
+    <string name="connection_scanner_title">የማጣመሪያ QR ይቃኙ</string>
     <string name="connection_scanner_card_title">የOpenCode ማጣመሪያ QR</string>
     <string name="connection_scanner_card_body">ከ opencode pair --remote። ተራው pair QR የሚያሳየው አገልጋዩ ከlocalhost ውጪ ሲደረስ ብቻ ነው።</string>
     <string name="connection_onboarding_title">ከአገልጋይዎ ጋር ይገናኙ</string>
@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">ከስልክዎ ይድረሱበት</string>
     <string name="onboarding_setup_step3_body">የሚመከር፦ Tailscale — Tailscaleን በኮምፒውተሩና በስልኩ ላይ ይጫኑ፣ ከዚያ የኮምፒውተሩን Tailscale IP ወይም MagicDNS ስም እንደ አገልጋዩ URL ይጠቀሙ።\n\nእነዚህም ይሰራሉ፦ ተመሳሳይ LAN፣ VPN፣ HTTPS፣ ወይም እርስዎ የሚያስተዳድሩት ሌላ ዋሻ። መተግበሪያው ሪሌይ አይፈጥርልዎትም።</string>
     <string name="onboarding_setup_step4_title">በመተግበሪያው ውስጥ ይገናኙ</string>
-    <string name="onboarding_setup_step4_body">መነሻ URL + የይለፍ ቃል ያስገቡ። መተግበሪያው GET /global/health ይፈትሻል፣ ከዚያ በዚህ መሣሪያ ላይ የተቀመጠ የአገልጋይ ግንኙነት ያስቀምጣል።</string>
+    <string name="onboarding_setup_step4_body">መነሻ URL + የይለፍ ቃል ያስገቡ። መተግበሪያው GET /global/health ይፈትሻል፣ ከዚያ በዚህ መሣሪያ ላይ የአገልጋይ ግንኙነት ያስቀምጣል።</string>
     <string name="onboarding_setup_open_docs">የአገልጋይ ሰነዶችን ክፈት</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile ተቆልፏል</string>
@@ -162,8 +162,8 @@
     <string name="server_health_error_log_stream">የቀጥታ ግንኙነት</string>
     <string name="server_health_error_log_repeated">በተከታታይ %1$d ጊዜ በ%2$s ውስጥ</string>
     <string name="server_health_error_log_show_all">ሁሉንም %1$d አሳይ</string>
-    <string name="server_health_error_log_show_less">አነስ አድርገህ አሳይ</string>
-    <string name="server_health_error_log_capped">የቅርብ %1$d ከ%2$d</string>
+    <string name="server_health_error_log_show_less">ያነሰ አሳይ</string>
+    <string name="server_health_error_log_capped">የቅርብ ጊዜዎቹ %1$d ከ%2$d</string>
     <string name="server_health_category_network">አውታረ መረብ</string>
     <string name="server_health_category_timeout">የጊዜ ማብቂያ</string>
     <string name="server_health_category_heartbeat">የልብ ምት መቆም</string>
@@ -218,12 +218,12 @@
     <string name="common_selected">ተመርጧል</string>
     <string name="home_sessions_title">ክፍለ-ጊዜዎች</string>
     <string name="home_servers_sheet_using_now">አሁን በመጠቀም ላይ</string>
-    <string name="home_servers_sheet_switch_to">ወደ ቀይር</string>
+    <string name="home_servers_sheet_switch_to">ወደ ሌላ ቀይር</string>
     <string name="home_servers_sheet_manage">በቅንጅቶች ውስጥ አስተዳድር</string>
     <string name="home_more_options">ተጨማሪ አማራጮች</string>
     <string name="home_filter_sheet_title">በፕሮጀክት አጣራ</string>
     <string name="home_empty_title">እስካሁን ፕሮጀክት የለም</string>
-    <string name="home_empty_message">በአገልጋይዎ ላይ አቃፊ ለመምረጥ ከታች ያለውን «ፕሮጀክት አክል» አዶ ይንኩ።</string>
+    <string name="home_empty_message">በአገልጋይዎ ላይ አቃፊ ለመምረጥ ከታች ያለውን «ፕሮጀክት ጨምር» አዶ ይንኩ።</string>
     <string name="home_no_session_selected_title">ምንም ክፍለ ጊዜ አልተመረጠም</string>
     <string name="home_no_session_selected_message">ከዝርዝሩ ክፍለ ጊዜ ይምረጡ</string>
     <string name="home_probe_failed_title">መገናኘት አልተቻለም</string>
@@ -235,7 +235,7 @@
     <string name="home_remove_project_message">«%1$s» ከመነሻ ይወገድ? ክፍለ-ጊዜዎቹ በአገልጋዩ ላይ ይቆያሉ።</string>
     <string name="home_snackbar_removed">«%1$s» ከመነሻ ተወግዷል</string>
     <string name="home_snackbar_already_on_home">«%1$s» ቀድሞውኑ በመነሻ ላይ አለ</string>
-    <string name="home_snackbar_joined_project">ከ%1$s ጋር አንድ ተመሳሳይ repo ነው። እዚያ እንደ worktree ይታያል።</string>
+    <string name="home_snackbar_joined_project">ከ%1$s ጋር ተመሳሳይ repo ነው። እዚያ እንደ worktree ይታያል።</string>
     <string name="home_all">ሁሉም</string>
     <string name="home_all_projects">ሁሉም ፕሮጀክቶች</string>
     <plurals name="home_project_count">
@@ -334,7 +334,7 @@
     </plurals>
     <string name="add_project_in_folder">በ%1$s ውስጥ</string>
     <string name="add_project_root_home">መነሻ</string>
-    <string name="add_project_error_add_failed">ይህን ማውጫ መጨመር አልተቻለም</string>
+    <string name="add_project_error_add_failed">ይህን አቃፊ መጨመር አልተቻለም</string>
     <string name="worktree_new_row">አዲስ worktree…</string>
     <string name="worktree_run_in_subtitle">checkout ፍጠርና እዚያ ጀምር</string>
     <string name="worktree_move_subtitle">checkout ፍጠርና ወደዚያ ሂድ</string>
@@ -388,9 +388,9 @@
     <string name="files_find_no_match_detail">የአገልጋይ ፍለጋ ችላ የተባሉ አቃፊዎችን ይዘልላል።</string>
     <string name="files_error_check_server_connection">ከአገልጋዩ ጋር ያለውን ግንኙነት ይፈትሹና እንደገና ይሞክሩ።</string>
     <string name="files_error_server_status">አገልጋዩ በ%1$d ምላሽ ሰጥቷል።</string>
-    <string name="files_no_file_title">ከዛፉ ላይ ፋይል ክፈት</string>
+    <string name="files_no_file_title">ፋይል ከዛፉ ይክፈቱ</string>
     <string name="files_no_file_message">የተከፈቱ ፋይሎች እንደ ትሮች ይቆያሉ</string>
-    <string name="files_path_copied">መንገዱ ተቀድቷል</string>
+    <string name="files_path_copied">መንገዱ ተገልብጧል</string>
     <string name="file_viewer_copy_path">መንገድ ኮፒ አድርግ</string>
     <string name="file_viewer_wrap_lines">መስመሮችን ጠቅልል</string>
     <string name="file_viewer_wrap_lines_on">መስመሮችን ጠቅልል፣ በርቷል</string>
@@ -427,23 +427,23 @@
     <string name="terminal_title">ተርሚናል</string>
     <string name="terminal_catalog_title">ተርሚናሎች</string>
     <string name="terminal_catalog_loading">ተርሚናሎችን በመጫን ላይ</string>
-    <string name="terminal_catalog_empty_title">የሚሰሩ ሼሎች የሉም</string>
+    <string name="terminal_catalog_empty_title">የሚሰሩ shell የሉም</string>
     <string name="terminal_catalog_empty_message">ለአንድ ፕሮጀክት አንድ ይጀምሩ። ከውይይት ክፍለ ጊዜ ጋር አልተያያዘም።</string>
-    <string name="terminal_select_title">ሼል ምረጥ</string>
-    <string name="terminal_select_message">ከዝርዝሩ ውስጥ ሼል ይምረጡ።</string>
-    <string name="terminal_new_shell">አዲስ ሼል</string>
+    <string name="terminal_select_title">shell ምረጥ</string>
+    <string name="terminal_select_message">ከዝርዝሩ ውስጥ shell ይምረጡ።</string>
+    <string name="terminal_new_shell">አዲስ shell</string>
     <string name="terminal_close">ዝጋ</string>
-    <string name="terminal_close_dialog_title">ይህን ሼል ይዘጋ?</string>
+    <string name="terminal_close_dialog_title">ይህ shell ይዘጋ?</string>
     <string name="terminal_close_dialog_title_named">“%1$s” ይዘጋ?</string>
-    <string name="terminal_close_dialog_message">ይህ በአገልጋዩ ላይ ያለውን ሼል ያቆማል።</string>
+    <string name="terminal_close_dialog_message">ይህ በአገልጋዩ ላይ ያለውን shell ያቆማል።</string>
     <string name="terminal_projects_empty_title">እስካሁን ምንም ፕሮጀክት የለም</string>
-    <string name="terminal_projects_empty_message">በመነሻ ገጽ ላይ ፕሮጀክት ይጨምሩ፣ ከዚያ እዚህ ሼል ይጀምሩ።</string>
-    <string name="terminal_error_create">ሼል መጀመር አልተቻለም።</string>
+    <string name="terminal_projects_empty_message">በመነሻ ገጽ ላይ ፕሮጀክት ይጨምሩ፣ ከዚያ እዚህ shell ይጀምሩ።</string>
+    <string name="terminal_error_create">shell መጀመር አልተቻለም።</string>
     <string name="terminal_connecting_title">በማገናኘት ላይ</string>
-    <string name="terminal_connecting_subtitle">ሼል በመጀመር ላይ…</string>
+    <string name="terminal_connecting_subtitle">shell በመጀመር ላይ…</string>
     <string name="terminal_connect_failed_title">ማገናኘት አልተሳካም</string>
-    <string name="terminal_connect_failed_message">ለዚህ ፕሮጀክት ሼል መጀመር አልተቻለም።</string>
-    <string name="terminal_exited">ሼል አብቅቷል</string>
+    <string name="terminal_connect_failed_message">ለዚህ ፕሮጀክት shell መጀመር አልተቻለም።</string>
+    <string name="terminal_exited">shell አብቅቷል</string>
     <string name="terminal_retry">እንደገና ሞክር</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
@@ -454,19 +454,19 @@
     <string name="terminal_key_right">ቀኝ</string>
     <string name="session_chat_loading">ክፍለ ጊዜ በመጫን ላይ</string>
     <string name="session_chat_more_options">ተጨማሪ አማራጮች</string>
-    <string name="session_chat_menu_rename">ክፍለ ጊዜ ዳግም ሰይም</string>
+    <string name="session_chat_menu_rename">የክፍለ ጊዜ ስም ቀይር</string>
     <string name="session_chat_menu_review_changes">ለውጦችን ገምግም</string>
     <string name="session_chat_menu_fork">ክፍለ ጊዜ ቅዳ (Fork)</string>
     <string name="session_chat_menu_browse_files">ፋይሎችን ዳስስ</string>
     <string name="session_chat_menu_session_context">የክፍለ ጊዜ አውድ</string>
-    <string name="session_chat_menu_copy_session_id">የክፍለ ጊዜ መታወቂያ ኮፒ</string>
+    <string name="session_chat_menu_copy_session_id">የክፍለ ጊዜ መታወቂያ ኮፒ አድርግ</string>
     <string name="session_chat_menu_archive">በማህደር አስቀምጥ</string>
     <string name="session_chat_menu_report_problem">ችግር ሪፖርት አድርግ</string>
     <string name="session_chat_menu_delete">ሰርዝ</string>
     <string name="session_chat_delete_dialog_title">ክፍለ ጊዜ ሰርዝ</string>
     <string name="session_chat_delete_dialog_message">ክፍለ ጊዜ “%1$s” ይሰረዝ?</string>
     <string name="session_chat_delete_dialog_confirm">ሰርዝ</string>
-    <string name="session_chat_rename_dialog_title">ክፍለ ጊዜ ዳግም ሰይም</string>
+    <string name="session_chat_rename_dialog_title">የክፍለ ጊዜ ስም ቀይር</string>
     <string name="session_chat_rename_dialog_save">አስቀምጥ</string>
     <string name="session_chat_title_hint">ርዕስ</string>
     <string name="session_chat_fork_dialog_title">ክፍለ ጊዜ ቅዳ (Fork)</string>
@@ -496,7 +496,7 @@
     <string name="session_chat_commands_compact_label">የታመቀ</string>
     <string name="session_chat_commands_compact_description">የክፍለ ጊዜ አውድ አሳምቅ</string>
     <string name="session_chat_commands_terminal_label">ተርሚናል</string>
-    <string name="session_chat_commands_terminal_description">የፕሮጀክት ሼል ክፈት</string>
+    <string name="session_chat_commands_terminal_description">የፕሮጀክት shell ክፈት</string>
     <string name="session_chat_commands_files_label">ፋይሎች</string>
     <string name="session_chat_commands_files_description">የፕሮጀክት ፋይሎችን ዳስስ</string>
     <string name="session_chat_commands_mcp_label">MCP አገልጋዮች</string>
@@ -521,8 +521,8 @@
     <string name="session_chat_model_notice_none_usable">ጥቅም ላይ የሚውሉ ሞዴሎች የሉም። እንደገና ለመሞከር ሞዴልን ይንኩ።</string>
     <string name="session_chat_model_notice_variant_unavailable">የተታወሰው ልዩነት አይገኝም። ነባሪ በመጠቀም ላይ።</string>
     <string name="session_chat_model_notice_model_unavailable">የተመረጠው ሞዴል አይገኝም። %1$s በመጠቀም ላይ።</string>
-    <string name="session_chat_side_question_unsupported">/btw የጎን ጥያቄዎችን የሚመልስ opencode v2 አገልጋይ ይፈልጋል። ይህ አገልጋይ ውይይቱ ላይ ሳይጨምር መመለስ አይችልም።</string>
-    <string name="session_chat_side_question_unavailable">/btw አዲስ opencode አገልጋይ ይፈልጋል።</string>
+    <string name="session_chat_side_question_unsupported">/btw የጎን ጥያቄዎችን የሚመልስ opencode v2 አገልጋይ ይፈልጋል። ይህ አገልጋይ ወደ ውይይቱ ሳይጨምር መመለስ አይችልም።</string>
+    <string name="session_chat_side_question_unavailable">/btw ይበልጥ አዲስ የሆነ opencode አገልጋይ ይፈልጋል።</string>
     <string name="session_chat_side_question_copied">መልሱ ተገልብጧል</string>
     <string name="session_chat_side_question_failed">/btw አልተሳካም፦ “%1$s”</string>
     <string name="attachment_error_folder">አቃፊዎችን ማያያዝ አይቻልም።</string>
@@ -553,8 +553,8 @@
     </plurals>
     <string name="attachment_drop_some_skipped">አንዳንዶቹ ይዘለላሉ</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
-    <string name="session_chat_activity_review_permission">ፈቃድን ገምግም</string>
-    <string name="session_chat_activity_review_permission_request">የፈቃድ ጥያቄን ገምግም</string>
+    <string name="session_chat_activity_review_permission">ፍቃድን ገምግም</string>
+    <string name="session_chat_activity_review_permission_request">የፍቃድ ጥያቄን ገምግም</string>
     <string name="session_chat_activity_answer_question">ጥያቄውን መልስ</string>
     <string name="session_chat_activity_request_failed">ጥያቄው አልተሳካም</string>
     <string name="session_chat_activity_btw_failed">/btw አልተሳካም · እንደገና ሞክር</string>
@@ -651,19 +651,19 @@
         <item quantity="other">%1$d subagents</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
-        <item quantity="one">%1$d ሼል</item>
-        <item quantity="other">%1$d ሼሎች</item>
+        <item quantity="one">%1$d shell</item>
+        <item quantity="other">%1$d shells</item>
     </plurals>
     <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
     <string name="timeline_background_work_subagents_and_shells_spoken">%1$s እና %2$s</string>
-    <string name="timeline_background_work_running_spoken">%1$s በመሄድ ላይ</string>
+    <string name="timeline_background_work_running_spoken">%1$s በሂደት ላይ</string>
     <string name="timeline_background_work_agent_needs_input">%1$s ግብዓት ይፈልጋል</string>
     <plurals name="timeline_background_work_subagents_need_input">
         <item quantity="one">%1$d subagent ግብዓት ይፈልጋል</item>
         <item quantity="other">%1$d subagents ግብዓት ይፈልጋሉ</item>
     </plurals>
-    <string name="timeline_background_work_needs_input_running">%1$s · %2$d በመሄድ ላይ</string>
-    <string name="timeline_background_work_needs_input_running_spoken">%1$s፣ %2$s በመሄድ ላይ</string>
+    <string name="timeline_background_work_needs_input_running">%1$s · %2$d በሂደት ላይ</string>
+    <string name="timeline_background_work_needs_input_running_spoken">%1$s፣ %2$s በሂደት ላይ</string>
     <plurals name="timeline_tool_result_files_modified">
         <item quantity="one">%1$d ተቀይሯል</item>
         <item quantity="other">%1$d ተቀይረዋል</item>
@@ -681,7 +681,7 @@
     <string name="tool_title_glob">Glob</string>
     <string name="tool_title_search">ፍለጋ</string>
     <string name="tool_title_fetch">ማምጣት</string>
-    <string name="tool_title_shell">ሼል</string>
+    <string name="tool_title_shell">shell</string>
     <string name="tool_title_execute">ማስኬድ</string>
     <string name="tool_title_lsp">LSP</string>
     <string name="tool_title_plan">ዕቅድ</string>
@@ -716,15 +716,15 @@
     </plurals>
     <plurals name="tool_count_fetch">
         <item quantity="one">%1$d ማምጣት</item>
-        <item quantity="other">%1$d ማምጣቶች</item>
+        <item quantity="other">%1$d ማምጣት</item>
     </plurals>
     <plurals name="tool_count_shell">
-        <item quantity="one">%1$d ሼል</item>
-        <item quantity="other">%1$d ሼሎች</item>
+        <item quantity="one">%1$d shell</item>
+        <item quantity="other">%1$d shells</item>
     </plurals>
     <plurals name="tool_count_execute">
         <item quantity="one">%1$d ማስኬድ</item>
-        <item quantity="other">%1$d ማስኬዶች</item>
+        <item quantity="other">%1$d ማስኬድ</item>
     </plurals>
     <plurals name="tool_count_lsp">
         <item quantity="one">%1$d LSP</item>
@@ -740,7 +740,7 @@
     </plurals>
     <plurals name="tool_count_write">
         <item quantity="one">%1$d መጻፍ</item>
-        <item quantity="other">%1$d መጻፎች</item>
+        <item quantity="other">%1$d መጻፍ</item>
     </plurals>
     <plurals name="tool_count_skill">
         <item quantity="one">%1$d ክህሎት</item>
@@ -752,11 +752,11 @@
     </plurals>
     <plurals name="tool_count_get_issue">
         <item quantity="one">%1$d ጉዳይ ማግኘት</item>
-        <item quantity="other">%1$d ጉዳይ ማግኘቶች</item>
+        <item quantity="other">%1$d ጉዳይ ማግኘት</item>
     </plurals>
     <plurals name="tool_count_save_issue">
         <item quantity="one">%1$d ጉዳይ ማስቀመጥ</item>
-        <item quantity="other">%1$d ጉዳይ ማስቀመጦች</item>
+        <item quantity="other">%1$d ጉዳይ ማስቀመጥ</item>
     </plurals>
     <plurals name="tool_count_tool">
         <item quantity="one">%1$d መሣሪያ</item>
@@ -771,8 +771,8 @@
         <item quantity="other">%1$d ተመሳሳዮች</item>
     </plurals>
     <plurals name="tool_count_path">
-        <item quantity="one">%1$d ዱካ</item>
-        <item quantity="other">%1$d ዱካዎች</item>
+        <item quantity="one">%1$d መንገድ</item>
+        <item quantity="other">%1$d መንገዶች</item>
     </plurals>
     <plurals name="tool_count_named">
         <item quantity="one">%1$d %2$s</item>
@@ -805,22 +805,22 @@
     <string name="timeline_step_searching_named">%1$s በመፈለግ ላይ</string>
     <string name="timeline_step_listing">በመዘርዘር ላይ…</string>
     <string name="timeline_step_listing_named">%1$s በመዘርዘር ላይ</string>
-    <string name="timeline_step_editing">በማረም ላይ…</string>
-    <string name="timeline_step_editing_named">%1$s በማረም ላይ</string>
+    <string name="timeline_step_editing">በማርትዕ ላይ…</string>
+    <string name="timeline_step_editing_named">%1$s በማርትዕ ላይ</string>
     <string name="timeline_step_writing">በመጻፍ ላይ…</string>
     <string name="timeline_step_writing_named">%1$s በመጻፍ ላይ</string>
     <string name="timeline_step_fetching">በማምጣት ላይ…</string>
     <string name="timeline_step_fetching_named">%1$s በማምጣት ላይ</string>
     <string name="timeline_step_running">በማሄድ ላይ…</string>
     <string name="timeline_step_running_named">%1$s በማሄድ ላይ</string>
-    <string name="timeline_step_ran_named">%1$s ተሄዷል</string>
-    <string name="timeline_step_ran_command">ትዕዛዝ ተሄዷል</string>
+    <string name="timeline_step_ran_named">%1$s ተፈጽሟል</string>
+    <string name="timeline_step_ran_command">ትዕዛዝ ተፈጽሟል</string>
     <string name="timeline_step_loading_skill">ክህሎት በመጫን ላይ…</string>
     <string name="timeline_step_loading_skill_named">ክህሎት %1$s በመጫን ላይ</string>
     <string name="timeline_step_skill_named">ክህሎት %1$s</string>
     <string name="timeline_step_thought_duration">አስቧል · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
-    <string name="timeline_explore_title">ተፈትሿል — %1$s</string>
+    <string name="timeline_explore_title">ተዳሷል — %1$s</string>
     <string name="timeline_list_separator">%1$s · %2$s</string>
     <string name="timeline_role_you">እርስዎ</string>
     <string name="timeline_role_assistant">ረዳት</string>
@@ -848,11 +848,11 @@
     <string name="timeline_activity_thinking">በማሰብ ላይ…</string>
     <string name="timeline_activity_waiting_for_agents">ወኪሎችን በመጠበቅ ላይ</string>
     <string name="timeline_activity_waiting_for_you">እርስዎን በመጠበቅ ላይ</string>
-    <string name="timeline_notice_moved_to">ወደ ተዛወረ</string>
+    <string name="timeline_notice_moved_to">ተዛወረ ወደ</string>
     <string name="timeline_notice_agent_changed">ወኪል ተቀይሯል</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
-    <string name="timeline_notice_switched_to">ወደ ተቀየረ</string>
-    <string name="timeline_notice_variant_switched">ልዩነት ወደ ተቀየረ</string>
+    <string name="timeline_notice_switched_to">ተቀየረ ወደ</string>
+    <string name="timeline_notice_variant_switched">ልዩነት ተቀየረ ወደ</string>
     <string name="timeline_notice_variant_default">ልዩነት ወደ ነባሪ ተቀይሯል</string>
     <string name="timeline_notice_instructions_updated">መመሪያዎች ተዘምነዋል</string>
     <string name="timeline_notice_restart">ከዳግም ማስጀመር በኋላ በመቀጠል ላይ</string>
@@ -875,15 +875,15 @@
     <string name="session_chat_revert_redo_failed">መድገም አልተቻለም።</string>
     <string name="session_chat_revert_cancel_failed">መመለሱን መሰረዝ አልተቻለም።</string>
     <string name="session_chat_revert_commit_failed">መመለሱን ማጽደቅ አልተቻለም።</string>
-    <string name="session_chat_fork_rename_failed">ፎርክ ተፈጥሯል፣ ግን ስሙን መቀየር አልተቻለም።</string>
+    <string name="session_chat_fork_rename_failed">Fork ተፈጥሯል፣ ግን ስሙን መቀየር አልተቻለም።</string>
     <string name="session_chat_pending_prompt_update_failed">በመጠባበቅ ላይ ያለውን ፕሮምፕት ማዘመን አልተቻለም</string>
-    <string name="session_chat_shell_stop_failed">ሼሉን ማቆም አልተቻለም። እንደገና ይሞክሩ።</string>
-    <string name="session_chat_shell_status_running">በመሄድ ላይ</string>
+    <string name="session_chat_shell_stop_failed">shellን ማቆም አልተቻለም። እንደገና ይሞክሩ።</string>
+    <string name="session_chat_shell_status_running">በሂደት ላይ</string>
     <string name="session_chat_shell_status_exited">ወጥቷል</string>
     <string name="session_chat_shell_status_timed_out">ጊዜው አልፏል</string>
-    <string name="session_chat_shell_duration_seconds">%1$d ሰ</string>
+    <string name="session_chat_shell_duration_seconds">%1$d ሰከንድ</string>
     <string name="session_chat_shell_duration_minutes">%1$d ደቂቃ</string>
-    <string name="session_chat_shell_duration_minutes_seconds">%1$d ደቂቃ %2$d ሰ</string>
+    <string name="session_chat_shell_duration_minutes_seconds">%1$d ደቂቃ %2$d ሰከንድ</string>
     <string name="session_chat_shell_duration_hours">%1$d ሰዓት</string>
     <string name="session_chat_shell_duration_hours_minutes">%1$d ሰዓት %2$d ደቂቃ</string>
     <string name="session_chat_todos_progress">%1$d/%2$d</string>
@@ -891,7 +891,7 @@
     <string name="session_chat_sheet_copy_output">ውጤቱን ኮፒ አድርግ</string>
     <string name="session_chat_sheet_message_actions_title">መልዕክት</string>
     <string name="session_chat_sheet_message_actions_revert">መልዕክቱን መልስ</string>
-    <string name="session_chat_sheet_message_actions_fork">ከዚህ ፎርክ አድርግ</string>
+    <string name="session_chat_sheet_message_actions_fork">ከዚህ Fork አድርግ</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">የኮድ ብሎክ ኮፒ አድርግ</string>
     <string name="session_chat_sheet_message_actions_copy_message">መልዕክቱን ኮፒ አድርግ</string>
     <string name="session_chat_sheet_message_actions_select_text">ጽሑፍ ምረጥ</string>
@@ -925,7 +925,7 @@
     <string name="session_chat_sheet_pending_prompts_move_to_queue">ወደ ወረፋ አንቀሳቅስ</string>
     <string name="session_chat_sheet_pending_prompts_steer_now">አሁን አቅጣጫ ስጥ</string>
     <string name="session_chat_sheet_pending_prompts_delete">ሰርዝ</string>
-    <string name="session_chat_sheet_side_question_done">ተጠናቋል</string>
+    <string name="session_chat_sheet_side_question_done">ተከናውኗል</string>
     <string name="session_chat_sheet_side_question_not_added">ወደ ውይይቱ አልተጨመረም</string>
     <string name="session_chat_sheet_todos_title">የክፍለ ጊዜ ተግባራት</string>
     <string name="session_chat_sheet_todos_progress">%1$d ከ%2$d ተጠናቋል</string>
@@ -940,7 +940,7 @@
     <string name="session_chat_goal_tag_paused">ቆሟል</string>
     <string name="session_chat_goal_tag_met">ተሳክቷል</string>
     <string name="session_chat_goal_show_all">ሁሉንም አሳይ</string>
-    <string name="session_chat_goal_show_less">አነስ አድርገህ አሳይ</string>
+    <string name="session_chat_goal_show_less">ያነሰ አሳይ</string>
     <string name="session_chat_goal_first_turn">የመጀመሪያ ዙር · ዙር 0 ከ%1$d</string>
     <string name="session_chat_goal_round">ዙር %1$d ከ%2$d</string>
     <string name="session_chat_goal_paused_in_round">በዙር %1$d ከ%2$d ቆሟል</string>
@@ -954,36 +954,36 @@
         <item quantity="other">ለ%1$d ዙሮች ምንም ሂደት የለም፤ ከ%2$d በኋላ ይቆማል</item>
     </plurals>
     <string name="session_chat_goal_waiting">በመጠበቅ ላይ</string>
-    <string name="session_chat_goal_waiting_shell">የጀርባ ሼል እስኪያልቅ በመጠበቅ ላይ፦ %1$s። ለ%2$d ደቂቃዎች ምንም ነገር ካልሄደ ይቆማል።</string>
-    <string name="session_chat_goal_waiting_subagent">ንዑስ ወኪል እስኪያልቅ በመጠበቅ ላይ። ለ%1$d ደቂቃዎች ምንም ነገር ካልሄደ ይቆማል።</string>
-    <string name="session_chat_goal_waiting_on_you">አንተን በመጠበቅ ላይ</string>
-    <string name="session_chat_goal_waiting_permission">የፈቃድ ጥያቄ ክፍት ነው። ሲመልሱት ግቡ ይቀጥላል።</string>
+    <string name="session_chat_goal_waiting_shell">የጀርባ shell እስኪያልቅ በመጠበቅ ላይ፦ %1$s። ለ%2$d ደቂቃ ምንም ነገር ካልሰራ ይቆማል።</string>
+    <string name="session_chat_goal_waiting_subagent">ንዑስ ወኪል እስኪያልቅ በመጠበቅ ላይ። ለ%1$d ደቂቃ ምንም ነገር ካልሰራ ይቆማል።</string>
+    <string name="session_chat_goal_waiting_on_you">እርስዎን በመጠበቅ ላይ</string>
+    <string name="session_chat_goal_waiting_permission">የፍቃድ ጥያቄ ክፍት ነው። ሲመልሱት ግቡ ይቀጥላል።</string>
     <string name="session_chat_goal_waiting_question">አንድ ጥያቄ ክፍት ነው። ሲመልሱት ግቡ ይቀጥላል።</string>
     <string name="session_chat_goal_evidence">ማስረጃ</string>
     <string name="session_chat_goal_reconnecting">እንደገና በመገናኘት ላይ። የመጨረሻው የሚታወቀው ግብ እየታየ ነው።</string>
-    <string name="session_chat_goal_pause">አቁም</string>
-    <string name="session_chat_goal_pausing">በማቆም ላይ…</string>
+    <string name="session_chat_goal_pause">ለጊዜው አቁም</string>
+    <string name="session_chat_goal_pausing">ለጊዜው በማቆም ላይ…</string>
     <string name="session_chat_goal_resume">ቀጥል</string>
     <string name="session_chat_goal_resuming">በመቀጠል ላይ…</string>
     <string name="session_chat_goal_clear">አጽዳ</string>
     <string name="session_chat_goal_clearing">በማጽዳት ላይ…</string>
     <string name="session_chat_goal_new">አዲስ ግብ…</string>
-    <string name="session_chat_goal_footnote_active">ከእያንዳንዱ ዙር በኋላ ገምጋሚ ሥራውን ከግቡ ጋር ያመሳስላል። ወኪሉ ግቡ እስኪሳካ፣ አንተን እስኪፈልግ ወይም %1$d ዙሮች እስኪያልፉ ድረስ ይቀጥላል።</string>
+    <string name="session_chat_goal_footnote_active">ከእያንዳንዱ ዙር በኋላ ገምጋሚ ሥራውን ከግቡ ጋር ያነጻጽራል። ወኪሉ ግቡ እስኪሳካ፣ እርስዎን እስኪፈልግ ወይም %1$d ዙሮች እስኪያልፉ ድረስ ይቀጥላል።</string>
     <string name="session_chat_goal_footnote_paused">መቀጠል አዲስ የ%1$d ዙሮች በጀት ይጀምራል።</string>
     <string name="session_chat_goal_footnote_met">አዲስ ግብ ይህንን ይተካዋል።</string>
     <string name="session_chat_goal_paused">ግብ ቆሟል</string>
-    <string name="session_chat_goal_paused_by_user">ግቡን አቁመሃል</string>
-    <string name="session_chat_goal_paused_stopped">ዙሩን አቁመሃል፣ ስለዚህ ግቡ ቆሟል</string>
+    <string name="session_chat_goal_paused_by_user">ግቡን አቁመዋል</string>
+    <string name="session_chat_goal_paused_stopped">ዙሩን አቁመዋል፣ ስለዚህ ግቡ ቆሟል</string>
     <string name="session_chat_goal_paused_failed">ከስህተት በኋላ ግብ ቆሟል</string>
     <string name="session_chat_goal_paused_no_progress">ግብ ቆሟል፦ ለ%1$d ዙሮች ምንም ሂደት የለም</string>
     <string name="session_chat_goal_paused_round_limit">ከ%1$d ዙሮች በኋላ ግብ ቆሟል</string>
-    <string name="session_chat_goal_paused_restart">ግብ ቆሟል፦ አገልጋዩ እንደገና ጀምሯል</string>
+    <string name="session_chat_goal_paused_restart">ግብ ቆሟል፦ አገልጋዩ እንደገና ተጀምሯል</string>
     <string name="session_chat_goal_paused_reviewer">ግብ ቆሟል፦ ገምጋሚው መወሰን አልቻለም</string>
     <string name="session_chat_goal_paused_quiet">ግብ ቆሟል፦ የጀርባ ሥራ ጸጥ አለ</string>
     <string name="session_chat_goal_met">ግብ ተሳክቷል</string>
     <string name="session_chat_goal_set">ግብ ተቀምጧል</string>
     <string name="session_chat_goal_ended">አብቅቷል</string>
-    <string name="session_chat_goal_set_earlier">ቀደም ያለ ግብ። ጸድቷል ወይም ተተክቷል።</string>
+    <string name="session_chat_goal_set_earlier">ቀደም ያለ ግብ። ተወግዷል ወይም ተተክቷል።</string>
     <string name="session_chat_goal_bubble_label">ግብ</string>
     <string name="session_chat_goal_objective_hint">“ተጠናቅቋል” ምን እንደሚመስል ይግለጹ…</string>
     <string name="session_chat_goal_resume_placeholder">መልስ ይስጡ፣ ከዚያ ግቡን ይቀጥሉ…</string>
@@ -992,7 +992,7 @@
     <string name="session_chat_goal_command_replaces">የአሁኑን ግብዎን ይተካል</string>
     <string name="session_chat_goal_command_replaces_paused">የአሁኑን ግብዎን ይተካል (የቆመ)</string>
     <string name="session_chat_goal_command_replaces_met">የአሁኑን ግብዎን ይተካል (የተሳካ)</string>
-    <string name="session_chat_goal_pause_failed">ግቡን ማቆም አልተቻለም</string>
+    <string name="session_chat_goal_pause_failed">ግቡን ለጊዜው ማቆም አልተቻለም</string>
     <string name="session_chat_goal_pause_failed_reason">ግቡን ባለበት ማቆም አልተቻለም፦ %1$s</string>
     <string name="session_chat_goal_resume_failed">ግቡን መቀጠል አልተቻለም</string>
     <string name="session_chat_goal_resume_failed_reason">ግቡን መቀጠል አልተቻለም፦ %1$s</string>
@@ -1014,8 +1014,8 @@
         <item quantity="other">%1$d ፋይሎች</item>
     </plurals>
     <plurals name="component_branch_pill_uncommitted_files">
-        <item quantity="one">%1$d ያልተቀመጠ ፋይል</item>
-        <item quantity="other">%1$d ያልተቀመጡ ፋይሎች</item>
+        <item quantity="one">%1$d ኮሚት ያልተደረገ ፋይል</item>
+        <item quantity="other">%1$d ኮሚት ያልተደረጉ ፋይሎች</item>
     </plurals>
     <string name="component_branch_pill_a11y_branch">ቅርንጫፍ %1$s</string>
     <string name="component_branch_pill_a11y_worktree_branch">የworktree ቅርንጫፍ %1$s</string>
@@ -1028,15 +1028,15 @@
     <string name="session_chat_mcp_load_failed">MCP አገልጋዮችን መጫን አልተቻለም። ግንኙነቱን ይፈትሹ እና እንደገና ይሞክሩ።</string>
     <string name="session_chat_create_failed">ክፍለ ጊዜ መፍጠር አልተቻለም</string>
     <string name="session_chat_send_timed_out">መላክ አልተቻለም። እንደገና ይሞክሩ።</string>
-    <string name="session_chat_shell_cannot_queue">የሼል ትዕዛዞችን ወረፋ ላይ ማስቀመጥ አይቻልም። አሁን ለማስኬድ ወደ አቅጣጫ ስጥ ይቀይሩ።</string>
+    <string name="session_chat_shell_cannot_queue">የሼል ትዕዛዞችን ወረፋ ላይ ማስቀመጥ አይቻልም። አሁን ለማስኬድ ወደ «አቅጣጫ ስጥ» ይቀይሩ።</string>
     <string name="session_chat_reply_error_permission">ምላሽዎን መላክ አልተቻለም። እንደገና ይሞክሩ።</string>
     <string name="session_chat_reply_error_permission_reason">ምላሽዎን መላክ አልተቻለም። %1$s።</string>
     <string name="session_chat_reply_error_question">መልስዎን መላክ አልተቻለም። እንደገና ይሞክሩ።</string>
     <string name="session_chat_reply_error_question_reason">መልስዎን መላክ አልተቻለም። %1$s።</string>
-    <string name="session_chat_reply_error_dismiss">ጥያቄውን ማሰናበት አልተቻለም። እንደገና ይሞክሩ።</string>
-    <string name="session_chat_reply_error_dismiss_reason">ጥያቄውን ማሰናበት አልተቻለም። %1$s።</string>
+    <string name="session_chat_reply_error_dismiss">ጥያቄውን መዝጋት አልተቻለም። እንደገና ይሞክሩ።</string>
+    <string name="session_chat_reply_error_dismiss_reason">ጥያቄውን መዝጋት አልተቻለም። %1$s።</string>
     <string name="session_chat_permission_unavailable">የፈቃድ ጥያቄው አሁን አይገኝም</string>
-    <string name="session_chat_question_unavailable">የጥያቄ ጥያቄው አሁን አይገኝም</string>
+    <string name="session_chat_question_unavailable">የወኪሉ ጥያቄ አሁን አይገኝም</string>
     <string name="session_chat_permission_tree_failed">የፈቃድ ክፍለ ጊዜ ዛፍን ማደስ አልተቻለም</string>
     <string name="session_chat_question_tree_failed">የጥያቄ ክፍለ ጊዜ ዛፍን ማደስ አልተቻለም</string>
     <string name="session_chat_sheet_timeline_style_picker_title">አዲስ፦ የጊዜ መስመርዎን ይምረጡ</string>
@@ -1059,7 +1059,7 @@
     <string name="session_chat_sheet_picker_filter_models_hint">ሞዴሎችን አጣራ...</string>
     <string name="session_chat_sheet_tool_detail_provider_response">የአቅራቢ ምላሽ</string>
     <string name="session_chat_sheet_tool_detail_tool">መሣሪያ</string>
-    <string name="session_chat_sheet_tool_result_exit_code">መውጫ %1$d</string>
+    <string name="session_chat_sheet_tool_result_exit_code">መውጫ ኮድ %1$d</string>
     <plurals name="session_chat_sheet_tool_result_matches">
         <item quantity="one">%1$d ተዛማጅ</item>
         <item quantity="other">%1$d ተዛማጆች</item>
@@ -1098,8 +1098,8 @@
         <item quantity="one">በመሥራት ላይ %1$d</item>
         <item quantity="other">በመሥራት ላይ %1$d</item>
     </plurals>
-    <string name="session_chat_sheet_activity_back_to_steps">ወደ ደረጃዎች ተመለስ</string>
-    <string name="session_chat_sheet_activity_steps">ደረጃዎች</string>
+    <string name="session_chat_sheet_activity_back_to_steps">ወደ እርምጃዎች ተመለስ</string>
+    <string name="session_chat_sheet_activity_steps">እርምጃዎች</string>
     <plurals name="session_chat_sheet_activity_tools_so_far">
         <item quantity="one">እስካሁን %1$d መሣሪያ</item>
         <item quantity="other">እስካሁን %1$d መሣሪያዎች</item>
@@ -1127,7 +1127,7 @@
     <string name="session_context_stat_input_tokens">የግብዓት ቶክኖች</string>
     <string name="session_context_stat_output_tokens">የውጤት ቶክኖች</string>
     <string name="session_context_stat_reasoning_tokens">የምክንያት ቶክኖች</string>
-    <string name="session_context_stat_cache_tokens">የካሽ ቶክኖች (ንባብ/ጽሑፍ)</string>
+    <string name="session_context_stat_cache_tokens">የመሸጎጫ ቶክኖች (ንባብ/ጽሑፍ)</string>
     <string name="session_context_stat_user_messages">የተጠቃሚ መልዕክቶች</string>
     <string name="session_context_stat_assistant_messages">የረዳት መልዕክቶች</string>
     <string name="session_context_stat_total_cost">ጠቅላላ ወጪ</string>
@@ -1140,7 +1140,7 @@
     <string name="session_context_breakdown_tool_calls">የመሣሪያ ጥሪዎች</string>
     <string name="session_context_breakdown_other">ሌላ</string>
     <string name="session_context_breakdown_legend">%1$s %2$s</string>
-    <string name="session_context_breakdown_footnote">የግብዓት ቶከኖች ግምታዊ ክፍፍል። «ሌላ» የመሣሪያ ትርጓሜዎችን እና ተጨማሪ ወጪን ያካትታል።</string>
+    <string name="session_context_breakdown_footnote">የግብዓት ቶክኖች ግምታዊ ክፍፍል። «ሌላ» የመሣሪያ ትርጓሜዎችን እና ተጨማሪ ወጪን ያካትታል።</string>
     <string name="settings_title">ቅንጅቶች</string>
     <string name="settings_section_server">አገልጋይ</string>
     <string name="settings_section_help_feedback">እገዛ እና አስተያየት</string>
@@ -1208,25 +1208,25 @@
     <string name="settings_analytics_title">ትንታኔ እና የብልሽት ሪፖርቶች</string>
     <string name="settings_analytics_subtitle">በራስ ፈቃድ የምርት አጠቃቀም ክስተቶችን እና የብልሽት ሪፖርቶችን ፍቀድ። ሲጠፋ ወደ Firebase ምንም አይላክም።</string>
     <string name="settings_analytics_label">የምርት ትንታኔ</string>
-    <string name="settings_diagnostic_logs_subtitle">የተሰረዘ የሚንከባለል የሩጫ ጊዜ መዝገብ መስኮት አጋራ</string>
+    <string name="settings_diagnostic_logs_subtitle">ሚስጥራዊ መረጃ የተወገደበት የሚንከባለል የሩጫ ጊዜ መዝገብ አጋራ</string>
     <string name="settings_clear_all_data_title">ሁሉንም ውሂብ አጽዳ</string>
-    <string name="settings_clear_all_data_subtitle">ግንኙነትንና ጊዜያዊ ማከማቻን አስወግድ</string>
+    <string name="settings_clear_all_data_subtitle">ግንኙነትንና መሸጎጫን አስወግድ</string>
     <string name="settings_clear_all_data_dialog_title">ሁሉም ውሂብ ይጽዳ?</string>
-    <string name="settings_clear_all_data_dialog_message">ይህ መቀልበስ አይቻልም።</string>
+    <string name="settings_clear_all_data_dialog_message">ይህን መቀልበስ አይቻልም።</string>
     <string name="settings_version">ስሪት</string>
     <string name="settings_build">ግንባታ</string>
     <string name="settings_source_code_title">ምንጭ ኮድ</string>
     <string name="settings_source_code_subtitle">GPL-3.0 በ GitHub</string>
     <string name="settings_rate_app_title">በ Google Play ላይ ደረጃ ይስጡ</string>
     <string name="settings_rate_app_subtitle">ግምገማ ሌሎች መተግበሪያውን እንዲያገኙ ይረዳል</string>
-    <string name="settings_star_on_github_title">በ GitHub ላይ ኮከብ ስጥ</string>
-    <string name="settings_follow_on_x_title">በ X ላይ ተከተል</string>
+    <string name="settings_star_on_github_title">በ GitHub ላይ ኮከብ ይስጡ</string>
+    <string name="settings_follow_on_x_title">በ X ላይ ይከተሉ</string>
     <string name="diagnostics_title">የምርመራ መዝገቦች</string>
     <string name="diagnostics_loading">የምርመራ መዝገቦችን በመጫን ላይ</string>
     <string name="diagnostics_entries_title">ግቤቶች</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d የተሰረዘ መስመር በተያዘው መስኮት ውስጥ</item>
-        <item quantity="other">%1$d የተሰረዙ መስመሮች በተያዘው መስኮት ውስጥ</item>
+        <item quantity="one">%1$d ሚስጥር የተወገደበት መስመር በተያዘው መስኮት ውስጥ</item>
+        <item quantity="other">%1$d ሚስጥር የተወገደባቸው መስመሮች በተያዘው መስኮት ውስጥ</item>
     </plurals>
     <string name="diagnostics_entries_empty">በተያዘው መስኮት ውስጥ እስካሁን ምንም ግቤት የለም</string>
     <string name="diagnostics_kept_title">የተያዘ</string>
@@ -1234,7 +1234,7 @@
         <item quantity="one">ያለፈው %1$d ደቂቃ</item>
         <item quantity="other">ያለፉት %1$d ደቂቃዎች</item>
     </plurals>
-    <string name="diagnostics_export_title">ላክ</string>
+    <string name="diagnostics_export_title">ወደ ውጭ ላክ</string>
     <string name="diagnostics_soft_cap_title">ለስላሳ ገደብ</string>
     <string name="diagnostics_soft_cap_dropped">ከፍተኛ %1$d · %2$d የቆዩ ተጥለዋል</string>
     <plurals name="diagnostics_soft_cap_none_dropped">
@@ -1242,7 +1242,7 @@
         <item quantity="other">ከፍተኛ %1$d · ምንም አልተጣለም</item>
     </plurals>
     <string name="diagnostics_format_title">ቅርጸት</string>
-    <string name="diagnostics_format_value">JSONL · ሚስጥሮችና የመልዕክት አካላት ተሰርዘዋል</string>
+    <string name="diagnostics_format_value">JSONL · ሚስጥሮችና የመልዕክት አካላት ተወግደዋል</string>
     <string name="diagnostics_range_title">ክልል</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
     <string name="diagnostics_areas_title">አካባቢዎች</string>
@@ -1262,7 +1262,7 @@
     <string name="appearance_theme_subtitle">%1$s · %2$s</string>
     <string name="appearance_code_highlight_title">የኮድ ማድመቂያ</string>
     <string name="appearance_theme_blurb_porcelain">ወደ ነጭ / ወደ ጥቁር የተጠጋ</string>
-    <string name="appearance_theme_blurb_linen">ሞቃት ወረቀት / ኤስፕሬሶ</string>
+    <string name="appearance_theme_blurb_linen">ሞቅ ያለ ወረቀት / ኤስፕሬሶ</string>
     <string name="appearance_theme_blurb_signal">ንጹህ ነጭ / ንጹህ ጥቁር</string>
     <string name="appearance_theme_blurb_hotline">ገለልተኛ ክፈፍ፣ ደማቅ ሮዝ</string>
     <string name="appearance_theme_blurb_phosphor">ገለልተኛ ክፈፍ፣ CRT አረንጓዴ</string>
@@ -1313,19 +1313,19 @@
     <string name="feature_flags_section_flags">ባንዲራዎች</string>
     <string name="feedback_title_report">ችግር ሪፖርት አድርግ</string>
     <string name="feedback_title_hide_parts">ክፍሎችን ደብቅ</string>
-    <string name="feedback_title_log_preview">የመመርመሪያ ሎግ</string>
+    <string name="feedback_title_log_preview">የምርመራ መዝገብ</string>
     <string name="feedback_title_listening">በማዳመጥ ላይ</string>
     <string name="feedback_kind_bug">ሳንካ</string>
     <string name="feedback_kind_idea">ሃሳብ</string>
     <string name="feedback_placeholder_bug">ምን ተፈጠረ? ምን ይጠብቁ ነበር?</string>
     <string name="feedback_placeholder_idea">OpenCode ለእርስዎ የተሻለ እንዲሆን ምን ይረዳል?</string>
-    <string name="feedback_privacy_note">ለOpenCode Mobile ቡድን ብቻ ነው የሚደርሰው። የአገልጋይዎን አድራሻ፣ የተጠቃሚ ስም ወይም የይለፍ ቃል በጭራሽ አያካትትም። ሎጎች በዚህ ስልክ ላይ ይሰረዛሉ።</string>
+    <string name="feedback_privacy_note">ለOpenCode Mobile ቡድን ብቻ ነው የሚደርሰው። የአገልጋይዎን አድራሻ፣ የተጠቃሚ ስም ወይም የይለፍ ቃል በጭራሽ አያካትትም። መዝገቦች በዚህ ስልክ ላይ ሚስጥራዊ መረጃ ይወገድባቸዋል።</string>
     <string name="feedback_error_offline">ከመስመር ውጭ ነዎት። ሪፖርትዎ እዚህ ተቀምጧል — ሲገናኙ እንደገና ይሞክሩ።</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">አሁን ሪፖርት ልከዋል። በ%1$d ሰከንድ ውስጥ እንደገና ይሞክሩ።</item>
         <item quantity="other">አሁን ሪፖርት ልከዋል። በ%1$d ሰከንድ ውስጥ እንደገና ይሞክሩ።</item>
     </plurals>
-    <string name="feedback_error_unverified">የዚህን መተግበሪያ ቅጂ ማረጋገጥ አልተቻለም። ሪፖርቶች መላክ የሚቻለው ከApp Store፣ ከTestFlight ወይም ከPlay በተጫነ ቅጂ ብቻ ነው።</string>
+    <string name="feedback_error_unverified">የዚህን መተግበሪያ ቅጂ ማረጋገጥ አልተቻለም። ሪፖርቶች መላክ የሚቻለው ከApp Store፣ ከTestFlight ወይም ከGoogle Play በተጫነ ቅጂ ብቻ ነው።</string>
     <string name="feedback_error_failed">ሪፖርቱን መላክ አልተቻለም።</string>
     <string name="feedback_action_try_again">እንደገና ሞክር</string>
     <string name="feedback_action_share_instead">በምትኩ አጋራ</string>
@@ -1346,10 +1346,10 @@
     </plurals>
     <string name="feedback_attachment_tap_to_hide">ክፍሎችን ለመደበቅ ይንኩ</string>
     <string name="feedback_attachment_tap_to_preview">ቅድመ እይታ ለማየት ይንኩ</string>
-    <string name="feedback_attachment_logs">ሎጎች</string>
+    <string name="feedback_attachment_logs">መዝገቦች</string>
     <plurals name="feedback_attachment_logs_minutes">
-        <item quantity="one">ሎጎች · %1$d ደቂቃ</item>
-        <item quantity="other">ሎጎች · %1$d ደቂቃ</item>
+        <item quantity="one">መዝገቦች · %1$d ደቂቃ</item>
+        <item quantity="other">መዝገቦች · %1$d ደቂቃ</item>
     </plurals>
     <plurals name="feedback_log_window_minutes">
         <item quantity="one">%1$d ደቂቃ</item>
@@ -1361,11 +1361,11 @@
         <item quantity="other">ቅጽበታዊ ገጽ እይታ፣ %1$d አካባቢዎች ተደብቀዋል</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">ያለፈው %1$d ደቂቃ · ሲላክ በgzip ይጨመቃል። በዚህ ስልክ ላይ ተሰርዟል።</item>
-        <item quantity="other">ያለፉት %1$d ደቂቃዎች · ሲላክ በgzip ይጨመቃል። በዚህ ስልክ ላይ ተሰርዟል።</item>
+        <item quantity="one">ያለፈው %1$d ደቂቃ · ሲላክ በgzip ይጨመቃል። በዚህ ስልክ ላይ ሚስጥራዊ መረጃ ተወግዷል።</item>
+        <item quantity="other">ያለፉት %1$d ደቂቃዎች · ሲላክ በgzip ይጨመቃል። በዚህ ስልክ ላይ ሚስጥራዊ መረጃ ተወግዷል።</item>
     </plurals>
     <string name="feedback_log_preview_loading">በመጫን ላይ…</string>
-    <string name="feedback_log_preview_empty_title">ምንም የሎግ መስመር የለም</string>
+    <string name="feedback_log_preview_empty_title">ምንም የመዝገብ መስመር የለም</string>
     <plurals name="feedback_log_preview_empty_message">
         <item quantity="one">በያለፈው %1$d ደቂቃ ውስጥ ምንም አልተመዘገበም።</item>
         <item quantity="other">በያለፉት %1$d ደቂቃዎች ውስጥ ምንም አልተመዘገበም።</item>
@@ -1411,18 +1411,18 @@
     <string name="keyboard_shortcuts_send_note">ማስታወሻ ላክ</string>
     <string name="keyboard_shortcuts_next_question">ቀጣይ ጥያቄ</string>
     <string name="keyboard_shortcuts_submit_answers">መልሶችን አስገባ</string>
-    <string name="keyboard_shortcuts_dismiss_question">ጥያቄውን አሰናብት</string>
+    <string name="keyboard_shortcuts_dismiss_question">ጥያቄውን ዝጋ</string>
     <string name="keyboard_shortcuts_toggle_sidebar">የጎን አሞሌን ቀይር</string>
     <string name="keyboard_shortcuts_next_session">ቀጣይ ክፍለ ጊዜ</string>
     <string name="keyboard_shortcuts_previous_session">ቀዳሚ ክፍለ ጊዜ</string>
-    <string name="keyboard_shortcuts_focus_composer">ወደ ጸሐፊው አተኩር</string>
+    <string name="keyboard_shortcuts_focus_composer">ወደ መጻፊያው አተኩር</string>
     <string name="keyboard_shortcuts_search_sessions">ክፍለ-ጊዜዎችን ፈልግ</string>
     <string name="changes_title">ለውጦች</string>
     <string name="changes_source_menu_label">የለውጥ ምንጭ ይምረጡ</string>
     <string name="changes_source_menu_selected">%1$s፣ ተመርጧል</string>
     <string name="changes_source_working_tree_name">የGit ለውጦች</string>
     <string name="changes_source_working_tree_empty_title">ምንም የGit ለውጦች የሉም</string>
-    <string name="changes_source_working_tree_empty_message">የሥራ ዛፉ ያልተቀመጠ (uncommitted) ለውጥ የለውም።</string>
+    <string name="changes_source_working_tree_empty_message">የሥራ ዛፉ ኮሚት ያልተደረገ ለውጥ የለውም።</string>
     <string name="changes_source_last_turn_name">የመጨረሻው ዙር ለውጦች</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">የGit ለውጦች %1$d የተለወጠ ፋይል አላቸው።</item>
@@ -1439,7 +1439,7 @@
     <string name="changes_loading_title">ለውጦችን በመጫን ላይ</string>
     <string name="changes_loading_message">diff በማምጣት ላይ…</string>
     <string name="changes_no_turn_title">የተጠናቀቀ ዙር የለም</string>
-    <string name="changes_no_turn_message">ፕሮምፕት ላክና እስኪጠናቀቅ ጠብቅ፣ ከዚያ እንደገና ሞክር።</string>
+    <string name="changes_no_turn_message">ፕሮምፕት ልከው እስኪጠናቀቅ ይጠብቁ፣ ከዚያ እንደገና ይሞክሩ።</string>
     <string name="changes_error_title">ለውጦችን መጫን አልተቻለም</string>
     <string name="changes_error_fallback">ለውጦቹ አልተጫኑም።</string>
     <string name="changes_error_request_failed">ጥያቄው አልተሳካም</string>
@@ -1448,10 +1448,10 @@
     <string name="changes_filter_hint">አጣራ</string>
     <string name="changes_filter_accessibility_label">የተለወጡ ፋይሎችን አጣራ</string>
     <string name="changes_no_matches_title">የሚዛመዱ ፋይሎች የሉም</string>
-    <string name="changes_no_matches_message">ሌላ መንገድ ሞክር ወይም ማጣሪያውን አጽዳ።</string>
+    <string name="changes_no_matches_message">ሌላ መንገድ ይሞክሩ ወይም ማጣሪያውን ያጽዱ።</string>
     <string name="changes_no_matches_clear_filter">ማጣሪያ አጽዳ</string>
     <string name="changes_select_file_title">ፋይል ምረጥ</string>
-    <string name="changes_select_file_message">diff ለማየት የተለወጠ ፋይል ምረጥ።</string>
+    <string name="changes_select_file_message">diff ለማየት የተለወጠ ፋይል ይምረጡ።</string>
     <string name="changes_preview_unavailable_title">ቅድመ እይታ አይገኝም</string>
     <string name="changes_preview_unavailable_message">ለዚህ ፋይል የጽሑፍ ቅድመ እይታ አይገኝም።</string>
     <string name="changes_file_viewer_truncated">የዚህ ፋይል ለውጦች የመጀመሪያው 1 MB ብቻ እየታየ ነው።</string>
@@ -1478,8 +1478,8 @@
     </plurals>
     <string name="component_review_changes_pill_title">ለውጦችን ገምግም</string>
     <string name="component_unified_diff_summary_added">የታከለ ፋይል %1$s፣ %2$s፣ %3$s</string>
-    <string name="component_activity_status_running">በመሄድ ላይ</string>
-    <string name="component_subagent_state_running">በመሄድ ላይ</string>
+    <string name="component_activity_status_running">በሂደት ላይ</string>
+    <string name="component_subagent_state_running">በሂደት ላይ</string>
     <string name="component_todo_item_accessibility_label">%1$s፣ %2$s</string>
     <string name="component_todo_item_status_pending">በመጠባበቅ ላይ</string>
     <string name="component_todo_item_status_in_progress">በሂደት ላይ</string>
@@ -1498,7 +1498,7 @@
     <string name="component_unified_diff_row_kind_context">አውድ</string>
     <string name="component_unified_diff_row_kind_addition">መጨመር</string>
     <string name="component_unified_diff_row_kind_deletion">መሰረዝ</string>
-    <string name="component_unified_diff_old_line">የድሮ መስመር %1$d</string>
+    <string name="component_unified_diff_old_line">የቀድሞ መስመር %1$d</string>
     <string name="component_unified_diff_new_line">አዲስ መስመር %1$d</string>
     <string name="component_floating_pill_state_live">በሂደት ላይ</string>
     <string name="component_floating_pill_state_ready">ዝግጁ</string>
@@ -1534,19 +1534,19 @@
     <string name="session_list_scope_load_loading">ክፍለ-ጊዜዎችን በመጫን ላይ…</string>
     <string name="dictation_insert">አስገባ</string>
     <string name="dictation_action_check_again">እንደገና ፈትሽ</string>
-    <string name="component_activity_sheet_steps">ደረጃዎች</string>
+    <string name="component_activity_sheet_steps">እርምጃዎች</string>
     <string name="component_list_item_show_actions">እርምጃዎችን አሳይ</string>
     <string name="dictation_status_line">%1$s · %2$s</string>
     <string name="component_attachment_kind_image">ምስል</string>
     <string name="component_composer_hide_question">ጥያቄውን ደብቅ</string>
     <string name="live_updates_status_connecting">በመገናኘት ላይ</string>
     <string name="dictation_model_queued_detail">%1$s ማውረዱን በወረፋ አስቀምጧል። Wi-Fi፣ ባትሪ መሙላት ወይም ነፃ ማከማቻ ሊጠብቅ ይችላል። ከጥቂት ደቂቃዎች በኋላ እንደገና ይመልከቱ።</string>
-    <string name="dictation_model_not_installed_detail">ዲክቴሽን በዚህ መሣሪያ ላይ ይሰራል፣ ስለዚህ ድምፅዎ በጭራሽ አይሰቀልም። %1$s ሞዴሉን አንድ ጊዜ ያወርዳል፣ ለሁሉም መተግበሪያዎች ያቆየዋል።</string>
+    <string name="dictation_model_not_installed_detail">ዲክቴሽን በዚህ መሣሪያ ላይ ይሠራል፣ ስለዚህ ድምፅዎ በጭራሽ አይሰቀልም። %1$s ሞዴሉን አንድ ጊዜ ያወርዳል፣ ለሁሉም መተግበሪያዎች ያቆየዋል።</string>
     <string name="component_outgoing_message_shows_actions_hint">የመልእክት እርምጃዎችን ያሳያል</string>
     <string name="component_activity_status_stopped">ቆሟል</string>
     <string name="dictation_action_try_again">እንደገና ሞክር</string>
     <string name="component_composer_model_effort">ሞዴል %1$s፣ ጥረት %2$s</string>
-    <string name="component_activity_card_working">በመስራት ላይ</string>
+    <string name="component_activity_card_working">በመሥራት ላይ</string>
     <string name="component_activity_card_opens_activity">%1$s፣ እንቅስቃሴን ይከፍታል</string>
     <string name="component_image_loading_label">%1$s፣ በመጫን ላይ</string>
     <string name="session_list_dock_new_session">አዲስ ክፍለ ጊዜ</string>
@@ -1557,9 +1557,9 @@
     <string name="component_composer_deny">ክድ</string>
     <string name="component_composer_deny_options">ተጨማሪ የመከልከል አማራጮች</string>
     <string name="component_composer_deny_with_note_menu">በማስታወሻ ክድ…</string>
-    <string name="component_composer_deny_with_note_menu_subtitle">ወኪሉ በምትኩ ምን ማድረግ እንዳለበት ንገሩት</string>
+    <string name="component_composer_deny_with_note_menu_subtitle">ወኪሉ በምትኩ ምን ማድረግ እንዳለበት ይንገሩት</string>
     <string name="component_composer_deny_with_note_title">በማስታወሻ ክድ</string>
-    <string name="component_composer_deny_note_placeholder">OpenCode በምትኩ ምን ማድረግ እንዳለበት ንገሩት</string>
+    <string name="component_composer_deny_note_placeholder">OpenCode በምትኩ ምን ማድረግ እንዳለበት ይንገሩት</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="one">ሌላ %1$d በመጠባበቅ ላይ ያለ ጥያቄንም ይከለክላል።</item>
         <item quantity="other">ሌሎች %1$d በመጠባበቅ ላይ ያሉ ጥያቄዎችንም ይከለክላል።</item>
@@ -1576,7 +1576,7 @@
     <string name="session_list_section_recent">የቅርብ ጊዜ</string>
     <string name="session_list_section_recent_hint">ፈጣን እይታ ይፈልጋል</string>
     <string name="component_activity_status_completed">ተጠናቋል</string>
-    <string name="share_diagnostics_chooser_title">የምርመራ ምዝግቦችን አጋራ</string>
+    <string name="share_diagnostics_chooser_title">የምርመራ መዝገቦችን አጋራ</string>
     <string name="dictation_model_queued_title">%1$s %2$sን በኋላ ያወርዳል</string>
     <string name="session_list_dock_choose_project_or_worktree">ፕሮጀክት ወይም worktree ምረጥ</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
@@ -1604,7 +1604,7 @@
         <item quantity="other">ከ%1$d ቀ በፊት</item>
     </plurals>
     <string name="component_server_address_scheme_button_description">ፕሮቶኮል %1$s። የፕሮቶኮል መምረጫ ይከፍታል</string>
-    <string name="share_diagnostics_subject">OpenCode የምርመራ ምዝግብ ማስታወሻዎች</string>
+    <string name="share_diagnostics_subject">OpenCode የምርመራ መዝገቦች</string>
     <string name="component_reorderable_list_move_up">ወደ ላይ አንቀሳቅስ</string>
     <string name="session_list_scope_load_failed_title">%1$s መጫን አልተቻለም</string>
     <string name="dictation_status_listening">በማዳመጥ ላይ</string>
@@ -1623,17 +1623,17 @@
         <item quantity="other">ከ%1$d ሰዓት በፊት</item>
     </plurals>
     <plurals name="component_activity_card_step_count">
-        <item quantity="one">%1$d ደረጃ</item>
-        <item quantity="other">%1$d ደረጃዎች</item>
+        <item quantity="one">%1$d እርምጃ</item>
+        <item quantity="other">%1$d እርምጃዎች</item>
     </plurals>
     <string name="theme_error_apply_failed">የገጽታ ቅድመ ዝግጅትን መተግበር አልተሳካም</string>
     <string name="component_unified_diff_summary_deleted">የተሰረዘ ፋይል %1$s፣ %2$s፣ %3$s</string>
-    <string name="session_list_status_running">በመሄድ ላይ</string>
+    <string name="session_list_status_running">በሂደት ላይ</string>
     <string name="component_step_rail_expands">%1$s፣ ይሰፋል</string>
     <string name="session_list_status_done">ተጠናቅቋል</string>
     <string name="session_list_status_idle">ስራ ፈት</string>
     <string name="component_attachment_kind_file">ፋይል</string>
-    <string name="component_composer_run_shell_command">ሼል ትዕዛዝ አስኪድ</string>
+    <string name="component_composer_run_shell_command">የሼል ትዕዛዝ አስኪድ</string>
     <string name="component_image_could_not_load">መጫን አልተቻለም</string>
     <string name="component_outgoing_message_show_actions">የመልእክት እርምጃዎችን አሳይ</string>
     <string name="live_updates_accessibility_label">ቀጥታ ዝማኔዎች %1$s</string>
@@ -1641,7 +1641,7 @@
     <string name="component_activity_card_agent">ወኪል</string>
     <string name="session_list_section_today">ዛሬ</string>
     <string name="component_composer_child_lockout">ለንዑስ ክፍለ ጊዜዎች መልዕክት መላክ አይቻልም።</string>
-    <string name="component_attachment_uploading_percent">በመጫን ላይ %1$d%%</string>
+    <string name="component_attachment_uploading_percent">በመስቀል ላይ %1$d%%</string>
     <string name="component_composer_custom_answer_hint">ብጁ መልስ ያስገቡ</string>
     <string name="component_composer_cancel_revert">መመለስን ሰርዝ</string>
     <string name="session_list_scope_load_slow_caption">አሁንም በመጫን ላይ ነው — ትልልቅ ፕሮጀክቶች ጥቂት ሊወስዱ ይችላሉ</string>
@@ -1677,7 +1677,7 @@
         <item quantity="other">ከ%1$d ደቂቃ በፊት</item>
     </plurals>
     <string name="component_composer_request_position">%1$d ከ%2$d</string>
-    <string name="component_composer_side_question_placeholder">ተጨማሪ ጥያቄ፣ ወደ ውይይቱ አይታከልም</string>
+    <string name="component_composer_side_question_placeholder">የጎን ጥያቄ፣ ወደ ውይይቱ አይታከልም</string>
     <string name="session_list_worktree_empty_every_project">ሁሉንም ፕሮጀክቶች ለማየት ማጣሪያውን ያጽዱ።</string>
     <string name="component_image_viewer_could_not_load_named">%1$s መጫን አልተቻለም</string>
     <string name="component_composer_select_up_to">እስከ %1$d ድረስ ይምረጡ</string>
@@ -1694,26 +1694,26 @@
     <string name="component_code_file_line_label">መስመር %1$d፣ %2$s</string>
     <string name="share_feedback_subject_idea">የOpenCode Mobile ሐሳብ ሪፖርት</string>
     <string name="component_hunk_navigation_previous">ቀዳሚ hunk</string>
-    <string name="session_list_section_week_of">የሳምንት %1$s – %2$s</string>
-    <string name="dictation_model_download_failed_title">%1$s %2$s ማውረድ አልቻለም</string>
-    <string name="component_activity_status_pending">በመጠበቅ ላይ</string>
-    <string name="component_composer_revert_tag">መልስ</string>
+    <string name="session_list_section_week_of">የ%1$s – %2$s ሳምንት</string>
+    <string name="dictation_model_download_failed_title">%1$s %2$sን ማውረድ አልቻለም</string>
+    <string name="component_activity_status_pending">በመጠባበቅ ላይ</string>
+    <string name="component_composer_revert_tag">መመለስ</string>
     <string name="component_composer_model">ሞዴል %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
-        <item quantity="one">%1$d ቀዳሚ ደረጃ</item>
-        <item quantity="other">%1$d ቀዳሚ ደረጃዎች</item>
+        <item quantity="one">%1$d ቀዳሚ እርምጃ</item>
+        <item quantity="other">%1$d ቀዳሚ እርምጃዎች</item>
     </plurals>
     <string name="component_outgoing_message_long_press_hint">የመልዕክት እርምጃዎችን ለማሳየት በረጅሙ ይጫኑ</string>
     <string name="component_composer_hide_permission">የፈቃድ ጥያቄን ደብቅ</string>
     <string name="dictation_downloading_model_progress">የንግግር ሞዴል በማውረድ ላይ፣ %1$s</string>
-    <string name="component_branch_pill_copy_branch_name">የቅርንጫፍ ስም ኮፒ</string>
+    <string name="component_branch_pill_copy_branch_name">የቅርንጫፍ ስም ኮፒ አድርግ</string>
     <string name="component_truncation_row_full_message_title">ሙሉ መልዕክት አሳይ</string>
     <string name="component_truncation_row_full_message_caption">ከ%2$s ቁምፊዎች %1$s ታይተዋል</string>
     <string name="component_truncation_row_full_message_hint">ሙሉውን መልዕክት ይከፍታል</string>
     <string name="component_outgoing_message_label">ወጪ መልዕክት</string>
     <string name="session_list_status_stopped">ቆሟል</string>
     <string name="component_attachment_cancel_upload">የ%1$s ሰቀላ ሰርዝ</string>
-    <string name="dictation_cancel_description">ማዘዣ በድምፅ ሰርዝ</string>
+    <string name="dictation_cancel_description">ዲክቴሽን ሰርዝ</string>
     <string name="component_composer_shell_mode">የሼል ሁነታ</string>
     <string name="component_skeleton_illustration_connect">አገናኝ</string>
     <string name="component_composer_not_selected">አልተመረጠም</string>
@@ -1729,31 +1729,31 @@
     <string name="component_close">ዝጋ</string>
     <string name="relative_time_now">አሁን</string>
     <string name="component_composer_previous_permission">ቀዳሚ የፈቃድ ጥያቄ</string>
-    <string name="component_composer_dictate">በድምፅ ተናገር</string>
+    <string name="component_composer_dictate">በድምጽ ጻፍ</string>
     <string name="component_composer_side_question_mode_description">የጎን ጥያቄ ሁነታ። ከጎን ጥያቄ ሁነታ ውጣ</string>
-    <string name="component_composer_abort">እየተሰራ ያለውን ሥራ አቋርጥ</string>
+    <string name="component_composer_abort">በሂደት ላይ ያለውን ሥራ አቋርጥ</string>
     <string name="component_server_address_scheme_button">ፕሮቶኮል %1$s</string>
     <string name="component_composer_open_subagent_session">የንዑስ ወኪል ክፍለ ጊዜ ክፈት</string>
     <string name="component_composer_question_step">ደረጃ %1$d ከ%2$d</string>
     <string name="share_feedback_subject_bug">የOpenCode Mobile የስህተት ሪፖርት</string>
-    <string name="component_activity_card_opens_child_session_hint">የልጅ ክፍለ ጊዜውን ይከፍታል</string>
+    <string name="component_activity_card_opens_child_session_hint">የንዑስ ክፍለ ጊዜውን ይከፍታል</string>
     <string name="component_activity_status_failed">አልተሳካም</string>
     <string name="dictation_model_not_installed_title">%1$s የራሱን %2$s ይፈልጋል</string>
     <string name="component_composer_back_to_main_session">ወደ ዋናው ክፍለ ጊዜ ተመለስ</string>
-    <string name="component_activity_sheet_working_count">በመስራት ላይ %1$d</string>
+    <string name="component_activity_sheet_working_count">በመሥራት ላይ %1$d</string>
     <string name="session_list_status_retrying">እንደገና በመሞከር ላይ</string>
     <string name="component_attachment_remove">%1$s አስወግድ</string>
     <string name="component_composer_send_steer">እንደ አቅጣጫ ላክ</string>
     <string name="component_composer_next_permission">ቀጣይ የፈቃድ ጥያቄ</string>
     <string name="session_list_dock_project_filter">የፕሮጀክት ማጣሪያ</string>
     <string name="component_split_pane_resize_hint">የጎን አሞሌን ለመደበቅ ሁለቴ መታ ያድርጉ</string>
-    <string name="component_branch_pill_shows_details_hint">የ branch ዝርዝሮችን ያሳያል</string>
+    <string name="component_branch_pill_shows_details_hint">የቅርንጫፍ ዝርዝሮችን ያሳያል</string>
     <string name="component_composer_permission_requested">ፈቃድ ተጠይቋል</string>
     <string name="component_thinking">ማሰብ</string>
     <string name="dictation_model_downloading_title">%1$s %2$sን በማውረድ ላይ ነው</string>
     <string name="component_hunk_navigation_expand_context">አውድ ዘርጋ</string>
     <string name="dictation_listening_placeholder">በማዳመጥ ላይ…</string>
-    <string name="component_skeleton_illustration_unofficial">መደበኛ ያልሆነ</string>
+    <string name="component_skeleton_illustration_unofficial">ይፋዊ ያልሆነ</string>
     <string name="dictation_status_ready">ለማስገባት ዝግጁ</string>
     <string name="dictation_starting">በመጀመር ላይ…</string>
     <string name="dictation_language_speech_model">የ%1$s የንግግር ሞዴል</string>
@@ -1762,8 +1762,8 @@
         <item quantity="one">%1$d ንጥል</item>
         <item quantity="other">%1$d ንጥሎች</item>
     </plurals>
-    <string name="component_server_address_scheme">Scheme</string>
-    <string name="component_server_address_scheme_picker_hint">የ scheme መምረጫን ይከፍታል</string>
+    <string name="component_server_address_scheme">ፕሮቶኮል</string>
+    <string name="component_server_address_scheme_picker_hint">የፕሮቶኮል መምረጫን ይከፍታል</string>
     <string name="component_split_pane_hide_sidebar">የጎን አሞሌን ደብቅ</string>
     <string name="component_composer_select_range">ከ%1$d እስከ %2$d ይምረጡ</string>
     <string name="component_image_viewer_position">%1$d ከ%2$d</string>
@@ -1792,15 +1792,15 @@
     <string name="worktrees_remove_title">worktree “%1$s” ይወገድ?</string>
     <string name="worktrees_remove_message">%1$sን በአገልጋዩ ላይ ይሰርዛል።</string>
     <plurals name="worktrees_remove_changes">
-        <item quantity="one">%1$d ያልተቀመጠ (uncommitted) ለውጥ ይጠፋል።</item>
-        <item quantity="other">%1$d ያልተቀመጡ (uncommitted) ለውጦች ይጠፋሉ።</item>
+        <item quantity="one">%1$d ኮሚት ያልተደረገ ለውጥ ይጠፋል።</item>
+        <item quantity="other">%1$d ኮሚት ያልተደረጉ ለውጦች ይጠፋሉ።</item>
     </plurals>
-    <string name="worktrees_remove_changes_unknown">ያልተቀመጡ (uncommitted) ለውጦች ይጠፋሉ።</string>
-    <string name="worktrees_remove_changes_unchecked">ያልተቀመጡ (uncommitted) ለውጦችን መፈተሽ አልተቻለም። ካሉ ይጠፋሉ።</string>
+    <string name="worktrees_remove_changes_unknown">ኮሚት ያልተደረጉ ለውጦች ይጠፋሉ።</string>
+    <string name="worktrees_remove_changes_unchecked">ኮሚት ያልተደረጉ ለውጦችን መፈተሽ አልተቻለም። ካሉ ይጠፋሉ።</string>
     <string name="worktrees_remove_sessions_stay">ይህን worktree የሚጠቀሙ ክፍለ-ጊዜዎች በመነሻ ላይ ይቆያሉ፣ ግን እዚህ እንደገና መሥራት አይችሉም።</string>
     <string name="worktrees_remove_confirm_anyway">ለማንኛውም አስወግድ</string>
     <string name="worktrees_blocked_title">“%1$s”ን ገና ማስወገድ አይቻልም</string>
-    <string name="worktrees_blocked_message">በዚህ worktree ውስጥ ክፍለ ጊዜ እየሠራ ነው። አቁመው፣ ከዚያ worktree-ውን ያስወግዱ።</string>
+    <string name="worktrees_blocked_message">በዚህ worktree ውስጥ ክፍለ ጊዜ እየሠራ ነው። አቁመው፣ ከዚያ worktree ያስወግዱ።</string>
     <string name="worktrees_blocked_ok">እሺ</string>
     <string name="worktrees_blocked_show_session">ክፍለ ጊዜ አሳይ</string>
     <string name="worktrees_removed">worktree “%1$s” ተወግዷል</string>

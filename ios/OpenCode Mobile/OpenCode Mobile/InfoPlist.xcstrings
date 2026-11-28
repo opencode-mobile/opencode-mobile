@@ -50,7 +50,7 @@
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile bruger kameraet til at scanne en OpenCode 2-parrings-QR fra din computer."
+            "value" : "OpenCode Mobile bruger kameraet til at scanne en QR-kode til parring med OpenCode 2 fra din computer."
           }
         },
         "de" : {
@@ -68,7 +68,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Το OpenCode Mobile χρησιμοποιεί την κάμερα για σάρωση ενός QR ζεύξης OpenCode 2 από τον υπολογιστή σας."
+            "value" : "Το OpenCode Mobile χρησιμοποιεί την κάμερα για σάρωση ενός QR σύζευξης OpenCode 2 από τον υπολογιστή σας."
           }
         },
         "en" : {
@@ -86,7 +86,7 @@
         "et" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile kasutab kaamerat, et skannida teie arvutist OpenCode 2 sidumise QR-koodi."
+            "value" : "OpenCode Mobile kasutab kaamerat, et skannida sinu arvutist OpenCode 2 sidumise QR-koodi."
           }
         },
         "fi" : {
@@ -98,7 +98,7 @@
         "fo" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile brúkar kameraið til at skanna ein OpenCode 2 parings-QR frá tínari teldu."
+            "value" : "OpenCode Mobile brúkar kameraið til at skanna eina OpenCode 2 paringar-QR-kodu frá tíni teldu."
           }
         },
         "fr" : {
@@ -122,7 +122,7 @@
         "hu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Az OpenCode Mobile a kamerát használja a számítógépén megjelenő OpenCode 2 párosító QR-kód beolvasásához."
+            "value" : "Az OpenCode Mobile a kamerát használja a számítógépeden megjelenő OpenCode 2 párosító QR-kód beolvasásához."
           }
         },
         "hy" : {
@@ -140,7 +140,7 @@
         "is" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile notar myndavélina til að skanna OpenCode 2 pörunar-QR úr tölvunni þinni."
+            "value" : "OpenCode Mobile notar myndavélina til að skanna QR-kóða til pörunar við OpenCode 2 úr tölvunni þinni."
           }
         },
         "it" : {
@@ -188,7 +188,7 @@
         "lv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile izmanto kameru, lai noskenētu OpenCode 2 pārošanas QR no tava datora."
+            "value" : "OpenCode Mobile izmanto kameru, lai noskenētu OpenCode 2 pārošanas QR kodu no jūsu datora."
           }
         },
         "mk" : {
@@ -206,7 +206,7 @@
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile menggunakan kamera untuk mengimbas QR pasangan OpenCode 2 daripada komputer anda."
+            "value" : "OpenCode Mobile menggunakan kamera untuk mengimbas QR penggandingan OpenCode 2 daripada komputer anda."
           }
         },
         "my" : {
@@ -218,7 +218,7 @@
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile bruker kameraet til å skanne en OpenCode 2-paring-QR fra datamaskinen din."
+            "value" : "OpenCode Mobile bruker kameraet til å skanne en QR-kode for paring av OpenCode 2 fra datamaskinen din."
           }
         },
         "ne" : {
@@ -230,7 +230,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile gebruikt de camera om een OpenCode 2-koppel-QR van je computer te scannen."
+            "value" : "OpenCode Mobile gebruikt de camera om de koppel-QR van OpenCode 2 op je computer te scannen."
           }
         },
         "pl" : {
@@ -284,13 +284,13 @@
         "sr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile користи камеру за скенирање QR кода за упаривање са OpenCode 2 са вашег рачунара."
+            "value" : "OpenCode Mobile користи камеру за скенирање QR кода за упаривање који OpenCode 2 приказује на вашем рачунару."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile använder kameran för att skanna en OpenCode 2-parkoppling-QR från din dator."
+            "value" : "OpenCode Mobile använder kameran för att skanna en QR-kod för OpenCode 2-parkoppling från din dator."
           }
         },
         "tg" : {
@@ -314,7 +314,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile, bilgisayarındaki OpenCode 2 eşleştirme QR'ını taramak için kamerayı kullanır."
+            "value" : "OpenCode Mobile, bilgisayarınızdaki OpenCode 2 eşleştirme QR kodunu taramak için kamerayı kullanır."
           }
         },
         "uk" : {
@@ -344,7 +344,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile 會使用相機掃描來自你電腦的 OpenCode 2 配對 QR。"
+            "value" : "OpenCode Mobile 會使用相機掃描電腦上顯示的 OpenCode 2 配對 QR 碼。"
           }
         }
       }
@@ -362,7 +362,7 @@
         "az" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tətbiq Kilidi aktiv olduqda OpenCode Mobile tətbiqin kilidini açmaq üçün Face ID istifadə edir."
+            "value" : "Tətbiq kilidi aktiv olduqda OpenCode Mobile tətbiqin kilidini açmaq üçün Face ID-dən istifadə edir."
           }
         },
         "bg" : {
@@ -380,13 +380,13 @@
         "bs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile koristi Face ID za otključavanje aplikacije kada je Zaključavanje aplikacije uključeno."
+            "value" : "OpenCode Mobile koristi Face ID za otključavanje aplikacije kada je uključeno zaključavanje aplikacije."
           }
         },
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile utilitza Face ID per desbloquejar l'aplicació quan el Bloqueig de l'aplicació està activat."
+            "value" : "OpenCode Mobile utilitza Face ID per desbloquejar l'app quan el Bloqueig de l'app està activat."
           }
         },
         "cs" : {
@@ -446,13 +446,13 @@
         "fo" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile brúkar Face ID til at læsa appina upp, tá App Lock er tendrað."
+            "value" : "OpenCode Mobile brúkar Face ID til at læsa appina upp, tá Appulás er tendraður."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile utilise Face ID pour déverrouiller l’app lorsque le Verrouillage de l’app est activé."
+            "value" : "OpenCode Mobile utilise Face ID pour déverrouiller l’app lorsque le verrouillage de l’app est activé."
           }
         },
         "hi" : {
@@ -488,7 +488,7 @@
         "is" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile notar Face ID til að opna appið þegar kveikt er á appláskinu."
+            "value" : "OpenCode Mobile notar Face ID til að opna appið þegar kveikt er á appalæsingu."
           }
         },
         "it" : {
@@ -530,13 +530,13 @@
         "lt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile naudoja Face ID, kad atrakintų programėlę, kai įjungtas programėlės užraktas."
+            "value" : "OpenCode Mobile naudoja Face ID, kad atrakintų programą, kai įjungtas programos užraktas."
           }
         },
         "lv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile izmanto Face ID, lai atbloķētu lietotni, kad ir ieslēgts lietotnes bloķētājs."
+            "value" : "OpenCode Mobile izmanto Face ID, lai atbloķētu lietotni, kad ir ieslēgta lietotnes bloķēšana."
           }
         },
         "mk" : {
@@ -548,13 +548,13 @@
         "mn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Аппын түгжээ асаалттай үед OpenCode Mobile аппыг тайлахдаа Face ID ашиглана."
+            "value" : "Апп түгжээ асаалттай үед OpenCode Mobile-ийн түгжээг тайлахад Face ID ашиглана."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile menggunakan Face ID untuk membuka kunci apl apabila Kunci Apl dihidupkan."
+            "value" : "OpenCode Mobile menggunakan Face ID untuk membuka kunci aplikasi apabila Kunci aplikasi dihidupkan."
           }
         },
         "my" : {
@@ -620,7 +620,7 @@
         "sl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile uporablja Face ID za odklepanje aplikacije, ko je vklopljena zaklenitev aplikacije."
+            "value" : "OpenCode Mobile uporablja Face ID za odklepanje aplikacije, ko je vklopljen zaklep aplikacije."
           }
         },
         "sq" : {
@@ -656,7 +656,7 @@
         "tk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile Programma gulpy açyk wagty programmany açmak üçin Face ID ulanýar."
+            "value" : "OpenCode Mobile, Programma gulpy açyk bolanda programmany açmak üçin Face ID ulanýar."
           }
         },
         "tr" : {
@@ -674,7 +674,7 @@
         "uz" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ilova qulfi yoqilganda OpenCode Mobile ilovani ochish uchun Face ID dan foydalanadi."
+            "value" : "Ilova qulfi yoqilganda OpenCode Mobile ilovani ochish uchun Face ID’dan foydalanadi."
           }
         },
         "vi" : {
@@ -704,13 +704,13 @@
         "am" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile በመሣሪያ ላይ ለሚደረግ የጽሑፍ ማቅረቢያ ድምፅ ማስገቢያ ማይክሮፎኑን ይጠቀማል። ድምፁ በዚህ መሣሪያ ላይ ብቻ ይቆያል።"
+            "value" : "OpenCode Mobile በመሣሪያ ላይ ድምፅን ወደ ጽሑፍ ቀይሮ በመጻፊያው ውስጥ ለማስገባት ማይክሮፎኑን ይጠቀማል። ድምፁ በዚህ መሣሪያ ላይ ብቻ ይቆያል።"
           }
         },
         "az" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile cihazda mesaj yazma sahəsinə səslə daxiletmə üçün mikrofondan istifadə edir. Səs bu cihazda qalır."
+            "value" : "OpenCode Mobile cihazda mesaj yazma sahəsində səslə yazma üçün mikrofondan istifadə edir. Səs bu cihazda qalır."
           }
         },
         "bg" : {
@@ -722,7 +722,7 @@
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ডিভাইসেই কম্পোজারে ডিক্টেশনের জন্য OpenCode Mobile মাইক্রোফোন ব্যবহার করে। অডিও এই ডিভাইসেই থাকে।"
+            "value" : "কম্পোজারে ডিভাইসেই ডিক্টেশন চালানোর জন্য OpenCode Mobile মাইক্রোফোন ব্যবহার করে। অডিও এই ডিভাইসেই থাকে।"
           }
         },
         "bs" : {
@@ -734,7 +734,7 @@
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile utilitza el micròfon per al dictat al compositor dins del dispositiu. L'àudio es queda en aquest dispositiu."
+            "value" : "OpenCode Mobile utilitza el micròfon per dictar al compositor sense sortir del dispositiu. L'àudio no surt d'aquest dispositiu."
           }
         },
         "cs" : {
@@ -776,7 +776,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile usa el micrófono para el dictado en el compositor, en el propio dispositivo. El audio no sale de este dispositivo."
+            "value" : "OpenCode Mobile usa el micrófono para dictar en el cuadro de mensaje, de forma local en el dispositivo. El audio no sale de este dispositivo."
           }
         },
         "et" : {
@@ -794,7 +794,7 @@
         "fo" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile brúkar mikrofonina til diktering á tólinum, beint á eindini. Ljóðið verður á hesi eindini."
+            "value" : "OpenCode Mobile brúkar mikrofonina til talainnslátt í skriviøkinum á hesum tilfarinum. Ljóðið verður á hesum tilfarinum."
           }
         },
         "fr" : {
@@ -812,7 +812,7 @@
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile koristi mikrofon za diktiranje u polje za pisanje izravno na uređaju. Zvuk ostaje na ovom uređaju."
+            "value" : "OpenCode Mobile koristi mikrofon za diktiranje na uređaju u polju za pisanje. Zvuk ostaje na ovom uređaju."
           }
         },
         "hu" : {
@@ -824,7 +824,7 @@
         "hy" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile-ն օգտագործում է խոսափողը՝ կազմիչում սարքի վրա թելադրելու համար։ Աուդիոն մնում է այս սարքում։"
+            "value" : "OpenCode Mobile-ն օգտագործում է խոսափողը՝ կազմիչում սարքում կատարվող թելադրության համար։ Աուդիոն մնում է այս սարքում։"
           }
         },
         "id" : {
@@ -836,7 +836,7 @@
         "is" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile notar hljóðnemann fyrir upplestur í skrifreitinn á tækinu. Hljóðið helst á þessu tæki."
+            "value" : "OpenCode Mobile notar hljóðnemann fyrir raddinnslátt í skrifreitinn á tækinu. Hljóðið helst á þessu tæki."
           }
         },
         "it" : {
@@ -866,7 +866,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile은 입력창의 기기 내 음성 받아쓰기에 마이크를 사용합니다. 오디오는 이 기기에만 저장됩니다."
+            "value" : "OpenCode Mobile은 입력창의 기기 내 음성 받아쓰기에 마이크를 사용합니다. 오디오는 이 기기를 벗어나지 않습니다."
           }
         },
         "lo" : {
@@ -896,7 +896,7 @@
         "mn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile төхөөрөмж дээрх бичвэр оруулах дуу хоолойн диктовкт микрофон ашиглана. Аудио энэ төхөөрөмжөөс гарахгүй."
+            "value" : "OpenCode Mobile бичигч дэх төхөөрөмж дээрх дуугаар бичих үед микрофон ашиглана. Аудио энэ төхөөрөмжөөс гарахгүй."
           }
         },
         "ms" : {
@@ -932,19 +932,19 @@
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile używa mikrofonu do dyktowania tekstu w polu wiadomości na urządzeniu. Dźwięk pozostaje na tym urządzeniu."
+            "value" : "OpenCode Mobile używa mikrofonu do dyktowania na urządzeniu w polu wiadomości. Dźwięk pozostaje na tym urządzeniu."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O OpenCode Mobile usa o microfone para ditar texto no compositor, processado no dispositivo. O áudio permanece neste dispositivo."
+            "value" : "O OpenCode Mobile usa o microfone para ditar texto no campo de mensagem, com processamento no dispositivo. O áudio permanece neste dispositivo."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile folosește microfonul pentru dictarea în compozitor, direct pe dispozitiv. Sunetul rămâne pe acest dispozitiv."
+            "value" : "OpenCode Mobile folosește microfonul pentru dictarea în câmpul de mesaj, direct pe dispozitiv. Sunetul rămâne pe acest dispozitiv."
           }
         },
         "ru" : {
@@ -974,7 +974,7 @@
         "sq" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile përdor mikrofonin për diktim në hapësirën e shkrimit direkt në pajisje. Audioja mbetet në këtë pajisje."
+            "value" : "OpenCode Mobile përdor mikrofonin për diktim në pajisje në fushën e mesazhit. Audioja mbetet në këtë pajisje."
           }
         },
         "sr" : {
@@ -1004,7 +1004,7 @@
         "tk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile enjamyň özünde ýazgy diktowkasy üçin mikrofony ulanýar. Ses bu enjamda galýar."
+            "value" : "OpenCode Mobile ýazyjyda sesli ýazmak üçin enjamyň özünde mikrofony ulanýar. Ses bu enjamda galýar."
           }
         },
         "tr" : {
@@ -1022,13 +1022,13 @@
         "uz" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile qurilmada matn diktovka qilish uchun mikrofondan foydalanadi. Audio shu qurilmada qoladi."
+            "value" : "OpenCode Mobile qurilmada ovozli matn kiritish uchun mikrofondan foydalanadi. Audio shu qurilmada qoladi."
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile dùng micro để đọc chính tả vào khung soạn tin ngay trên thiết bị. Âm thanh được giữ trên thiết bị này."
+            "value" : "OpenCode Mobile dùng micrô để nhập bằng giọng nói vào khung soạn tin ngay trên thiết bị. Âm thanh được giữ trên thiết bị này."
           }
         },
         "zh-Hans" : {
@@ -1064,7 +1064,7 @@
         "bg" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile записва изображения от сесия във вашата фотобиблиотека, когато изберете „Запази изображението“."
+            "value" : "OpenCode Mobile записва изображения от сесия във вашата библиотека със снимки, когато изберете „Запазване на изображението“."
           }
         },
         "bn" : {
@@ -1076,7 +1076,7 @@
         "bs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile sprema slike iz sesije u vašu biblioteku fotografija kada odaberete Spremi sliku."
+            "value" : "OpenCode Mobile čuva slike iz sesije u vašu biblioteku fotografija kada odaberete Sačuvaj sliku."
           }
         },
         "ca" : {
@@ -1130,7 +1130,7 @@
         "et" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile salvestab seansi pildid teie fototeeki, kui valite Salvesta pilt."
+            "value" : "OpenCode Mobile salvestab seansi pildid sinu fototeeki, kui valid Salvesta pilt."
           }
         },
         "fi" : {
@@ -1154,7 +1154,7 @@
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "जब आप इमेज सेव करें चुनते हैं, तब OpenCode Mobile किसी सेशन की इमेज आपकी फ़ोटो लाइब्रेरी में सेव करता है।"
+            "value" : "जब आप \"इमेज सेव करें\" चुनते हैं, तब OpenCode Mobile किसी सेशन की इमेज आपकी फ़ोटो लाइब्रेरी में सेव करता है।"
           }
         },
         "hr" : {
@@ -1166,7 +1166,7 @@
         "hu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Az OpenCode Mobile a munkamenetek képeit a fotótárába menti, amikor a Kép mentése lehetőséget választja."
+            "value" : "Az OpenCode Mobile a munkamenetek képeit a fotótáradba menti, amikor a Kép mentése lehetőséget választod."
           }
         },
         "hy" : {
@@ -1226,13 +1226,13 @@
         "lt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile išsaugo seanso paveikslėlius jūsų nuotraukų bibliotekoje, kai pasirenkate „Išsaugoti paveikslėlį“."
+            "value" : "OpenCode Mobile išsaugo seanso paveikslėlius į jūsų nuotraukų biblioteką, kai pasirenkate „Išsaugoti paveikslėlį“."
           }
         },
         "lv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile saglabā attēlus no sesijas tavā fotoattēlu bibliotēkā, kad izvēlies Saglabāt attēlu."
+            "value" : "OpenCode Mobile saglabā attēlus no sesijas jūsu fotoattēlu bibliotēkā, kad izvēlaties Saglabāt attēlu."
           }
         },
         "mk" : {
@@ -1244,7 +1244,7 @@
         "mn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Та Зураг хадгалах гэснийг сонгоход OpenCode Mobile сессийн зургуудыг таны зургийн санд хадгална."
+            "value" : "Та “Зураг хадгалах”-ыг сонгоход OpenCode Mobile сессийн зургуудыг таны зургийн санд хадгална."
           }
         },
         "ms" : {
@@ -1268,7 +1268,7 @@
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "तपाईंले तस्बिर सुरक्षित गर्नुहोस् छान्दा OpenCode Mobile ले सत्रका तस्बिरहरू तपाईंको फोटो लाइब्रेरीमा सुरक्षित गर्छ।"
+            "value" : "तपाईंले “तस्बिर सुरक्षित गर्नुहोस्” छान्दा OpenCode Mobile ले सत्रका तस्बिरहरू तपाईंको फोटो लाइब्रेरीमा सुरक्षित गर्छ।"
           }
         },
         "nl" : {
@@ -1280,7 +1280,7 @@
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile zapisuje obrazy z sesji w Twojej bibliotece zdjęć, gdy wybierzesz Zapisz obraz."
+            "value" : "OpenCode Mobile zapisuje obrazy z sesji w Twojej bibliotece zdjęć, gdy wybierzesz „Zapisz obraz”."
           }
         },
         "pt-BR" : {
@@ -1340,7 +1340,7 @@
         "tg" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile тасвирҳои сессияро ҳангоми интихоби «Нигоҳ доштани тасвир» ба китобхонаи расмҳои шумо захира мекунад."
+            "value" : "OpenCode Mobile тасвирҳои сессияро ҳангоми интихоби «Захира кардани тасвир» ба китобхонаи расмҳои шумо захира мекунад."
           }
         },
         "th" : {
@@ -1352,13 +1352,13 @@
         "tk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Surady ýatda saklamak saýlanyňyzda, OpenCode Mobile sessiýadaky suratlary surat kitaphanaňyza saklaýar."
+            "value" : "Suraty saklamagy saýlanyňyzda, OpenCode Mobile sessiýadaky suratlary surat kitaphanaňyza saklaýar."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile, Görseli Kaydet'i seçtiğinde bir oturumdaki görselleri fotoğraf kitaplığına kaydeder."
+            "value" : "OpenCode Mobile, “Görseli Kaydet” seçeneğini seçtiğinizde bir oturumdaki görselleri fotoğraf kitaplığınıza kaydeder."
           }
         },
         "uk" : {
@@ -1400,13 +1400,13 @@
         "am" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile ጽሑፍን ወደ ማቅረቢያው ለማስገባት በመሣሪያ ላይ ያለ የንግግር ለይቶ ማወቅን ይጠቀማል። ድምፁ በዚህ መሣሪያ ላይ ብቻ ይቆያል።"
+            "value" : "OpenCode Mobile ጽሑፍን ወደ መጻፊያው ለማስገባት በመሣሪያ ላይ ያለ የንግግር ለይቶ ማወቅን ይጠቀማል። ድምፁ በዚህ መሣሪያ ላይ ብቻ ይቆያል።"
           }
         },
         "az" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile mətni mesaj yazma sahəsinə daxil etmək üçün cihazda nitq tanıma istifadə edir. Səs bu cihazda qalır."
+            "value" : "OpenCode Mobile mətni mesaj yazma sahəsinə daxil etmək üçün cihazda nitq tanımadan istifadə edir. Səs bu cihazda qalır."
           }
         },
         "bg" : {
@@ -1472,7 +1472,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile usa el reconocimiento de voz en el dispositivo para insertar texto en el compositor. El audio no sale de este dispositivo."
+            "value" : "OpenCode Mobile usa el reconocimiento de voz en el dispositivo para insertar texto en el cuadro de mensaje. El audio no sale de este dispositivo."
           }
         },
         "et" : {
@@ -1490,7 +1490,7 @@
         "fo" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile brúkar talugreining á eindini til at seta tekst inn í skrivi-økið. Ljóðið verður á hesi eindini."
+            "value" : "OpenCode Mobile brúkar talugreining á hesum tilfarinum til at seta tekst inn í skriviøkið. Ljóðið verður á hesum tilfarinum."
           }
         },
         "fr" : {
@@ -1520,7 +1520,7 @@
         "hy" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile-ն օգտագործում է սարքի վրա խոսքի ճանաչում՝ կազմիչում տեքստ տեղադրելու համար։ Աուդիոն մնում է այս սարքում։"
+            "value" : "OpenCode Mobile-ն օգտագործում է սարքում կատարվող խոսքի ճանաչում՝ կազմիչում տեքստ տեղադրելու համար։ Աուդիոն մնում է այս սարքում։"
           }
         },
         "id" : {
@@ -1562,7 +1562,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile은 기기 내 음성 인식으로 입력창에 텍스트를 넣습니다. 오디오는 이 기기에만 저장됩니다."
+            "value" : "OpenCode Mobile은 기기 내 음성 인식으로 입력창에 텍스트를 넣습니다. 오디오는 이 기기를 벗어나지 않습니다."
           }
         },
         "lo" : {
@@ -1586,13 +1586,13 @@
         "mk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile користи препознавање говор на самиот уред за да вметне текст во полето за пишување. Звукот останува на овој уред."
+            "value" : "OpenCode Mobile користи препознавање на говор на самиот уред за да вметне текст во полето за пишување. Звукот останува на овој уред."
           }
         },
         "mn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile бичвэр оруулагчид текст нэмэхдээ төхөөрөмж дээрх яриа таних боломжийг ашиглана. Аудио энэ төхөөрөмжөөс гарахгүй."
+            "value" : "OpenCode Mobile бичигчид текст оруулахдаа төхөөрөмж дээрх яриа таних боломжийг ашиглана. Аудио энэ төхөөрөмжөөс гарахгүй."
           }
         },
         "ms" : {
@@ -1634,13 +1634,13 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O OpenCode Mobile usa o reconhecimento de fala no dispositivo para inserir texto no compositor. O áudio permanece neste dispositivo."
+            "value" : "O OpenCode Mobile usa o reconhecimento de fala no dispositivo para inserir texto no campo de mensagem. O áudio permanece neste dispositivo."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile folosește recunoașterea vocală de pe dispozitiv pentru a introduce text în compozitor. Sunetul rămâne pe acest dispozitiv."
+            "value" : "OpenCode Mobile folosește recunoașterea vocală de pe dispozitiv pentru a introduce text în câmpul de mesaj. Sunetul rămâne pe acest dispozitiv."
           }
         },
         "ru" : {
@@ -1670,7 +1670,7 @@
         "sq" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile përdor njohjen e të folurit direkt në pajisje për të futur tekst në hapësirën e shkrimit. Audioja mbetet në këtë pajisje."
+            "value" : "OpenCode Mobile përdor njohjen e të folurit në pajisje për të futur tekst në fushën e mesazhit. Audioja mbetet në këtë pajisje."
           }
         },
         "sr" : {
@@ -1700,7 +1700,7 @@
         "tk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile ýazgy meýdanyna tekst goşmak üçin enjamyň özündäki çykyş tanamany ulanýar. Ses bu enjamda galýar."
+            "value" : "OpenCode Mobile ýazyjyna tekst goşmak üçin enjamyň özünde söz tanamagy ulanýar. Ses bu enjamda galýar."
           }
         },
         "tr" : {
@@ -1718,7 +1718,7 @@
         "uz" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile matnni kiritish uchun qurilmadagi nutqni tanish funksiyasidan foydalanadi. Audio shu qurilmada qoladi."
+            "value" : "OpenCode Mobile yozish maydoniga matn kiritish uchun qurilmadagi nutqni aniqlash funksiyasidan foydalanadi. Audio shu qurilmada qoladi."
           }
         },
         "vi" : {

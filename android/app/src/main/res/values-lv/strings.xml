@@ -25,11 +25,11 @@
     <string name="connection_setup_action_scan_qr_instead">Tā vietā skenēt QR</string>
     <string name="connection_setup_scan_qr_instead_hint">No opencode pair</string>
     <string name="connection_setup_remove_server">Noņemt serveri</string>
-    <string name="connection_setup_remove_dialog_title_unnamed">Vai noņemt “serveri”?</string>
+    <string name="connection_setup_remove_dialog_title_unnamed">Vai noņemt „serveri“?</string>
     <string name="connection_setup_instructions_run">Savā datorā palaid šo komandu un noskenē QR.</string>
-    <string name="connection_setup_instructions_first_run">Pirmā palaišana aizņem apmēram minūti. Nepieciešams OpenCode 2.0.25 vai jaunāks. Pakalpojums tiek startēts, ja tas vēl nedarbojas.</string>
-    <string name="connection_setup_instructions_same_wifi_title">Tā vietā tas pats Wi-Fi</string>
-    <string name="connection_setup_instructions_same_wifi_body">Vienkāršais pair rāda QR tikai tad, kad serveris ir sasniedzams ārpus localhost.</string>
+    <string name="connection_setup_instructions_first_run">Pirmā palaišana aizņem apmēram minūti. Nepieciešams OpenCode 2.0.25 vai jaunāks. Pakalpojums tiek palaists, ja tas vēl nedarbojas.</string>
+    <string name="connection_setup_instructions_same_wifi_title">Tā vietā — tas pats Wi-Fi tīkls</string>
+    <string name="connection_setup_instructions_same_wifi_body">Vienkāršā pair komanda parāda QR tikai tad, kad serveris ir sasniedzams ārpus localhost.</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">Hosts</string>
     <string name="connection_setup_host_help">LAN, Tailscale MagicDNS vai tunelis — nevis localhost uz tālruņa.</string>
@@ -38,7 +38,7 @@
     <string name="connection_setup_password_hint">Parole (nav obligāta)</string>
     <string name="connection_setup_password_help">Noklusējuma lietotājs ir opencode. Parole nav obligāta.</string>
     <string name="connection_setup_pairing_code_hint">Pārošanas kods</string>
-    <string name="connection_setup_pairing_code_help">No pair saites. Darbojas vienreiz un beidzas pēc 5 minūtēm.</string>
+    <string name="connection_setup_pairing_code_help">No pair saites. Derīgs vienu reizi un beidzas pēc 5 minūtēm.</string>
     <string name="connection_setup_segment_password">Parole</string>
     <string name="connection_setup_segment_pairing_code">Pārošanas kods</string>
     <string name="connection_setup_addresses_hint_tunnel_only">Attālais tunelis saglabāts. Nav ko izvēlēties. Tas paliek, līdz izslēgsi attālo piekļuvi.</string>
@@ -51,7 +51,7 @@
     <string name="connection_setup_address_using_now">Tiek izmantots</string>
     <string name="connection_setup_address_saved">Saglabāts</string>
     <string name="connection_setup_pair_again_unreachable">Saglabātā adrese nav sasniedzama. Savieno pārī vēlreiz.</string>
-    <string name="connection_setup_pair_again_unauthorized">Serveris noraidīja saglabāto pieteikšanos. Savieno pārī vēlreiz. Jauna parole izraksta no visām ierīcēm.</string>
+    <string name="connection_setup_pair_again_unauthorized">Serveris noraidīja saglabāto pieteikšanos. Savieno pārī vēlreiz. Jauna parole atsakās no visām ierīcēm.</string>
     <string name="connection_cleartext_title">Savienojums nav šifrēts</string>
     <string name="connection_cleartext_message_one_host">%1$s izmanto vienkāršu http ārpus tava vietējā tīkla vai Tailscale. Tava servera parole un viss tavās sesijās tiktu sūtīts nešifrēts. Labāk izmanto https, VPN vai tuneli.</string>
     <string name="connection_cleartext_message_hosts">%1$s izmanto vienkāršu http ārpus tava vietējā tīkla vai Tailscale. Tava servera parole un viss tavās sesijās tiktu sūtīts nešifrēts. Labāk izmanto https, VPN vai tuneli.</string>
@@ -63,11 +63,11 @@
     <string name="connection_error_camera_unavailable">Kamera šajā ierīcē nav pieejama</string>
     <string name="connection_error_enter_host">Ievadi hostu</string>
     <string name="connection_error_enter_pairing_code">Ievadi pārošanas kodu</string>
-    <string name="connection_error_pairing_link_expired">Šī pārošanas saite ir beigusies vai jau izmantota</string>
+    <string name="connection_error_pairing_link_expired">Šīs pārošanas saites derīgums ir beidzies, vai tā jau ir izmantota</string>
     <string name="connection_error_duplicate_profile">Serveris ar šo hostu un lietotājvārdu jau ir saglabāts</string>
-    <string name="connection_error_qr_scan_failed">QR neizdevās pievienot. OpenCode 2 pārošanas API vēl mainās, tāpēc skenēšana var neizdoties, kamēr lietotne darbojas. Ievadi hostu un pievienojies. Parole nav obligāta. Der arī pārošanas kods.</string>
+    <string name="connection_error_qr_scan_failed">QR neizdevās pievienot. OpenCode 2 pārošanas API vēl mainās, tāpēc skenēšana var neizdoties, lai gan lietotne darbojas pareizi. Ievadi hostu un pievienojies. Parole nav obligāta. Der arī pārošanas kods.</string>
     <string name="connection_error_unreachable">Serveris nav sasniedzams</string>
-    <string name="server_error_pairing_expired">Pārošana beigusies, savieno pārī vēlreiz</string>
+    <string name="server_error_pairing_expired">Pārošanas derīgums beidzies, savieno pārī vēlreiz</string>
     <string name="server_error_not_found">Mape vai fails nav atrasts</string>
     <string name="server_error_not_found_path">Mape vai fails nav atrasts · %1$s</string>
     <string name="server_error_session_busy">Sesija ir aizņemta</string>
@@ -76,7 +76,7 @@
     <string name="connection_error_unhealthy">Serveris ziņo, ka nedarbojas pareizi</string>
     <string name="connection_scanner_title">Skenēt pārošanas QR</string>
     <string name="connection_scanner_card_title">OpenCode pārošanas QR</string>
-    <string name="connection_scanner_card_body">No opencode pair --remote. Vienkāršais pair rāda QR tikai tad, kad serveris ir sasniedzams ārpus localhost.</string>
+    <string name="connection_scanner_card_body">No opencode pair --remote. Vienkāršā pair komanda parāda QR tikai tad, kad serveris ir sasniedzams ārpus localhost.</string>
     <string name="connection_onboarding_title">Pievienojies savam serverim</string>
     <string name="connection_onboarding_body">OpenCode Mobile vada sesijas opencode serverī, kas darbojas tavā izstrādes datorā.</string>
     <string name="connection_onboarding_connect">Pievienoties serverim</string>
@@ -88,7 +88,7 @@
     <string name="onboarding_unofficial_badge">Neoficiāls</string>
     <string name="onboarding_connect_page_title">Pievienojies\nsaviem serveriem</string>
     <string name="onboarding_connect_page_body">Norādi lietotnei opencode serveri savā datorā. Iesakām Tailscale, lai tālrunis varētu droši sasniegt to no jebkuras vietas.</string>
-    <string name="onboarding_connect_page_setup_link">Vispirms vajadzīgs serveris?</string>
+    <string name="onboarding_connect_page_setup_link">Vispirms vajag serveri?</string>
     <string name="onboarding_features_title">Ko vari darīt\nno šejienes</string>
     <string name="onboarding_features_sessions_title">Sesijas</string>
     <string name="onboarding_features_sessions_detail">Skatīt sarakstu, atvērt, izveidot, pārdēvēt, atzarot, arhivēt, dzēst</string>
@@ -101,7 +101,7 @@
     <string name="onboarding_features_live_title">Tiešraidē, kamēr atvērts</string>
     <string name="onboarding_features_live_detail">Notikumu straume priekšplānā; atsvaidzināšana pēc atkārtotas savienošanas</string>
     <string name="onboarding_setup_title">Iestatīt opencode serve</string>
-    <string name="onboarding_setup_intro">Lietotne sazinās ar opencode serveri, ko palaid pats. Īsais ceļš zemāk — pilnas detaļas oficiālajā dokumentācijā.</string>
+    <string name="onboarding_setup_intro">Lietotne sazinās ar opencode serveri, ko palaid pats. Īss ceļvedis zemāk — pilns apraksts oficiālajā dokumentācijā.</string>
     <string name="onboarding_setup_step_number">%1$d. solis</string>
     <string name="onboarding_setup_step1_title">Palaid serveri savā datorā</string>
     <string name="onboarding_setup_step1_body">Savā projektā palaid opencode serveri (bez saskarnes). Turi to darbojamies, kamēr lieto tālruni.</string>
@@ -122,7 +122,7 @@
         <item quantity="other">%1$d servera savienojumi</item>
     </plurals>
     <string name="servers_saved">Saglabātie</string>
-    <string name="server_health_title">Servera veselība</string>
+    <string name="server_health_title">Servera stāvoklis</string>
     <string name="server_health_ms_ping">ms ping</string>
     <string name="server_health_last_30_min">Pēdējās 30 min</string>
     <string name="server_health_30_min_ago">pirms 30 min</string>
@@ -160,7 +160,7 @@
     <string name="server_health_errors">Kļūdas</string>
     <string name="server_health_errors_empty">Šajā periodā kļūdu nav.</string>
     <string name="server_health_error_log">Kļūdu žurnāls</string>
-    <string name="server_health_error_log_check">Veselības pārbaude</string>
+    <string name="server_health_error_log_check">Stāvokļa pārbaude</string>
     <string name="server_health_error_log_stream">Tiešais savienojums</string>
     <string name="server_health_error_log_repeated">%1$d pēc kārtas %2$s laikā</string>
     <string name="server_health_error_log_show_all">Rādīt visas %1$d</string>
@@ -168,7 +168,7 @@
     <string name="server_health_error_log_capped">Jaunākās %1$d no %2$d</string>
     <string name="server_health_category_network">Tīkls</string>
     <string name="server_health_category_timeout">Noildze</string>
-    <string name="server_health_category_heartbeat">Sirdsdarbības iesaldēšana</string>
+    <string name="server_health_category_heartbeat">Sirdspukstu aizture</string>
     <string name="server_health_category_server">Servera kļūda</string>
     <string name="server_health_category_auth">Autentifikācija</string>
     <string name="server_health_category_other">Cits</string>
@@ -186,7 +186,7 @@
     <string name="server_health_event_streams_value">%1$d no %2$d darbojas</string>
     <string name="server_health_footnote">Mērīts tikai tad, kad lietotne ir atvērta. Šajā ierīcē tiek glabāts 7 dienas.</string>
     <string name="server_health_empty_title">Mērījumu vēl nav</string>
-    <string name="server_health_empty_message">Veselība tiek mērīta, kamēr lietotne ir atvērta un savienota ar šo serveri.</string>
+    <string name="server_health_empty_message">Stāvoklis tiek mērīts, kamēr lietotne ir atvērta un savienota ar šo serveri.</string>
     <string name="server_health_status_live">Darbojas</string>
     <string name="server_health_status_connecting">Pievienojas</string>
     <string name="server_health_status_reconnecting">Atkārtoti pievienojas</string>
@@ -200,16 +200,16 @@
     </plurals>
     <string name="server_health_quick_view_measuring">Mēra…</string>
     <string name="server_health_details">Detaļas</string>
-    <string name="server_health_open_details">Atvērt servera veselību</string>
+    <string name="server_health_open_details">Atvērt servera stāvokli</string>
     <string name="server_health_unknown_value">—</string>
     <string name="server_health_axis_ago">pirms %1$s</string>
     <string name="server_health_hero_streams">%1$d no %2$d notikumu straumēm darbojas</string>
     <string name="servers_status_active">Aktīvs</string>
     <string name="servers_add">Pievienot serveri</string>
     <string name="servers_edit_profile">Rediģēt %1$s</string>
-    <string name="servers_remove_dialog_title_named">Vai noņemt “%1$s”?</string>
-    <string name="servers_remove_dialog_message">Šī ierīce aizmirsīs servera savienojumu. Sesijas paliek šajā serverī. Ja tas ir aktīvais serveris, izvēlēsies citu — vai nonāksi pie pievienošanās, ja neviena nepaliek.</string>
-    <string name="common_retry">Mēģiniet vēlreiz</string>
+    <string name="servers_remove_dialog_title_named">Vai noņemt „%1$s“?</string>
+    <string name="servers_remove_dialog_message">Šī ierīce aizmirsīs servera savienojumu. Sesijas paliek šajā serverī. Ja tas ir aktīvais serveris, izvēlēsies citu — vai nonāksi pievienošanās ekrānā, ja neviena nepaliek.</string>
+    <string name="common_retry">Mēģināt vēlreiz</string>
     <string name="common_save">Saglabāt</string>
     <string name="common_delete">Dzēst</string>
     <string name="common_edit">Rediģēt</string>
@@ -218,7 +218,7 @@
     <string name="common_open">Atvērt</string>
     <string name="common_settings">Iestatījumi</string>
     <string name="common_terminal">Terminālis</string>
-    <string name="common_selected">Atlasīts</string>
+    <string name="common_selected">Izvēlēts</string>
     <string name="home_sessions_title">Sesijas</string>
     <string name="home_servers_sheet_using_now">Tiek izmantots</string>
     <string name="home_servers_sheet_switch_to">Pārslēgties uz</string>
@@ -226,7 +226,7 @@
     <string name="home_more_options">Vairāk iespēju</string>
     <string name="home_filter_sheet_title">Filtrēt pēc projekta</string>
     <string name="home_empty_title">Projektu vēl nav</string>
-    <string name="home_empty_message">Pieskaries ikonai Pievienot projektu zemāk, lai izvēlētos mapi savā serverī.</string>
+    <string name="home_empty_message">Pieskaries ikonai „Pievienot projektu“ zemāk, lai izvēlētos mapi savā serverī.</string>
     <string name="home_no_session_selected_title">Sesija nav izvēlēta</string>
     <string name="home_no_session_selected_message">Izvēlies sesiju no saraksta</string>
     <string name="home_probe_failed_title">Nevar pievienoties</string>
@@ -238,7 +238,7 @@
     <string name="home_remove_project_message">Vai noņemt „%1$s“ no sākuma? Tā sesijas paliek serverī.</string>
     <string name="home_snackbar_removed">„%1$s“ noņemts no sākuma</string>
     <string name="home_snackbar_already_on_home">„%1$s“ jau ir sākumā</string>
-    <string name="home_snackbar_joined_project">Tas pats repozitorijs, kas %1$s. Tur tiek rādīts kā worktree.</string>
+    <string name="home_snackbar_joined_project">Tas pats repozitorijs kā %1$s. Tur tiek rādīts kā worktree.</string>
     <string name="home_all">Visi</string>
     <string name="home_all_projects">Visi projekti</string>
     <plurals name="home_project_count">
@@ -280,7 +280,7 @@
     <string name="home_fork_title">Atzarot sesiju</string>
     <string name="home_fork_confirm">Atzarot</string>
     <string name="home_fork_result_title">Sesija atzarota</string>
-    <string name="home_fork_result_message">“%1$s” ir gatava.</string>
+    <string name="home_fork_result_message">„%1$s“ ir gatava.</string>
     <string name="home_fork_result_stay">Palikt šeit</string>
     <string name="home_delete_title">Dzēst sesiju</string>
     <string name="home_delete_message">Vai dzēst sesiju „%1$s“?</string>
@@ -338,18 +338,18 @@
     <string name="add_project_no_subfolders">Nav apakšmapju</string>
     <string name="add_project_nothing_starts_with">Nekas mapē %1$s nesākas ar „%2$s“</string>
     <plurals name="add_project_truncation_hint">
-        <item quantity="zero">Rāda pirmās %1$d mapes. Ievadi vairāk nosaukuma, lai sašaurinātu sarakstu.</item>
+        <item quantity="zero">Rāda pirmo %1$d mapju. Ievadi vairāk nosaukuma, lai sašaurinātu sarakstu.</item>
         <item quantity="one">Rāda pirmo %1$d mapi. Ievadi vairāk nosaukuma, lai sašaurinātu sarakstu.</item>
         <item quantity="other">Rāda pirmās %1$d mapes. Ievadi vairāk nosaukuma, lai sašaurinātu sarakstu.</item>
     </plurals>
     <string name="add_project_in_folder">Mapē %1$s</string>
     <string name="add_project_root_home">Mājas</string>
-    <string name="add_project_error_add_failed">Nevar pievienot šo direktoriju</string>
+    <string name="add_project_error_add_failed">Nevar pievienot šo mapi</string>
     <string name="worktree_new_row">Jauns worktree…</string>
     <string name="worktree_run_in_subtitle">Izveidot checkout un sākt darbu tajā</string>
     <string name="worktree_move_subtitle">Izveidot checkout un pāriet uz to</string>
     <string name="worktree_needs_v2">Nepieciešams opencode v2 serveris</string>
-    <string name="worktree_turn_on">Ieslēdz Worktree iestatījumos</string>
+    <string name="worktree_turn_on">Ieslēdz worktree iestatījumos</string>
     <string name="worktree_not_git">Nepieciešams git repozitorijs</string>
     <string name="worktree_no_commit">Nepieciešams git repozitorijs ar commit</string>
     <string name="worktree_unsupported">Šis serveris nevar izveidot worktree</string>
@@ -369,7 +369,7 @@
     <string name="worktree_name_empty">Ievadi nosaukumu</string>
     <string name="worktree_name_chars">Izmanto burtus, ciparus, punktus, domuzīmes vai pasvītras</string>
     <plurals name="worktree_name_long">
-        <item quantity="zero">Izmanto ne vairāk kā %1$d rakstzīmes</item>
+        <item quantity="zero">Izmanto ne vairāk kā %1$d rakstzīmju</item>
         <item quantity="one">Izmanto ne vairāk kā %1$d rakstzīmi</item>
         <item quantity="other">Izmanto ne vairāk kā %1$d rakstzīmes</item>
     </plurals>
@@ -389,7 +389,7 @@
     <string name="files_loading_title">Ielādē failus</string>
     <string name="files_loading_subtitle">Ielādē mapi…</string>
     <string name="files_folder_error">Neizdevās ielādēt mapi</string>
-    <string name="files_retry">Mēģiniet vēlreiz</string>
+    <string name="files_retry">Mēģināt vēlreiz</string>
     <string name="files_empty_folder">Tukša mape</string>
     <string name="files_empty_project">Šajā projektā nav failu, ko rādīt.</string>
     <string name="files_ignored">ignorēts</string>
@@ -403,9 +403,9 @@
     <string name="files_no_file_message">Atvērtie faili paliek kā cilnes</string>
     <string name="files_path_copied">Ceļš nokopēts</string>
     <string name="file_viewer_copy_path">Kopēt ceļu</string>
-    <string name="file_viewer_wrap_lines">Locīt rindas</string>
-    <string name="file_viewer_wrap_lines_on">Locīt rindas, ieslēgts</string>
-    <string name="file_viewer_wrap_lines_off">Locīt rindas, izslēgts</string>
+    <string name="file_viewer_wrap_lines">Aplauzt rindas</string>
+    <string name="file_viewer_wrap_lines_on">Aplauzt rindas, ieslēgts</string>
+    <string name="file_viewer_wrap_lines_off">Aplauzt rindas, izslēgts</string>
     <string name="file_viewer_loading">Ielādē failu</string>
     <string name="file_viewer_loading_image">Ielādē attēlu</string>
     <string name="file_viewer_rendering_preview">Veido priekšskatījumu</string>
@@ -440,24 +440,24 @@
     <string name="terminal_title">Terminālis</string>
     <string name="terminal_catalog_title">Termināļi</string>
     <string name="terminal_catalog_loading">Ielādē termināļus</string>
-    <string name="terminal_catalog_empty_title">Nav darbojošos čaulu</string>
-    <string name="terminal_catalog_empty_message">Palaid to projektam. Tā nav saistīta ar tērzēšanas sesiju.</string>
-    <string name="terminal_select_title">Izvēlies čaulu</string>
-    <string name="terminal_select_message">Izvēlies čaulu no saraksta.</string>
-    <string name="terminal_new_shell">Jauna čaula</string>
+    <string name="terminal_catalog_empty_title">Nav darbojošos shell</string>
+    <string name="terminal_catalog_empty_message">Palaid shell projektam. Tas nav saistīts ar tērzēšanas sesiju.</string>
+    <string name="terminal_select_title">Izvēlies shell</string>
+    <string name="terminal_select_message">Izvēlies shell no saraksta.</string>
+    <string name="terminal_new_shell">Jauns shell</string>
     <string name="terminal_close">Aizvērt</string>
-    <string name="terminal_close_dialog_title">Vai aizvērt šo čaulu?</string>
+    <string name="terminal_close_dialog_title">Vai aizvērt šo shell?</string>
     <string name="terminal_close_dialog_title_named">Vai aizvērt „%1$s“?</string>
-    <string name="terminal_close_dialog_message">Tas beidz čaulu serverī.</string>
+    <string name="terminal_close_dialog_message">Tas beidz shell darbību serverī.</string>
     <string name="terminal_projects_empty_title">Projektu vēl nav</string>
-    <string name="terminal_projects_empty_message">Pievieno projektu sākumā, tad palaid čaulu šeit.</string>
-    <string name="terminal_error_create">Neizdevās palaist čaulu.</string>
+    <string name="terminal_projects_empty_message">Pievieno projektu sākumā, tad palaid shell šeit.</string>
+    <string name="terminal_error_create">Neizdevās palaist shell.</string>
     <string name="terminal_connecting_title">Pievienojas</string>
-    <string name="terminal_connecting_subtitle">Palaiž čaulu…</string>
+    <string name="terminal_connecting_subtitle">Palaiž shell…</string>
     <string name="terminal_connect_failed_title">Pievienošanās neizdevās</string>
-    <string name="terminal_connect_failed_message">Neizdevās palaist čaulu šim projektam.</string>
-    <string name="terminal_exited">Čaula beigusies</string>
-    <string name="terminal_retry">Mēģiniet vēlreiz</string>
+    <string name="terminal_connect_failed_message">Neizdevās palaist shell šim projektam.</string>
+    <string name="terminal_exited">Shell darbība beigusies</string>
+    <string name="terminal_retry">Mēģināt vēlreiz</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
     <string name="terminal_key_tab">Tab</string>
@@ -487,7 +487,7 @@
     <string name="session_chat_fork_dialog_error_empty_title">Ievadi sesijas nosaukumu</string>
     <string name="session_chat_fork_dialog_error_failed">Neizdevās atzarot sesiju.</string>
     <string name="session_chat_fork_result_title">Sesija atzarota</string>
-    <string name="session_chat_fork_result_message_ready">“%1$s” ir gatava.</string>
+    <string name="session_chat_fork_result_message_ready">„%1$s“ ir gatava.</string>
     <string name="session_chat_fork_result_open">Atvērt</string>
     <string name="session_chat_fork_result_stay_here">Palikt šeit</string>
     <string name="session_chat_attachment_source_title">Pievienot pielikumu</string>
@@ -509,7 +509,7 @@
     <string name="session_chat_commands_compact_label">Kompakts</string>
     <string name="session_chat_commands_compact_description">Saspiest sesijas kontekstu</string>
     <string name="session_chat_commands_terminal_label">Terminālis</string>
-    <string name="session_chat_commands_terminal_description">Atvērt projekta čaulu</string>
+    <string name="session_chat_commands_terminal_description">Atvērt projekta shell</string>
     <string name="session_chat_commands_files_label">Faili</string>
     <string name="session_chat_commands_files_description">Pārlūkot projekta failus</string>
     <string name="session_chat_commands_mcp_label">MCP serveri</string>
@@ -517,7 +517,7 @@
     <string name="session_chat_commands_btw_label">Btw</string>
     <string name="session_chat_commands_btw_description">Uzdot blakus jautājumu</string>
     <string name="session_chat_suggestion_file">Fails</string>
-    <string name="session_chat_suggestion_no_matches">Nav atbilstību</string>
+    <string name="session_chat_suggestion_no_matches">Nav atbilstošu rezultātu</string>
     <string name="session_chat_suggestion_no_commands">Nav komandu</string>
     <string name="session_chat_suggestion_badge_skill">prasme</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
@@ -530,12 +530,12 @@
     <string name="session_chat_variant_default">Noklusējums</string>
     <string name="session_chat_model_chip_placeholder">Modelis</string>
     <string name="session_chat_model_chip_loading">Ielādē modeli…</string>
-    <string name="session_chat_model_notice_load_failed">Neizdevās ielādēt modeļus. Pieskaries Modelis, lai mēģinātu vēlreiz.</string>
-    <string name="session_chat_model_notice_none_usable">Nav pieejamu izmantojamu modeļu. Pieskaries Modelis, lai mēģinātu vēlreiz.</string>
-    <string name="session_chat_model_notice_variant_unavailable">Atcerētais variants nav pieejams. Izmanto noklusējumu.</string>
-    <string name="session_chat_model_notice_model_unavailable">Izvēlētais modelis nav pieejams. Izmanto %1$s.</string>
-    <string name="session_chat_side_question_unsupported">/btw ir vajadzīgs opencode v2 serveris, kas atbild uz blakus jautājumiem. Šis serveris nevar atbildēt, nepapildinot sarunu.</string>
-    <string name="session_chat_side_question_unavailable">/btw ir vajadzīgs jaunāks opencode serveris.</string>
+    <string name="session_chat_model_notice_load_failed">Neizdevās ielādēt modeļus. Pieskaries čipam „Modelis“, lai mēģinātu vēlreiz.</string>
+    <string name="session_chat_model_notice_none_usable">Nav izmantojamu modeļu. Pieskaries čipam „Modelis“, lai mēģinātu vēlreiz.</string>
+    <string name="session_chat_model_notice_variant_unavailable">Saglabātais variants nav pieejams. Tiek izmantots noklusējums.</string>
+    <string name="session_chat_model_notice_model_unavailable">Izvēlētais modelis nav pieejams. Tiek izmantots %1$s.</string>
+    <string name="session_chat_side_question_unsupported">/btw nepieciešams opencode v2 serveris, kas atbild uz blakus jautājumiem. Šis serveris nevar atbildēt, nepapildinot sarunu.</string>
+    <string name="session_chat_side_question_unavailable">/btw nepieciešams jaunāks opencode serveris.</string>
     <string name="session_chat_side_question_copied">Atbilde nokopēta</string>
     <string name="session_chat_side_question_failed">/btw neizdevās: „%1$s“</string>
     <string name="attachment_error_folder">Mapes nevar pievienot kā pielikumu.</string>
@@ -550,12 +550,12 @@
     <string name="attachment_drop_reject_one">To nevar pievienot</string>
     <string name="attachment_drop_reject_many">Šos nevar pievienot</string>
     <plurals name="attachment_drop_attach_images_count">
-        <item quantity="zero">Nomet, lai pievienotu %1$d attēlus</item>
+        <item quantity="zero">Nomet, lai pievienotu %1$d attēlu</item>
         <item quantity="one">Nomet, lai pievienotu %1$d attēlu</item>
         <item quantity="other">Nomet, lai pievienotu %1$d attēlus</item>
     </plurals>
     <plurals name="attachment_drop_attach_files_count">
-        <item quantity="zero">Nomet, lai pievienotu %1$d failus</item>
+        <item quantity="zero">Nomet, lai pievienotu %1$d failu</item>
         <item quantity="one">Nomet, lai pievienotu %1$d failu</item>
         <item quantity="other">Nomet, lai pievienotu %1$d failus</item>
     </plurals>
@@ -573,8 +573,8 @@
     <string name="session_chat_activity_review_permission_request">Pārskatīt atļaujas pieprasījumu</string>
     <string name="session_chat_activity_answer_question">Atbildēt uz jautājumu</string>
     <string name="session_chat_activity_request_failed">Pieprasījums neizdevās</string>
-    <string name="session_chat_activity_btw_failed">/btw neizdevās · Mēģiniet vēlreiz</string>
-    <string name="session_chat_activity_btw_failed_count">/btw neizdevās ×%1$d · Mēģiniet vēlreiz</string>
+    <string name="session_chat_activity_btw_failed">/btw neizdevās · Mēģināt vēlreiz</string>
+    <string name="session_chat_activity_btw_failed_count">/btw neizdevās ×%1$d · Mēģināt vēlreiz</string>
     <string name="session_chat_activity_btw_ready">/btw atbilde gatava</string>
     <string name="session_chat_activity_btw_ready_count">/btw atbilde gatava ×%1$d</string>
     <plurals name="session_chat_activity_queued">
@@ -589,19 +589,19 @@
     </plurals>
     <string name="session_chat_activity_side_question_failed">Blakus jautājums neizdevās</string>
     <plurals name="session_chat_activity_side_questions_failed">
-        <item quantity="zero">%1$d blakus jautājumi neizdevās</item>
-        <item quantity="one">%1$d blakus jautājums neizdevās</item>
-        <item quantity="other">%1$d blakus jautājumi neizdevās</item>
+        <item quantity="zero">Neizdevās %1$d blakus jautājumu</item>
+        <item quantity="one">Neizdevās %1$d blakus jautājums</item>
+        <item quantity="other">Neizdevās %1$d blakus jautājumi</item>
     </plurals>
     <string name="session_chat_activity_side_question_ready">Blakus jautājuma atbilde gatava</string>
     <plurals name="session_chat_activity_side_questions_ready">
-        <item quantity="zero">Gatavas %1$d blakus jautājumu atbildes</item>
-        <item quantity="one">Gatava %1$d blakus jautājuma atbilde</item>
-        <item quantity="other">Gatavas %1$d blakus jautājumu atbildes</item>
+        <item quantity="zero">Gatavas atbildes uz %1$d blakus jautājumu</item>
+        <item quantity="one">Gatava atbilde uz %1$d blakus jautājumu</item>
+        <item quantity="other">Gatavas atbildes uz %1$d blakus jautājumiem</item>
     </plurals>
     <string name="session_chat_activity_side_question_running">Blakus jautājums darbojas</string>
     <plurals name="session_chat_activity_side_questions_running">
-        <item quantity="zero">Darbojas %1$d blakus jautājumi</item>
+        <item quantity="zero">Darbojas %1$d blakus jautājumu</item>
         <item quantity="one">Darbojas %1$d blakus jautājums</item>
         <item quantity="other">Darbojas %1$d blakus jautājumi</item>
     </plurals>
@@ -609,17 +609,17 @@
     <string name="session_chat_activity_action_open_request">Atvērt pieprasījumu</string>
     <string name="session_chat_activity_action_open_background_work">Atvērt fona darbu</string>
     <string name="session_chat_activity_action_show_in_chat">Rādīt tērzēšanā</string>
-    <string name="session_chat_activity_action_retry">Mēģiniet vēlreiz</string>
+    <string name="session_chat_activity_action_retry">Mēģināt vēlreiz</string>
     <string name="session_chat_activity_action_open">Atvērt</string>
-    <string name="session_chat_activity_action_open_up_next">Atvērt sadaļu Tālāk</string>
+    <string name="session_chat_activity_action_open_up_next">Atvērt sadaļu Nākamie</string>
     <string name="session_chat_activity_action_show_thought">Rādīt domu</string>
     <plurals name="session_chat_activity_collapsed_show_count">
-        <item quantity="zero">Rādīt %1$d darbības</item>
+        <item quantity="zero">Rādīt %1$d darbību</item>
         <item quantity="one">Rādīt %1$d darbību</item>
         <item quantity="other">Rādīt %1$d darbības</item>
     </plurals>
     <plurals name="session_chat_activity_collapsed_hide_count">
-        <item quantity="zero">Paslēpt %1$d darbības</item>
+        <item quantity="zero">Paslēpt %1$d darbību</item>
         <item quantity="one">Paslēpt %1$d darbību</item>
         <item quantity="other">Paslēpt %1$d darbības</item>
     </plurals>
@@ -627,7 +627,7 @@
     <string name="session_chat_activity_hide_more">Paslēpt %1$d</string>
     <string name="session_chat_navigation_scroll_to_end">Ritināt līdz beigām</string>
     <plurals name="session_chat_navigation_new_count">
-        <item quantity="zero">%1$d jauni</item>
+        <item quantity="zero">%1$d jaunu</item>
         <item quantity="one">%1$d jauns</item>
         <item quantity="other">%1$d jauni</item>
     </plurals>
@@ -636,11 +636,11 @@
         <item quantity="one">Ritināt līdz beigām, %1$d jauna ziņa</item>
         <item quantity="other">Ritināt līdz beigām, %1$d jaunas ziņas</item>
     </plurals>
-    <string name="home_error_reconnect_to_create">Pieslēdzieties vēlreiz, lai izveidotu sesiju</string>
+    <string name="home_error_reconnect_to_create">Pievienojies vēlreiz, lai izveidotu sesiju</string>
     <string name="timeline_state_creating_title">Sesija tiek sākta…</string>
     <string name="timeline_state_creating_subtitle">Izveide serverī…</string>
     <string name="new_session_title">Jauna sesija</string>
-    <string name="new_session_draft_subtitle">Melnraksts · tiks izveidots, kad nosūtīsiet</string>
+    <string name="new_session_draft_subtitle">Melnraksts · tiks izveidots, kad nosūtīsi</string>
     <string name="new_session_discard_draft">Atmest melnrakstu</string>
     <string name="new_session_run_in_caption">Palaist sesiju šeit</string>
     <string name="new_session_project">Projekts</string>
@@ -649,23 +649,23 @@
     <string name="new_session_local">Lokāli</string>
     <string name="new_session_new_worktree">Jauns worktree</string>
     <string name="new_session_not_git">Nav · nav Git repozitorija</string>
-    <string name="new_session_created_on_send">Tiks izveidota, kad nosūtīsiet</string>
+    <string name="new_session_created_on_send">Tiks izveidota, kad nosūtīsi</string>
     <string name="new_session_search_projects">Meklēt projektos</string>
     <string name="new_session_no_project_matches">Nav atbilstošu projektu</string>
     <string name="new_session_add_project">Pievienot projektu…</string>
-    <string name="new_session_run_in_project">Palaist: %1$s</string>
+    <string name="new_session_run_in_project">Palaist šeit: %1$s</string>
     <string name="new_session_current_checkout">%1$s · pašreizējais checkout</string>
-    <string name="new_session_new_worktree_subtitle">Izolēta kopija, tiks izveidota, kad nosūtīsiet</string>
+    <string name="new_session_new_worktree_subtitle">Izolēta kopija, tiks izveidota, kad nosūtīsi</string>
     <string name="new_session_worktrees_section">Worktree</string>
     <string name="timeline_state_loading_title">Ielādē ziņojumus</string>
-    <string name="timeline_state_loading_subtitle">Ielādē laika joslu…</string>
+    <string name="timeline_state_loading_subtitle">Ielādē sarunu…</string>
     <string name="timeline_state_error_title">Neizdevās ielādēt ziņojumus</string>
-    <string name="timeline_state_error_fallback">Laika josla netika ielādēta.</string>
-    <string name="timeline_state_retry">Mēģiniet vēlreiz</string>
-    <string name="timeline_state_empty">Vēl nav ziņojumu. Nosūtiet uzvedni, lai sāktu.</string>
+    <string name="timeline_state_error_fallback">Sarunu neizdevās ielādēt.</string>
+    <string name="timeline_state_retry">Mēģināt vēlreiz</string>
+    <string name="timeline_state_empty">Vēl nav ziņojumu. Nosūti uzvedni, lai sāktu.</string>
     <string name="timeline_state_refreshing">Atsvaidzina ziņojumus</string>
     <string name="timeline_message_assistant">Asistenta ziņojums</string>
-    <string name="timeline_message_actions_hint_long_press">Turiet nospiestu, lai rādītu ziņojuma darbības</string>
+    <string name="timeline_message_actions_hint_long_press">Turi nospiestu, lai rādītu ziņojuma darbības</string>
     <string name="timeline_message_actions_hint">Rāda ziņojuma darbības</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
     <string name="timeline_failure_copy">Kopēt</string>
@@ -677,18 +677,18 @@
         <item quantity="other">%1$d apakšaģenti</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
-        <item quantity="zero">%1$d čaulu</item>
-        <item quantity="one">%1$d čaula</item>
-        <item quantity="other">%1$d čaulas</item>
+        <item quantity="zero">%1$d shell</item>
+        <item quantity="one">%1$d shell</item>
+        <item quantity="other">%1$d shell</item>
     </plurals>
     <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
     <string name="timeline_background_work_subagents_and_shells_spoken">%1$s un %2$s</string>
     <string name="timeline_background_work_running_spoken">%1$s darbojas</string>
-    <string name="timeline_background_work_agent_needs_input">%1$s gaida jūsu atbildi</string>
+    <string name="timeline_background_work_agent_needs_input">%1$s gaida tavu atbildi</string>
     <plurals name="timeline_background_work_subagents_need_input">
-        <item quantity="zero">%1$d apakšaģentu gaida jūsu atbildi</item>
-        <item quantity="one">%1$d apakšaģents gaida jūsu atbildi</item>
-        <item quantity="other">%1$d apakšaģenti gaida jūsu atbildi</item>
+        <item quantity="zero">%1$d apakšaģentu gaida tavu atbildi</item>
+        <item quantity="one">%1$d apakšaģents gaida tavu atbildi</item>
+        <item quantity="other">%1$d apakšaģenti gaida tavu atbildi</item>
     </plurals>
     <string name="timeline_background_work_needs_input_running">%1$s · %2$d darbojas</string>
     <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s darbojas</string>
@@ -712,7 +712,7 @@
     <string name="tool_title_glob">Glob</string>
     <string name="tool_title_search">Meklēt</string>
     <string name="tool_title_fetch">Iegūt</string>
-    <string name="tool_title_shell">Čaula</string>
+    <string name="tool_title_shell">Shell</string>
     <string name="tool_title_execute">Izpildīt</string>
     <string name="tool_title_lsp">LSP</string>
     <string name="tool_title_plan">Plāns</string>
@@ -756,12 +756,12 @@
         <item quantity="other">%1$d iegūšanas</item>
     </plurals>
     <plurals name="tool_count_shell">
-        <item quantity="zero">%1$d čaulu</item>
-        <item quantity="one">%1$d čaula</item>
-        <item quantity="other">%1$d čaulas</item>
+        <item quantity="zero">%1$d shell</item>
+        <item quantity="one">%1$d shell</item>
+        <item quantity="other">%1$d shell</item>
     </plurals>
     <plurals name="tool_count_execute">
-        <item quantity="zero">%1$d izpildes</item>
+        <item quantity="zero">%1$d izpilžu</item>
         <item quantity="one">%1$d izpilde</item>
         <item quantity="other">%1$d izpildes</item>
     </plurals>
@@ -834,7 +834,7 @@
     <string name="tool_error_failed">Neizdevās</string>
     <string name="tool_error_exit_code">Beidzās ar kodu %1$d</string>
     <string name="tool_status_declined">Noraidīts</string>
-    <string name="tool_user_note">Jūsu piezīme: %1$s</string>
+    <string name="tool_user_note">Tava piezīme: %1$s</string>
     <string name="tool_status_stopped">Apturēts</string>
     <string name="tool_placeholder_writing_command">Raksta komandu…</string>
     <string name="tool_placeholder_preparing_read">Sagatavo lasīšanu…</string>
@@ -875,7 +875,7 @@
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">Izpētīts — %1$s</string>
     <string name="timeline_list_separator">%1$s · %2$s</string>
-    <string name="timeline_role_you">Jūs</string>
+    <string name="timeline_role_you">Tu</string>
     <string name="timeline_role_assistant">Asistents</string>
     <string name="timeline_role_command">Komanda</string>
     <string name="timeline_role_tool">Rīks</string>
@@ -904,13 +904,13 @@
     </plurals>
     <string name="timeline_activity_thinking">Domā…</string>
     <string name="timeline_activity_waiting_for_agents">Gaida aģentus</string>
-    <string name="timeline_activity_waiting_for_you">Gaida jūs</string>
+    <string name="timeline_activity_waiting_for_you">Gaida tevi</string>
     <string name="timeline_notice_moved_to">Pārvietots uz</string>
     <string name="timeline_notice_agent_changed">Aģents nomainīts</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
     <string name="timeline_notice_switched_to">Pārslēgts uz</string>
     <string name="timeline_notice_variant_switched">Variants pārslēgts uz</string>
-    <string name="timeline_notice_variant_default">Variants pārslēgts uz noklusējuma</string>
+    <string name="timeline_notice_variant_default">Variants pārslēgts uz noklusējumu</string>
     <string name="timeline_notice_instructions_updated">Instrukcijas atjauninātas</string>
     <string name="timeline_notice_restart">Turpina pēc restartēšanas</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
@@ -921,12 +921,12 @@
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Izvēlēties modeli</string>
     <string name="timeline_failure_compact">Saspiest</string>
-    <string name="session_chat_compact_status">Kompaktē…</string>
+    <string name="session_chat_compact_status">Saspiež…</string>
     <string name="session_chat_turn_sending">Sūta…</string>
     <string name="session_chat_turn_sending_percent">Sūta %1$d%%</string>
-    <string name="session_chat_compact_success">Sesija sakompaktēta.</string>
-    <string name="session_chat_compact_success_usage">Konteksts sakompaktēts · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">Neizdevās sakompaktēt sesijas kontekstu.</string>
+    <string name="session_chat_compact_success">Sesija saspiesta.</string>
+    <string name="session_chat_compact_success_usage">Konteksts saspiests · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">Neizdevās saspiest sesijas kontekstu.</string>
     <string name="session_chat_revert_undo_failed">Neizdevās atsaukt pēdējo ziņojumu.</string>
     <string name="session_chat_revert_failed">Neizdevās atjaunot ziņojumu.</string>
     <string name="session_chat_revert_redo_failed">Neizdevās atatsaukt.</string>
@@ -934,7 +934,7 @@
     <string name="session_chat_revert_commit_failed">Neizdevās apstiprināt atjaunošanu.</string>
     <string name="session_chat_fork_rename_failed">Atzars izveidots, bet to neizdevās pārdēvēt.</string>
     <string name="session_chat_pending_prompt_update_failed">Neizdevās atjaunināt gaidošo uzvedni</string>
-    <string name="session_chat_shell_stop_failed">Neizdevās apturēt čaulu. Mēģiniet vēlreiz.</string>
+    <string name="session_chat_shell_stop_failed">Neizdevās apturēt shell. Mēģini vēlreiz.</string>
     <string name="session_chat_shell_status_running">Darbojas</string>
     <string name="session_chat_shell_status_exited">Beidzās</string>
     <string name="session_chat_shell_status_timed_out">Noildze</string>
@@ -955,7 +955,7 @@
     <string name="session_chat_sheet_select_text_title">Atlasīt tekstu</string>
     <string name="session_chat_sheet_select_text_copy_all">Kopēt visu</string>
     <string name="session_chat_sheet_select_text_full_message_title">Viss ziņojums</string>
-    <string name="session_chat_copy_too_long">Pārāk garš, lai kopētu. Atlasiet daļu no tā.</string>
+    <string name="session_chat_copy_too_long">Pārāk garš, lai kopētu. Atlasi daļu no tā.</string>
     <string name="session_chat_sheet_message_actions_clip_label_code">Kods</string>
     <string name="session_chat_sheet_mcp_loading_title">Pārbauda MCP serverus</string>
     <string name="session_chat_sheet_mcp_loading_subtitle">Nolasa statusu no opencode servera</string>
@@ -1010,15 +1010,15 @@
     <string name="session_chat_goal_reviewer_pending">Pārbauda darbu, kad šī kārta beidzas.</string>
     <plurals name="session_chat_goal_stalls">
         <item quantity="zero">Nav progresa %1$d kārtu; aptur pēc %2$d</item>
-        <item quantity="one">Nav progresa %1$d kārtu; aptur pēc %2$d</item>
-        <item quantity="other">Nav progresa %1$d kārtas; aptur pēc %2$d</item>
+        <item quantity="one">Nav progresa %1$d kārtā; aptur pēc %2$d</item>
+        <item quantity="other">Nav progresa %1$d kārtās; aptur pēc %2$d</item>
     </plurals>
     <string name="session_chat_goal_waiting">Gaida</string>
-    <string name="session_chat_goal_waiting_shell">Gaida, kamēr beigsies fona čaula: %1$s. Aptur, ja %2$d min. nekas nedarbojas.</string>
-    <string name="session_chat_goal_waiting_subagent">Gaida, kamēr beigs apakšaģents. Aptur, ja %1$d min. nekas nedarbojas.</string>
-    <string name="session_chat_goal_waiting_on_you">Gaida jūs</string>
-    <string name="session_chat_goal_waiting_permission">Ir atvērts atļaujas pieprasījums. Mērķis turpināsies, kad atbildēsiet.</string>
-    <string name="session_chat_goal_waiting_question">Ir atvērts jautājums. Mērķis turpināsies, kad atbildēsiet.</string>
+    <string name="session_chat_goal_waiting_shell">Gaida, kamēr fona shell pabeigs darbu: %1$s. Aptur, ja %2$d min nekas nedarbojas.</string>
+    <string name="session_chat_goal_waiting_subagent">Gaida, kamēr apakšaģents pabeigs darbu. Aptur, ja %1$d min nekas nedarbojas.</string>
+    <string name="session_chat_goal_waiting_on_you">Gaida tevi</string>
+    <string name="session_chat_goal_waiting_permission">Ir atvērts atļaujas pieprasījums. Mērķis turpināsies, kad atbildēsi.</string>
+    <string name="session_chat_goal_waiting_question">Ir atvērts jautājums. Mērķis turpināsies, kad atbildēsi.</string>
     <string name="session_chat_goal_evidence">Pierādījumi</string>
     <string name="session_chat_goal_reconnecting">Savienojas atkārtoti. Rāda pēdējo zināmo mērķi.</string>
     <string name="session_chat_goal_pause">Apturēt</string>
@@ -1028,15 +1028,15 @@
     <string name="session_chat_goal_clear">Notīrīt</string>
     <string name="session_chat_goal_clearing">Notīra…</string>
     <string name="session_chat_goal_new">Jauns mērķis…</string>
-    <string name="session_chat_goal_footnote_active">Pēc katras kārtas pārbaudītājs salīdzina darbu ar mērķi. Aģents turpina, līdz mērķis ir sasniegts, vajadzīga jūsu palīdzība vai pagājušas %1$d kārtas.</string>
-    <string name="session_chat_goal_footnote_paused">Turpināšana sāk jaunu budžetu: %1$d kārtas.</string>
+    <string name="session_chat_goal_footnote_active">Pēc katras kārtas pārbaudītājs salīdzina darbu ar mērķi. Aģents turpina, līdz mērķis ir sasniegts, vajadzīga tava palīdzība vai kārtu skaits sasniedz %1$d.</string>
+    <string name="session_chat_goal_footnote_paused">Turpinot sākas jauns kārtu limits: %1$d.</string>
     <string name="session_chat_goal_footnote_met">Jauns mērķis aizstās šo.</string>
     <string name="session_chat_goal_paused">Mērķis apturēts</string>
-    <string name="session_chat_goal_paused_by_user">Jūs apturējāt mērķi</string>
-    <string name="session_chat_goal_paused_stopped">Jūs apturējāt kārtu, tāpēc mērķis apturēts</string>
+    <string name="session_chat_goal_paused_by_user">Tu apturēji mērķi</string>
+    <string name="session_chat_goal_paused_stopped">Tu apturēji kārtu, tāpēc mērķis apturēts</string>
     <string name="session_chat_goal_paused_failed">Mērķis apturēts kļūdas dēļ</string>
-    <string name="session_chat_goal_paused_no_progress">Mērķis apturēts: nav progresa %1$d kārtas</string>
-    <string name="session_chat_goal_paused_round_limit">Mērķis apturēts pēc %1$d kārtām</string>
+    <string name="session_chat_goal_paused_no_progress">Mērķis apturēts: nav progresa (kārtas bez progresa: %1$d)</string>
+    <string name="session_chat_goal_paused_round_limit">Mērķis apturēts: sasniegts kārtu limits (%1$d)</string>
     <string name="session_chat_goal_paused_restart">Mērķis apturēts: serveris restartējās</string>
     <string name="session_chat_goal_paused_reviewer">Mērķis apturēts: pārbaudītājs nevarēja izlemt</string>
     <string name="session_chat_goal_paused_quiet">Mērķis apturēts: fona darbs apklusa</string>
@@ -1045,28 +1045,28 @@
     <string name="session_chat_goal_ended">beidzies</string>
     <string name="session_chat_goal_set_earlier">Iepriekšējs mērķis. Tas tika notīrīts vai aizstāts.</string>
     <string name="session_chat_goal_bubble_label">Mērķis</string>
-    <string name="session_chat_goal_objective_hint">Aprakstiet, kā izskatās „padarīts“…</string>
-    <string name="session_chat_goal_resume_placeholder">Atbildiet, tad turpiniet mērķi…</string>
+    <string name="session_chat_goal_objective_hint">Apraksti, kā izskatās „padarīts“…</string>
+    <string name="session_chat_goal_resume_placeholder">Atbildi, tad turpini mērķi…</string>
     <string name="session_chat_goal_count">%1$s / %2$s rakstzīmes</string>
-    <string name="session_chat_goal_count_over">%1$s / %2$s rakstzīmes · saīsiniet mērķi, lai sūtītu</string>
-    <string name="session_chat_goal_command_replaces">Aizstāj jūsu pašreizējo mērķi</string>
-    <string name="session_chat_goal_command_replaces_paused">Aizstāj jūsu pašreizējo mērķi (apturēts)</string>
-    <string name="session_chat_goal_command_replaces_met">Aizstāj jūsu pašreizējo mērķi (sasniegts)</string>
+    <string name="session_chat_goal_count_over">%1$s / %2$s rakstzīmes · saīsini mērķi, lai sūtītu</string>
+    <string name="session_chat_goal_command_replaces">Aizstāj tavu pašreizējo mērķi</string>
+    <string name="session_chat_goal_command_replaces_paused">Aizstāj tavu pašreizējo mērķi (apturēts)</string>
+    <string name="session_chat_goal_command_replaces_met">Aizstāj tavu pašreizējo mērķi (sasniegts)</string>
     <string name="session_chat_goal_pause_failed">Neizdevās apturēt mērķi</string>
     <string name="session_chat_goal_pause_failed_reason">Neizdevās apturēt mērķi: %1$s</string>
     <string name="session_chat_goal_resume_failed">Neizdevās turpināt mērķi</string>
     <string name="session_chat_goal_resume_failed_reason">Neizdevās turpināt mērķi: %1$s</string>
     <string name="session_chat_goal_clear_failed">Neizdevās notīrīt mērķi</string>
     <string name="session_chat_goal_clear_failed_reason">Neizdevās notīrīt mērķi: %1$s</string>
-    <string name="session_chat_timeline_style_notice">Laika josla: %1$s. Varat to mainīt jebkurā laikā iestatījumos.</string>
+    <string name="session_chat_timeline_style_notice">Sarunas stils: %1$s. Vari to mainīt jebkurā laikā iestatījumos.</string>
     <string name="session_chat_branch_copied">Atzara nosaukums nokopēts</string>
     <string name="session_chat_follow_up_switched_steer">Pārslēgts uz Virzīt</string>
     <string name="session_chat_follow_up_switched_queue">Pārslēgts uz Rindu</string>
-    <string name="session_chat_failure_retry_after_seconds">Mēģiniet vēlreiz pēc %1$d s</string>
-    <string name="session_chat_failure_retry_after_minutes">Mēģiniet vēlreiz pēc %1$d min</string>
+    <string name="session_chat_failure_retry_after_seconds">Mēģini vēlreiz pēc %1$d s</string>
+    <string name="session_chat_failure_retry_after_minutes">Mēģini vēlreiz pēc %1$d min</string>
     <string name="component_outgoing_message_pending_caption">Gaida · tiks nosūtīts nākamajā solī</string>
     <string name="component_keyboard_hint_prompt">Nospiediet Tab, lai atbildētu ar tastatūru</string>
-    <string name="component_session_status_bar_context_usage">Konteksta izmantojums %1$d procenti</string>
+    <string name="component_session_status_bar_context_usage">Konteksta izmantojums: %1$d %%</string>
     <string name="component_session_status_bar_context_usage_unavailable">Konteksta izmantojums nav pieejams</string>
     <string name="app_lock_prompt_title">Atbloķēt OpenCode Mobile</string>
     <plurals name="component_branch_pill_files">
@@ -1090,7 +1090,7 @@
     <string name="session_chat_mcp_load_failed">Neizdevās ielādēt MCP serverus. Pārbaudiet savienojumu un mēģiniet vēlreiz.</string>
     <string name="session_chat_create_failed">Neizdevās izveidot sesiju</string>
     <string name="session_chat_send_timed_out">Neizdevās nosūtīt. Mēģiniet vēlreiz.</string>
-    <string name="session_chat_shell_cannot_queue">Čaulas komandas nevar likt rindā. Pārslēdzieties uz Virzīt, lai tās palaistu tūlīt.</string>
+    <string name="session_chat_shell_cannot_queue">Shell komandas nevar likt rindā. Pārslēdzieties uz Virzīt, lai tās palaistu tūlīt.</string>
     <string name="session_chat_reply_error_permission">Neizdevās nosūtīt atbildi. Mēģiniet vēlreiz.</string>
     <string name="session_chat_reply_error_permission_reason">Neizdevās nosūtīt atbildi. %1$s.</string>
     <string name="session_chat_reply_error_question">Neizdevās nosūtīt atbildi. Mēģiniet vēlreiz.</string>
@@ -1099,11 +1099,11 @@
     <string name="session_chat_reply_error_dismiss_reason">Neizdevās noraidīt jautājumu. %1$s.</string>
     <string name="session_chat_permission_unavailable">Atļaujas pieprasījums vairs nav pieejams</string>
     <string name="session_chat_question_unavailable">Jautājuma pieprasījums vairs nav pieejams</string>
-    <string name="session_chat_permission_tree_failed">Neizdevās atsvaidzināt atļauju sesiju koku</string>
-    <string name="session_chat_question_tree_failed">Neizdevās atsvaidzināt jautājumu sesiju koku</string>
-    <string name="session_chat_sheet_timeline_style_picker_title">Jaunums: izvēlieties laika joslu</string>
+    <string name="session_chat_permission_tree_failed">Neizdevās atsvaidzināt sesiju koku ar atļaujām</string>
+    <string name="session_chat_question_tree_failed">Neizdevās atsvaidzināt sesiju koku ar jautājumiem</string>
+    <string name="session_chat_sheet_timeline_style_picker_title">Jaunums: izvēlieties savu laika līniju</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Šis atjauninājums piedāvā jaunus veidus, kā sekot līdzi aģenta darbam.</string>
-    <string name="session_chat_sheet_timeline_style_picker_footnote">To var mainīt jebkurā laikā sadaļā Iestatījumi → Laika joslas stils.</string>
+    <string name="session_chat_sheet_timeline_style_picker_footnote">To var mainīt jebkurā laikā sadaļā Iestatījumi → Laika līnijas stils.</string>
     <string name="session_chat_sheet_timeline_style_picker_use">Izmantot: %1$s</string>
     <string name="session_chat_sheet_timeline_style_picker_recommended">Ieteicams</string>
     <string name="session_chat_sheet_timeline_style_picker_current">Pašreizējais</string>
@@ -1111,7 +1111,7 @@
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">Rīku kartes un grupas starp aģenta ziņojumiem</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Soļu sliede</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Viena rinda katram solim uz sliedes, tiešraidē, kamēr aģents strādā</string>
-    <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Aktivitāšu karte</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Aktivitātes karte</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Notiekošie soļi vienā tiešraides kartē, kas sakļaujas kopsavilkumā</string>
     <string name="session_chat_sheet_picker_model">Modelis</string>
     <string name="session_chat_sheet_picker_agent_mode">Aģenta režīms</string>
@@ -1121,7 +1121,7 @@
     <string name="session_chat_sheet_picker_filter_models_hint">Filtrēt modeļus...</string>
     <string name="session_chat_sheet_tool_detail_provider_response">Pakalpojumu sniedzēja atbilde</string>
     <string name="session_chat_sheet_tool_detail_tool">Rīks</string>
-    <string name="session_chat_sheet_tool_result_exit_code">izeja %1$d</string>
+    <string name="session_chat_sheet_tool_result_exit_code">izejas kods %1$d</string>
     <plurals name="session_chat_sheet_tool_result_matches">
         <item quantity="zero">%1$d atbilstību</item>
         <item quantity="one">%1$d atbilstība</item>
@@ -1140,15 +1140,15 @@
     <string name="session_chat_sheet_tool_result_copy_link">Kopēt %1$s</string>
     <string name="session_chat_sheet_tool_result_copies_link_hint">Kopē saiti</string>
     <string name="session_chat_sheet_tool_result_line_accessibility">Rinda %1$d, %2$s</string>
-    <string name="session_chat_sheet_shell_title">Čaula</string>
+    <string name="session_chat_sheet_shell_title">Shell</string>
     <string name="session_chat_sheet_shell_command_accessibility">Komanda, %1$s</string>
     <string name="session_chat_sheet_shell_no_output">Vēl nav izvades</string>
     <string name="session_chat_sheet_shell_truncated">Rāda jaunāko izvadi</string>
-    <string name="session_chat_sheet_shell_stop">Apturēt čaulu</string>
-    <string name="session_chat_sheet_shell_stopping">Aptur…</string>
+    <string name="session_chat_sheet_shell_stop">Apturēt shell</string>
+    <string name="session_chat_sheet_shell_stopping">Tiek apturēts…</string>
     <string name="session_chat_sheet_background_work_title">Fona darbs</string>
     <string name="session_chat_sheet_background_work_subagents">Apakšaģenti</string>
-    <string name="session_chat_sheet_background_work_shells">Čaulas</string>
+    <string name="session_chat_sheet_background_work_shells">Shell</string>
     <string name="session_chat_sheet_background_work_tab_running">Darbojas</string>
     <string name="session_chat_sheet_background_work_tab_done">Pabeigti</string>
     <string name="session_chat_sheet_background_work_running_empty">Nekas nedarbojas. Pabeigtais darbs ir sadaļā Pabeigti.</string>
@@ -1191,7 +1191,7 @@
     <string name="session_context_stat_provider">Pakalpojumu sniedzējs</string>
     <string name="session_context_stat_model">Modelis</string>
     <string name="session_context_stat_context_limit">Konteksta ierobežojums</string>
-    <string name="session_context_stat_total_tokens">Kopā tokeni</string>
+    <string name="session_context_stat_total_tokens">Kopējais tokenu skaits</string>
     <string name="session_context_stat_usage">Izmantojums</string>
     <string name="session_context_stat_input_tokens">Ievades tokeni</string>
     <string name="session_context_stat_output_tokens">Izvades tokeni</string>
@@ -1209,7 +1209,7 @@
     <string name="session_context_breakdown_tool_calls">Rīku izsaukumi</string>
     <string name="session_context_breakdown_other">Citi</string>
     <string name="session_context_breakdown_legend">%1$s %2$s</string>
-    <string name="session_context_breakdown_footnote">Aptuvens ievades tokenu sadalījums. Citi ietver rīku definīcijas un papildu izmaksas.</string>
+    <string name="session_context_breakdown_footnote">Aptuvens ievades tokenu sadalījums. Citi ietver rīku definīcijas un papildu datus.</string>
     <string name="settings_title">Iestatījumi</string>
     <string name="settings_section_server">Serveris</string>
     <string name="settings_section_help_feedback">Palīdzība un atsauksmes</string>
@@ -1234,8 +1234,8 @@
     <string name="settings_send_feedback_subtitle">Ziņojiet par kļūdu vai dalieties idejā</string>
     <string name="settings_hide_user_directory_title">Slēpt lietotāja direktoriju</string>
     <string name="settings_hide_user_directory_subtitle">Rādīt ~/Projects/… nevis /Users/you/Projects/…</string>
-    <string name="settings_recent_window_title">Nesenais logs</string>
-    <string name="settings_recent_window_message">Sesijas paliek sadaļā Nesenās, kamēr tās darbojas vai ir gatavas, vai ja atjauninātas šajā laika logā.</string>
+    <string name="settings_recent_window_title">Nesenības periods</string>
+    <string name="settings_recent_window_message">Sesijas paliek sadaļā Nesenās, kamēr tās darbojas vai ir gatavas, vai ja ir atjauninātas šajā periodā.</string>
     <plurals name="settings_recent_window_hours">
         <item quantity="zero">%1$d stundu</item>
         <item quantity="one">%1$d stunda</item>
@@ -1243,12 +1243,12 @@
     </plurals>
     <string name="settings_collapse_tool_calls_title">Sakļaut secīgus rīku izsaukumus</string>
     <string name="settings_collapse_tool_calls_subtitle">Apvienot pēc kārtas izpildītos rīkus vienā kopsavilkuma kartē</string>
-    <string name="settings_timeline_style_title">Laika joslas stils</string>
+    <string name="settings_timeline_style_title">Laika līnijas stils</string>
     <string name="settings_timeline_style_standard_title">Standarta</string>
     <string name="settings_timeline_style_standard_subtitle">Rīku kartes un grupas starp aģenta ziņojumiem</string>
     <string name="settings_timeline_style_step_rail_title">Soļu sliede</string>
     <string name="settings_timeline_style_step_rail_subtitle">Viena rinda katram solim uz sliedes, tiešraidē, kamēr aģents strādā</string>
-    <string name="settings_timeline_style_activity_card_title">Aktivitāšu karte</string>
+    <string name="settings_timeline_style_activity_card_title">Aktivitātes karte</string>
     <string name="settings_timeline_style_activity_card_subtitle">Notiekošie soļi vienā tiešraides kartē, kas sakļaujas kopsavilkumā</string>
     <string name="settings_follow_up_title">Papildu ziņojuma sūtīšana</string>
     <string name="settings_follow_up_steer">Virzīt</string>
@@ -1257,7 +1257,7 @@
     <string name="settings_follow_up_subtitle_queue">Rinda · tikai V2 serveriem. V1 to neatbalsta.</string>
     <string name="settings_follow_up_unsupported">V1 to neatbalsta. Šis serveris vienmēr sūta uzreiz.</string>
     <string name="settings_worktrees_title">Worktree</string>
-    <string name="settings_worktrees_subtitle">Rādīt katra projekta worktree un atzarus sākumā, un ļaut sadaļā Jauna sesija izvēlēties worktree, kad to turat nospiestu.</string>
+    <string name="settings_worktrees_subtitle">Rādīt katra projekta worktree un atzarus sākuma ekrānā un ļaut sadaļā Jauna sesija izvēlēties worktree, kad to turat nospiestu.</string>
     <string name="settings_session_rows_title">Sesiju rindas</string>
     <string name="settings_session_rows_compact_title">Kompakts</string>
     <string name="settings_session_rows_compact_subtitle">Divas rindas: nosaukums un laiks, tad projekts / worktree</string>
@@ -1270,17 +1270,17 @@
     <string name="settings_clear_session_cache_title">Notīrīt sesiju kešatmiņu</string>
     <string name="settings_clear_session_cache_subtitle">Noņemt kešotās sesijas un ziņojumus</string>
     <string name="settings_clear_session_cache_dialog_title">Notīrīt sesiju kešatmiņu?</string>
-    <string name="settings_clear_session_cache_dialog_message">Noņem kešotās sesijas un ziņojumus. Savienojums un akreditācijas dati paliek.</string>
+    <string name="settings_clear_session_cache_dialog_message">Noņem kešotās sesijas un ziņojumus. Savienojums un pieteikšanās dati paliek.</string>
     <string name="settings_clear">Notīrīt</string>
     <string name="settings_app_lock_title">Lietotnes bloķēšana</string>
-    <string name="settings_app_lock_subtitle_available">Pieprasīt pirksta nospiedumu, seju vai ekrāna bloķēšanu, kad lietotne atgriežas no fona</string>
+    <string name="settings_app_lock_subtitle_available">Pieprasīt pirksta nospiedumu, sejas atpazīšanu vai ekrāna bloķēšanu, kad lietotne atgriežas no fona</string>
     <string name="settings_app_lock_subtitle_unavailable">Iestatiet ierīcē ekrāna bloķēšanu, lai izmantotu lietotnes bloķēšanu</string>
     <string name="settings_privacy_policy_title">Privātuma politika</string>
     <string name="settings_privacy_policy_subtitle">Kā lietotnes apstrādā datus</string>
     <string name="settings_analytics_title">Analītika un avāriju atskaites</string>
     <string name="settings_analytics_subtitle">Atļaut neobligātus produkta lietošanas notikumus un avāriju atskaites. Izslēgts: uz Firebase netiek sūtīts nekas.</string>
     <string name="settings_analytics_label">Produkta analītika</string>
-    <string name="settings_diagnostic_logs_subtitle">Kopīgot rediģētu ritošo izpildes žurnāla logu</string>
+    <string name="settings_diagnostic_logs_subtitle">Kopīgot ritošu izpildlaika žurnāla logu ar noslēptiem datiem</string>
     <string name="settings_clear_all_data_title">Dzēst visus datus</string>
     <string name="settings_clear_all_data_subtitle">Noņemt savienojumu un kešatmiņu</string>
     <string name="settings_clear_all_data_dialog_title">Dzēst visus datus?</string>
@@ -1289,22 +1289,22 @@
     <string name="settings_build">Būvējums</string>
     <string name="settings_source_code_title">Pirmkods</string>
     <string name="settings_source_code_subtitle">GPL-3.0 vietnē GitHub</string>
-    <string name="settings_rate_app_title">Novērtēt Google Play</string>
+    <string name="settings_rate_app_title">Novērtēt vietnē Google Play</string>
     <string name="settings_rate_app_subtitle">Atsauksme palīdz citiem atrast lietotni</string>
-    <string name="settings_star_on_github_title">Atzīmēt ar zvaigznīti GitHub</string>
-    <string name="settings_follow_on_x_title">Sekot X</string>
+    <string name="settings_star_on_github_title">Atzīmēt ar zvaigznīti vietnē GitHub</string>
+    <string name="settings_follow_on_x_title">Sekot platformā X</string>
     <string name="diagnostics_title">Diagnostikas žurnāli</string>
     <string name="diagnostics_loading">Ielādē diagnostikas žurnālus</string>
     <string name="diagnostics_entries_title">Ieraksti</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="zero">%1$d rediģētu rindu saglabātajā logā</item>
-        <item quantity="one">%1$d rediģēta rinda saglabātajā logā</item>
-        <item quantity="other">%1$d rediģētas rindas saglabātajā logā</item>
+        <item quantity="zero">%1$d rindu ar noslēptiem datiem saglabātajā logā</item>
+        <item quantity="one">%1$d rinda ar noslēptiem datiem saglabātajā logā</item>
+        <item quantity="other">%1$d rindas ar noslēptiem datiem saglabātajā logā</item>
     </plurals>
     <string name="diagnostics_entries_empty">Saglabātajā logā vēl nav ierakstu</string>
     <string name="diagnostics_kept_title">Saglabāts</string>
     <plurals name="diagnostics_last_minutes">
-        <item quantity="zero">Pēdējās %1$d minūtes</item>
+        <item quantity="zero">Pēdējo %1$d minūšu</item>
         <item quantity="one">Pēdējā %1$d minūte</item>
         <item quantity="other">Pēdējās %1$d minūtes</item>
     </plurals>
@@ -1317,7 +1317,7 @@
         <item quantity="other">Maks. %1$d · nekas nav atmests</item>
     </plurals>
     <string name="diagnostics_format_title">Formāts</string>
-    <string name="diagnostics_format_value">JSONL · noslēpti noslēpumi un ziņojumu saturs</string>
+    <string name="diagnostics_format_value">JSONL · slepenie dati un ziņojumu saturs noslēpti</string>
     <string name="diagnostics_range_title">Diapazons</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
     <string name="diagnostics_areas_title">Jomas</string>
@@ -1325,7 +1325,7 @@
     <string name="diagnostics_share">Kopīgot</string>
     <string name="diagnostics_export_window_title">Eksporta logs</string>
     <string name="diagnostics_export_sheet_title">Eksportēt diagnostikas žurnālus</string>
-    <string name="diagnostics_share_via_apps">Kopīgot ar lietotnēm</string>
+    <string name="diagnostics_share_via_apps">Kopīgot, izmantojot lietotnes</string>
     <string name="diagnostics_save_to_files">Saglabāt failos</string>
     <string name="diagnostics_clear_dialog_title">Notīrīt diagnostikas žurnālus?</string>
     <string name="diagnostics_clear_dialog_message">Tiks noņemts saglabātais diagnostikas žurnāls.</string>
@@ -1339,8 +1339,8 @@
     <string name="appearance_theme_blurb_porcelain">Gandrīz balts / gandrīz melns</string>
     <string name="appearance_theme_blurb_linen">Silts papīrs / espresso</string>
     <string name="appearance_theme_blurb_signal">Tīri balts / tīri melns</string>
-    <string name="appearance_theme_blurb_hotline">Neitrāls apvalks, spilgti rozā</string>
-    <string name="appearance_theme_blurb_phosphor">Neitrāls apvalks, CRT zaļš</string>
+    <string name="appearance_theme_blurb_hotline">Neitrāla saskarne, spilgti rozā</string>
+    <string name="appearance_theme_blurb_phosphor">Neitrāla saskarne, CRT zaļš</string>
     <string name="appearance_syntax_name_match">Atbilst tēmai</string>
     <string name="appearance_syntax_blurb_match">Izmantot saskarnes tēmas pašas krāsas</string>
     <string name="appearance_syntax_blurb_nocturne">One Dark saime</string>
@@ -1349,7 +1349,7 @@
     <string name="appearance_syntax_blurb_neon">Dracula saime</string>
     <string name="appearance_preview_light">Gaišs</string>
     <string name="appearance_preview_dark">Tumšs</string>
-    <string name="appearance_preview_sample_message">Izstaigā tokenu krātuvi.</string>
+    <string name="appearance_preview_sample_message">Pārskati tokenu krātuvi.</string>
     <string name="appearance_preview_sample_reply">Atsvaidzina vienreiz, tad mēģina vēlreiz.</string>
     <string name="appearance_more_options">Citas opcijas</string>
     <string name="appearance_reset_text_sizes">Atiestatīt teksta izmērus</string>
@@ -1382,9 +1382,9 @@
     <string name="appearance_sample_assistant_message">Tests nolasa sesijas sīkfailu uzreiz pēc `login()` pabeigšanas, bet sīkfails tiek ierakstīts vienu ciklu vēlāk.</string>
     <string name="appearance_sample_tool_title">Labots</string>
     <string name="feature_flags_title">Funkciju karogi</string>
-    <string name="feature_flags_clear_overrides">Notīrīt pārrakstīšanas</string>
+    <string name="feature_flags_clear_overrides">Notīrīt pārrakstījumus</string>
     <string name="feature_flags_more_options">Citas opcijas</string>
-    <string name="feature_flags_intro">Karoga pārslēgšana iestata ierīces pārrakstījumu, kas ir svarīgāks par attālo vērtību. Attālās vērtības tiek ielādētas palaišanas brīdī un piemērotas nākamajā palaišanā.</string>
+    <string name="feature_flags_intro">Karoga pārslēgšana iestata ierīces pārrakstījumu, kam ir prioritāte pār attālo vērtību. Attālās vērtības tiek ielādētas palaišanas brīdī un piemērotas nākamajā palaišanā.</string>
     <string name="feature_flags_section_flags">Karogi</string>
     <string name="feedback_title_report">Ziņot par problēmu</string>
     <string name="feedback_title_hide_parts">Slēpt daļas</string>
@@ -1394,14 +1394,14 @@
     <string name="feedback_kind_idea">Ideja</string>
     <string name="feedback_placeholder_bug">Kas notika? Ko jūs gaidījāt?</string>
     <string name="feedback_placeholder_idea">Kas padarītu OpenCode labāku jums?</string>
-    <string name="feedback_privacy_note">Nonāk tikai pie OpenCode Mobile komandas. Nekad neietver jūsu servera adresi, lietotājvārdu vai paroli. Žurnāli tiek rediģēti šajā tālrunī.</string>
-    <string name="feedback_error_offline">Jūs esat bezsaistē. Jūsu ziņojums tiek glabāts šeit — mēģiniet vēlreiz, kad būsiet savienots.</string>
+    <string name="feedback_privacy_note">Tiek nosūtīts tikai OpenCode Mobile komandai. Nekad neietver jūsu servera adresi, lietotājvārdu vai paroli. Slepenie dati žurnālos tiek noslēpti šajā tālrunī.</string>
+    <string name="feedback_error_offline">Jūs esat bezsaistē. Jūsu ziņojums tiek glabāts šeit — mēģiniet vēlreiz, kad būsiet tiešsaistē.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="zero">Jūs tikko nosūtījāt ziņojumu. Mēģiniet vēlreiz pēc %1$d s.</item>
         <item quantity="one">Jūs tikko nosūtījāt ziņojumu. Mēģiniet vēlreiz pēc %1$d s.</item>
         <item quantity="other">Jūs tikko nosūtījāt ziņojumu. Mēģiniet vēlreiz pēc %1$d s.</item>
     </plurals>
-    <string name="feedback_error_unverified">Neizdevās pārbaudīt šo lietotnes kopiju. Ziņojumus var sūtīt tikai no App Store, TestFlight vai Play instalācijas.</string>
+    <string name="feedback_error_unverified">Neizdevās pārbaudīt šo lietotnes kopiju. Ziņojumus var sūtīt tikai no App Store, TestFlight vai Google Play instalācijas.</string>
     <string name="feedback_error_failed">Neizdevās nosūtīt ziņojumu.</string>
     <string name="feedback_action_try_again">Mēģināt vēlreiz</string>
     <string name="feedback_action_share_instead">Kopīgot tā vietā</string>
@@ -1442,14 +1442,14 @@
         <item quantity="other">Ekrānuzņēmums, paslēpti %1$d apgabali</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="zero">Pēdējās %1$d minūtes · augšupielādējot tiks saspiests ar gzip. Rediģēts šajā tālrunī.</item>
-        <item quantity="one">Pēdējā %1$d minūte · augšupielādējot tiks saspiests ar gzip. Rediģēts šajā tālrunī.</item>
-        <item quantity="other">Pēdējās %1$d minūtes · augšupielādējot tiks saspiests ar gzip. Rediģēts šajā tālrunī.</item>
+        <item quantity="zero">Pēdējo %1$d minūšu · augšupielādējot tiks saspiests ar gzip. Slepenie dati noslēpti šajā tālrunī.</item>
+        <item quantity="one">Pēdējā %1$d minūte · augšupielādējot tiks saspiests ar gzip. Slepenie dati noslēpti šajā tālrunī.</item>
+        <item quantity="other">Pēdējās %1$d minūtes · augšupielādējot tiks saspiests ar gzip. Slepenie dati noslēpti šajā tālrunī.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Ielādē…</string>
     <string name="feedback_log_preview_empty_title">Nav žurnāla rindu</string>
     <plurals name="feedback_log_preview_empty_message">
-        <item quantity="zero">Pēdējās %1$d minūtēs nekas netika reģistrēts.</item>
+        <item quantity="zero">Pēdējo %1$d minūšu laikā nekas netika reģistrēts.</item>
         <item quantity="one">Pēdējā %1$d minūtē nekas netika reģistrēts.</item>
         <item quantity="other">Pēdējās %1$d minūtēs nekas netika reģistrēts.</item>
     </plurals>
@@ -1464,7 +1464,7 @@
     <string name="session_search_title">Meklēt sesijās</string>
     <string name="session_search_clear">Notīrīt meklēšanu</string>
     <string name="session_search_placeholder">Meklēt: %1$s</string>
-    <string name="session_search_hint">Atbilst sesiju nosaukumiem: %1$s.</string>
+    <string name="session_search_hint">Meklē sesiju nosaukumos: %1$s.</string>
     <string name="session_search_searching">Meklē…</string>
     <plurals name="session_search_results">
         <item quantity="zero">%1$d rezultātu</item>
@@ -1499,14 +1499,14 @@
     <string name="keyboard_shortcuts_toggle_sidebar">Pārslēgt sānjoslu</string>
     <string name="keyboard_shortcuts_next_session">Nākamā sesija</string>
     <string name="keyboard_shortcuts_previous_session">Iepriekšējā sesija</string>
-    <string name="keyboard_shortcuts_focus_composer">Fokusēt rakstīšanas lauku</string>
+    <string name="keyboard_shortcuts_focus_composer">Aktivizēt rakstīšanas lauku</string>
     <string name="keyboard_shortcuts_search_sessions">Meklēt sesijās</string>
     <string name="changes_title">Izmaiņas</string>
     <string name="changes_source_menu_label">Izvēlēties izmaiņu avotu</string>
     <string name="changes_source_menu_selected">%1$s, atlasīts</string>
     <string name="changes_source_working_tree_name">Git izmaiņas</string>
     <string name="changes_source_working_tree_empty_title">Nav Git izmaiņu</string>
-    <string name="changes_source_working_tree_empty_message">Darba kokā nav nesaglabātu izmaiņu.</string>
+    <string name="changes_source_working_tree_empty_message">Darba kokā nav neapstiprinātu izmaiņu.</string>
     <string name="changes_source_last_turn_name">Pēdējās kārtas izmaiņas</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="zero">Git izmaiņās ir %1$d mainīto failu.</item>
@@ -1514,7 +1514,7 @@
         <item quantity="other">Git izmaiņās ir %1$d mainīti faili.</item>
     </plurals>
     <plurals name="changes_other_source_last_turn">
-        <item quantity="zero">Pēdējā kārtā mainīti %1$d failu.</item>
+        <item quantity="zero">Pēdējā kārtā mainīts %1$d failu.</item>
         <item quantity="one">Pēdējā kārtā mainīts %1$d fails.</item>
         <item quantity="other">Pēdējā kārtā mainīti %1$d faili.</item>
     </plurals>
@@ -1594,7 +1594,7 @@
     <string name="component_floating_pill_state_ready">Gatavs</string>
     <string name="component_floating_pill_state_needs_attention">Nepieciešama uzmanība</string>
     <string name="component_floating_pill_state_error">Kļūda</string>
-    <string name="component_floating_pill_state_done">Gatavs</string>
+    <string name="component_floating_pill_state_done">Pabeigts</string>
     <string name="component_floating_pill_accessibility_label">%1$s, %2$s</string>
     <string name="component_floating_pill_dismiss">Aizvērt: %1$s</string>
     <string name="common_expanded">Izvērsts</string>
@@ -1610,12 +1610,12 @@
     <string name="component_filter_tabs_unseen">jauns</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Vakar</string>
-    <string name="component_composer_reverting_title">Atsauc šo ziņu</string>
+    <string name="component_composer_reverting_title">Tiek atsaukta šī ziņa</string>
     <string name="session_new_title">Jauna sesija</string>
     <string name="session_list_dock_add_project">Pievienot projektu</string>
     <string name="theme_error_preset_not_found">Tēmas sagatave nav atrasta</string>
     <string name="component_composer_submit">Iesniegt</string>
-    <string name="component_composer_select_all_that_apply">Atlasiet visu piemērojamo</string>
+    <string name="component_composer_select_all_that_apply">Atlasiet visus piemērotos</string>
     <string name="component_unified_diff_summary_modified">Mainīts fails %1$s, %2$s, %3$s</string>
     <string name="component_hunk_navigation_collapse_context">Sakļaut kontekstu</string>
     <string name="component_top_bar_project_subtitle">Projekts %1$s %2$s</string>
@@ -1630,18 +1630,18 @@
     <string name="component_attachment_kind_image">Attēls</string>
     <string name="component_composer_hide_question">Paslēpt jautājumu</string>
     <string name="live_updates_status_connecting">savienojas</string>
-    <string name="dictation_model_queued_detail">%1$s ir ieplānojusi lejupielādi. Tā var gaidīt Wi-Fi, uzlādi vai brīvu vietu. Pārbaudiet vēlreiz pēc dažām minūtēm.</string>
+    <string name="dictation_model_queued_detail">Lejupielāde ir ieplānota sistēmā %1$s. Tā var gaidīt Wi-Fi, uzlādi vai brīvu vietu. Pārbaudiet vēlreiz pēc dažām minūtēm.</string>
     <string name="dictation_model_not_installed_detail">Diktēšana darbojas šajā ierīcē, tāpēc jūsu balss netiek augšupielādēta. %1$s modeli lejupielādē vienreiz un glabā visām lietotnēm.</string>
     <string name="component_outgoing_message_shows_actions_hint">Parāda ziņas darbības</string>
     <string name="component_activity_status_stopped">apturēts</string>
     <string name="dictation_action_try_again">Mēģināt vēlreiz</string>
-    <string name="component_composer_model_effort">Modelis %1$s, piepūle %2$s</string>
+    <string name="component_composer_model_effort">Modelis %1$s, spriešanas līmenis %2$s</string>
     <string name="component_activity_card_working">Strādā</string>
     <string name="component_activity_card_opens_activity">%1$s, atver aktivitāti</string>
     <string name="component_image_loading_label">%1$s, ielādē</string>
     <string name="session_list_dock_new_session">Jauna sesija</string>
     <string name="component_composer_always_allows">Vienmēr atļauj: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">Iziet no blakus jautājuma režīma</string>
+    <string name="component_composer_leave_side_question_mode">Iziet no blakusjautājuma režīma</string>
     <string name="session_list_worktree_empty_other_projects">Notīriet filtru, lai redzētu sesijas citos projektos.</string>
     <string name="component_attachment_uploading">Augšupielādē…</string>
     <string name="component_composer_deny">Liegt</string>
@@ -1651,7 +1651,7 @@
     <string name="component_composer_deny_with_note_title">Liegt ar piezīmi</string>
     <string name="component_composer_deny_note_placeholder">Pasakiet OpenCode, ko darīt citādi</string>
     <plurals name="component_composer_deny_note_also_denies">
-        <item quantity="zero">Liedz arī %1$d citus gaidošos pieprasījumus.</item>
+        <item quantity="zero">Liedz arī %1$d citu gaidošo pieprasījumu.</item>
         <item quantity="one">Liedz arī %1$d citu gaidošo pieprasījumu.</item>
         <item quantity="other">Liedz arī %1$d citus gaidošos pieprasījumus.</item>
     </plurals>
@@ -1675,17 +1675,17 @@
     <string name="component_composer_question">Jautājums</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">Notīriet filtru, lai redzētu sesijas citos worktree.</string>
-    <string name="component_composer_side_question_mode">Blakus jautājuma režīms</string>
+    <string name="component_composer_side_question_mode">Blakusjautājuma režīms</string>
     <string name="component_page_indicator_label">%1$d. lapa no %2$d</string>
     <string name="component_composer_next">Tālāk</string>
     <string name="component_message_image_label">Attēls %1$s</string>
-    <string name="component_composer_leave_shell_mode">Iziet no čaulas režīma</string>
+    <string name="component_composer_leave_shell_mode">Iziet no shell režīma</string>
     <string name="dictation_action_downloading">Lejupielādē…</string>
     <string name="component_image_viewer_share">Kopīgot</string>
     <string name="session_list_status_failed">Neizdevās</string>
     <string name="component_composer_custom_answer_title">Ierakstiet savu atbildi</string>
     <string name="component_composer_always">Vienmēr</string>
-    <string name="component_composer_send_side_question">Uzdot blakus jautājumu</string>
+    <string name="component_composer_send_side_question">Uzdot blakusjautājumu</string>
     <string name="component_composer_select_exactly">Izvēlieties %1$d</string>
     <string name="dictation_action_open_settings">Atvērt iestatījumus</string>
     <string name="component_composer_open_commands">Atvērt komandas</string>
@@ -1724,18 +1724,18 @@
     <string name="component_unified_diff_summary_deleted">Dzēsts fails %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">Darbojas</string>
     <string name="component_step_rail_expands">%1$s, izvēršas</string>
-    <string name="session_list_status_done">Gatavs</string>
+    <string name="session_list_status_done">Pabeigts</string>
     <string name="session_list_status_idle">Dīkstāvē</string>
     <string name="component_attachment_kind_file">Fails</string>
-    <string name="component_composer_run_shell_command">Palaist čaulas komandu</string>
+    <string name="component_composer_run_shell_command">Palaist shell komandu</string>
     <string name="component_image_could_not_load">Neizdevās ielādēt</string>
     <string name="component_outgoing_message_show_actions">Rādīt ziņas darbības</string>
     <string name="live_updates_accessibility_label">Tiešraides atjauninājumi: %1$s</string>
     <string name="component_composer_previous_question">Iepriekšējais jautājums</string>
     <string name="component_activity_card_agent">Aģents</string>
     <string name="session_list_section_today">Šodien</string>
-    <string name="component_composer_child_lockout">Bērnsesijām nevar sūtīt uzvedni.</string>
-    <string name="component_attachment_uploading_percent">Augšupielādē %1$d%%</string>
+    <string name="component_composer_child_lockout">Apakšsesijām nevar sūtīt uzvedni.</string>
+    <string name="component_attachment_uploading_percent">Augšupielādē %1$d %%</string>
     <string name="component_composer_custom_answer_hint">Ievadiet pielāgotu atbildi</string>
     <string name="component_composer_cancel_revert">Atcelt atsaukšanu</string>
     <string name="session_list_scope_load_slow_caption">Joprojām ielādē — lieliem projektiem var vajadzēt brīdi</string>
@@ -1774,7 +1774,7 @@
         <item quantity="other">pirms %1$d min</item>
     </plurals>
     <string name="component_composer_request_position">%1$d no %2$d</string>
-    <string name="component_composer_side_question_placeholder">Blakus jautājums, netiek pievienots tērzēšanai</string>
+    <string name="component_composer_side_question_placeholder">Blakusjautājums, netiek pievienots sarunai</string>
     <string name="session_list_worktree_empty_every_project">Notīriet filtru, lai redzētu visus projektus.</string>
     <string name="component_image_viewer_could_not_load_named">Neizdevās ielādēt: %1$s</string>
     <string name="component_composer_select_up_to">Izvēlieties līdz %1$d</string>
@@ -1786,7 +1786,7 @@
     <string name="session_list_worktree_empty_action">Notīrīt filtru</string>
     <string name="dictation_model_download_failed_detail">Pārbaudiet savienojumu un brīvo vietu šajā ierīcē, tad mēģiniet vēlreiz.</string>
     <string name="component_composer_send_queue">Sūtīt rindā</string>
-    <string name="session_list_dock_new_session_hint">Izmantojiet «Izvēlēties projektu vai worktree», lai sāktu citur.</string>
+    <string name="session_list_dock_new_session_hint">Izmantojiet „Izvēlēties projektu vai worktree“, lai sāktu citur.</string>
     <string name="session_list_section_yesterday">Vakar</string>
     <string name="component_code_file_line_label">Rinda %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">OpenCode Mobile idejas ziņojums</string>
@@ -1804,7 +1804,7 @@
     <string name="component_outgoing_message_long_press_hint">Turiet nospiestu, lai parādītu ziņas darbības</string>
     <string name="component_composer_hide_permission">Paslēpt atļaujas pieprasījumu</string>
     <string name="dictation_downloading_model_progress">Lejupielādē runas modeli, %1$s</string>
-    <string name="component_branch_pill_copy_branch_name">Kopēt zara nosaukumu</string>
+    <string name="component_branch_pill_copy_branch_name">Kopēt atzara nosaukumu</string>
     <string name="component_truncation_row_full_message_title">Rādīt visu ziņu</string>
     <string name="component_truncation_row_full_message_caption">Parādīti %1$s no %2$s rakstzīmēm</string>
     <string name="component_truncation_row_full_message_hint">Atver visu ziņu</string>
@@ -1812,14 +1812,14 @@
     <string name="session_list_status_stopped">Apturēts</string>
     <string name="component_attachment_cancel_upload">Atcelt faila %1$s augšupielādi</string>
     <string name="dictation_cancel_description">Atcelt diktēšanu</string>
-    <string name="component_composer_shell_mode">Čaulas režīms</string>
+    <string name="component_composer_shell_mode">Shell režīms</string>
     <string name="component_skeleton_illustration_connect">Pievienoties</string>
     <string name="component_composer_not_selected">Nav atlasīts</string>
-    <string name="component_composer_shell_mode_description">Čaulas režīms. Iziet no čaulas režīma</string>
+    <string name="component_composer_shell_mode_description">Shell režīms. Iziet no shell režīma</string>
     <string name="component_branch_pill_based_on">Pamatā: %1$s</string>
     <string name="component_composer_add_attachment">Pievienot pielikumu</string>
     <string name="dictation_microphone_off">Piekļuve mikrofonam ir izslēgta</string>
-    <string name="component_composer_shell">Čaula</string>
+    <string name="component_composer_shell">Shell</string>
     <string name="live_updates_status_auth_failed">Autentifikācija neizdevās</string>
     <string name="component_branch_pill_view_all_changes">Skatīt visas izmaiņas</string>
     <string name="component_composer_send">Sūtīt</string>
@@ -1828,13 +1828,13 @@
     <string name="relative_time_now">tagad</string>
     <string name="component_composer_previous_permission">Iepriekšējais atļaujas pieprasījums</string>
     <string name="component_composer_dictate">Diktēt</string>
-    <string name="component_composer_side_question_mode_description">Blakus jautājuma režīms. Iziet no blakus jautājuma režīma</string>
+    <string name="component_composer_side_question_mode_description">Blakusjautājuma režīms. Iziet no blakusjautājuma režīma</string>
     <string name="component_composer_abort">Pārtraukt aktīvo darbu</string>
     <string name="component_server_address_scheme_button">Shēma %1$s</string>
     <string name="component_composer_open_subagent_session">Atvērt apakšaģenta sesiju</string>
     <string name="component_composer_question_step">%1$d. solis no %2$d</string>
     <string name="share_feedback_subject_bug">OpenCode Mobile kļūdas ziņojums</string>
-    <string name="component_activity_card_opens_child_session_hint">Atver bērnsesiju</string>
+    <string name="component_activity_card_opens_child_session_hint">Atver apakšsesiju</string>
     <string name="component_activity_status_failed">neizdevās</string>
     <string name="dictation_model_not_installed_title">%1$s nepieciešams: %2$s</string>
     <string name="component_composer_back_to_main_session">Atpakaļ uz galveno sesiju</string>
@@ -1845,7 +1845,7 @@
     <string name="component_composer_next_permission">Nākamais atļaujas pieprasījums</string>
     <string name="session_list_dock_project_filter">Projektu filtrs</string>
     <string name="component_split_pane_resize_hint">Veiciet dubultskārienu, lai paslēptu sānjoslu</string>
-    <string name="component_branch_pill_shows_details_hint">Parāda zara informāciju</string>
+    <string name="component_branch_pill_shows_details_hint">Parāda atzara informāciju</string>
     <string name="component_composer_permission_requested">Pieprasīta atļauja</string>
     <string name="component_thinking">Domā</string>
     <string name="dictation_model_downloading_title">%1$s lejupielādē: %2$s</string>
@@ -1876,50 +1876,50 @@
         <item quantity="one">%1$d worktree</item>
         <item quantity="other">%1$d worktree</item>
     </plurals>
-    <string name="worktrees_main_checkout">Galvenā izgūšana</string>
+    <string name="worktrees_main_checkout">Galvenā darba kopija</string>
     <string name="worktrees_cannot_remove">Nevar noņemt</string>
     <plurals name="worktrees_changed">
         <item quantity="zero">%1$d mainītu</item>
         <item quantity="one">%1$d mainīts</item>
         <item quantity="other">%1$d mainīti</item>
     </plurals>
-    <string name="worktrees_none_in_project">Nav worktree. Jauna sesija → «Izvēlēties projektu vai worktree» izveido vienu.</string>
+    <string name="worktrees_none_in_project">Nav worktree. Jauna sesija → „Izvēlēties projektu vai worktree“ izveido vienu.</string>
     <string name="worktrees_footer">Worktree noņemšana izdzēš tā mapi serverī. Tā sesijas paliek, bet vairs nevar tajā darboties.</string>
     <string name="worktrees_more">Citas darbības: %1$s</string>
-    <string name="worktrees_removing">Noņem…</string>
-    <string name="worktrees_actions_show_on_home">Rādīt sesijas sākumā</string>
+    <string name="worktrees_removing">Tiek noņemts…</string>
+    <string name="worktrees_actions_show_on_home">Rādīt sesijas sākuma ekrānā</string>
     <string name="worktrees_actions_new_session">Jauna sesija šeit</string>
     <string name="worktrees_actions_remove">Noņemt worktree…</string>
-    <string name="worktrees_remove_title">Noņemt worktree «%1$s»?</string>
+    <string name="worktrees_remove_title">Noņemt worktree „%1$s“?</string>
     <string name="worktrees_remove_message">Izdzēš %1$s serverī.</string>
     <plurals name="worktrees_remove_changes">
-        <item quantity="zero">%1$d nesaglabātu izmaiņu tiks zaudētas.</item>
-        <item quantity="one">%1$d nesaglabāta izmaiņa tiks zaudēta.</item>
-        <item quantity="other">%1$d nesaglabātas izmaiņas tiks zaudētas.</item>
+        <item quantity="zero">Tiks zaudēts %1$d neapstiprinātu izmaiņu.</item>
+        <item quantity="one">%1$d neapstiprināta izmaiņa tiks zaudēta.</item>
+        <item quantity="other">%1$d neapstiprinātas izmaiņas tiks zaudētas.</item>
     </plurals>
-    <string name="worktrees_remove_changes_unknown">Nesaglabātās izmaiņas tiks zaudētas.</string>
-    <string name="worktrees_remove_changes_unchecked">Neizdevās pārbaudīt nesaglabātās izmaiņas. Tās tiks zaudētas.</string>
-    <string name="worktrees_remove_sessions_stay">Sesijas, kas izmanto šo worktree, paliek sākumā, bet vairs nevar šeit darboties.</string>
+    <string name="worktrees_remove_changes_unknown">Neapstiprinātās izmaiņas tiks zaudētas.</string>
+    <string name="worktrees_remove_changes_unchecked">Neizdevās pārbaudīt neapstiprinātās izmaiņas. Tās tiks zaudētas.</string>
+    <string name="worktrees_remove_sessions_stay">Sesijas, kas izmanto šo worktree, paliek sākuma ekrānā, bet šeit vairs nevar darboties.</string>
     <string name="worktrees_remove_confirm_anyway">Tomēr noņemt</string>
-    <string name="worktrees_blocked_title">«%1$s» vēl nevar noņemt</string>
+    <string name="worktrees_blocked_title">„%1$s“ vēl nevar noņemt</string>
     <string name="worktrees_blocked_message">Šajā worktree darbojas sesija. Apturiet to un pēc tam noņemiet worktree.</string>
     <string name="worktrees_blocked_ok">Labi</string>
     <string name="worktrees_blocked_show_session">Rādīt sesiju</string>
-    <string name="worktrees_removed">Worktree «%1$s» noņemts</string>
-    <string name="worktrees_remove_failed">Neizdevās noņemt «%1$s». %2$s</string>
-    <string name="worktrees_remove_failed_connection">Neizdevās noņemt «%1$s». Pārbaudiet savienojumu un mēģiniet vēlreiz.</string>
+    <string name="worktrees_removed">Worktree „%1$s“ noņemts</string>
+    <string name="worktrees_remove_failed">Neizdevās noņemt „%1$s“. %2$s</string>
+    <string name="worktrees_remove_failed_connection">Neizdevās noņemt „%1$s“. Pārbaudiet savienojumu un mēģiniet vēlreiz.</string>
     <string name="worktrees_menu_subtitle">%1$d — %2$s</string>
     <string name="worktrees_menu_none">Nav</string>
     <string name="session_list_worktree_removed">worktree noņemts</string>
     <string name="whats_new_title">Kas jauns</string>
     <string name="whats_new_version">Versija %1$s</string>
     <string name="whats_new_skipped_one">Jūs izlaidāt vienu atjauninājumu, tāpēc tas ir iekļauts zemāk.</string>
-    <string name="whats_new_skipped_many">Jūs izlaidāt %1$d atjauninājumus, tāpēc tie ir iekļauti zemāk.</string>
+    <string name="whats_new_skipped_many">Jūs izlaidāt atjauninājumus (%1$d), tāpēc tie ir iekļauti zemāk.</string>
     <string name="whats_new_in_version">Versijā %1$s</string>
     <string name="whats_new_also_since">Jauns arī kopš pēdējā atjauninājuma · %1$s</string>
     <string name="whats_new_fixes">Labojumi</string>
     <string name="whats_new_done">Gatavs</string>
-    <string name="whats_new_find_again">Šo var atrast Iestatījumi → Kas jauns</string>
+    <string name="whats_new_find_again">Šo var atrast sadaļā Iestatījumi → Kas jauns</string>
     <string name="whats_new_installed">Instalēts</string>
     <string name="whats_new_settings_subtitle">Izlaides piezīmes katrai versijai</string>
 </resources>

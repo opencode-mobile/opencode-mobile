@@ -29,7 +29,7 @@
     <string name="connection_setup_instructions_run">Uruchom to na swoim komputerze, a potem zeskanuj kod QR.</string>
     <string name="connection_setup_instructions_first_run">Pierwsze uruchomienie trwa około minuty. Wymaga OpenCode 2.0.25 lub nowszego. Usługa uruchomi się, jeśli jeszcze nie działa.</string>
     <string name="connection_setup_instructions_same_wifi_title">Zamiast tego to samo Wi-Fi</string>
-    <string name="connection_setup_instructions_same_wifi_body">Zwykłe pair pokazuje kod QR dopiero, gdy serwer jest osiągalny poza localhost.</string>
+    <string name="connection_setup_instructions_same_wifi_body">Zwykłe opencode pair pokazuje kod QR dopiero, gdy serwer jest osiągalny poza localhost.</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">Host</string>
     <string name="connection_setup_host_help">Sieć lokalna, Tailscale MagicDNS lub tunel — nie localhost na telefonie.</string>
@@ -65,7 +65,7 @@
     <string name="connection_error_enter_pairing_code">Wpisz kod parowania</string>
     <string name="connection_error_pairing_link_expired">Ten link parowania wygasł lub został już użyty</string>
     <string name="connection_error_duplicate_profile">Serwer z tym hostem i nazwą użytkownika jest już zapisany</string>
-    <string name="connection_error_qr_scan_failed">Kod QR nie połączył. API parowania OpenCode 2 wciąż się zmienia, więc skanowanie może się nie udać, mimo że aplikacja działa. Wpisz host i połącz. Hasło jest opcjonalne. Kod parowania też działa.</string>
+    <string name="connection_error_qr_scan_failed">Nie udało się połączyć przez kod QR. API parowania OpenCode 2 wciąż się zmienia, więc skanowanie może się nie udać, mimo że aplikacja działa. Wpisz host i połącz. Hasło jest opcjonalne. Kod parowania też działa.</string>
     <string name="connection_error_unreachable">Nie można połączyć się z serwerem</string>
     <string name="server_error_pairing_expired">Parowanie wygasło, sparuj ponownie</string>
     <string name="server_error_not_found">Nie znaleziono folderu ani pliku</string>
@@ -73,10 +73,10 @@
     <string name="server_error_session_busy">Sesja jest zajęta</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Uwierzytelnianie nie powiodło się</string>
-    <string name="connection_error_unhealthy">Serwer zgłosił problem ze stanem</string>
+    <string name="connection_error_unhealthy">Serwer zgłosił, że nie działa prawidłowo</string>
     <string name="connection_scanner_title">Skanuj QR parowania</string>
     <string name="connection_scanner_card_title">Kod QR parowania OpenCode</string>
-    <string name="connection_scanner_card_body">Z opencode pair --remote. Zwykłe pair pokazuje kod QR tylko wtedy, gdy serwer jest osiągalny poza localhost.</string>
+    <string name="connection_scanner_card_body">Z opencode pair --remote. Zwykłe opencode pair pokazuje kod QR tylko wtedy, gdy serwer jest osiągalny poza localhost.</string>
     <string name="connection_onboarding_title">Połącz z serwerem</string>
     <string name="connection_onboarding_body">OpenCode Mobile steruje sesjami na serwerze opencode działającym na Twoim komputerze deweloperskim.</string>
     <string name="connection_onboarding_connect">Połącz z serwerem</string>
@@ -95,13 +95,13 @@
     <string name="onboarding_features_chat_title">Czat i przerywanie</string>
     <string name="onboarding_features_chat_detail">Wysyłaj prompty i zatrzymuj trwającą pracę</string>
     <string name="onboarding_features_permissions_title">Uprawnienia</string>
-    <string name="onboarding_features_permissions_detail">Zatwierdzaj lub odmawiaj próśb (bez trwałego zapamiętywania)</string>
+    <string name="onboarding_features_permissions_detail">Zatwierdzaj lub odrzucaj prośby (bez trwałego zapamiętywania)</string>
     <string name="onboarding_features_changes_title">Zmiany</string>
     <string name="onboarding_features_changes_detail">Przeglądaj diffy sesji</string>
-    <string name="onboarding_features_live_title">Na żywo, gdy otwarta</string>
+    <string name="onboarding_features_live_title">Na żywo, gdy aplikacja jest otwarta</string>
     <string name="onboarding_features_live_detail">Strumień zdarzeń na pierwszym planie; odświeżanie po ponownym połączeniu</string>
     <string name="onboarding_setup_title">Skonfiguruj opencode serve</string>
-    <string name="onboarding_setup_intro">Aplikacja łączy się z uruchomionym przez Ciebie serwerem opencode. Poniżej krótka droga — szczegóły w oficjalnej dokumentacji.</string>
+    <string name="onboarding_setup_intro">Aplikacja łączy się z uruchomionym przez Ciebie serwerem opencode. Poniżej krótka instrukcja — szczegóły w oficjalnej dokumentacji.</string>
     <string name="onboarding_setup_step_number">Krok %1$d</string>
     <string name="onboarding_setup_step1_title">Uruchom serwer na swoim komputerze</string>
     <string name="onboarding_setup_step1_body">W swoim projekcie uruchom serwer opencode (headless). Niech działa, gdy korzystasz z telefonu.</string>
@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">Połącz się z telefonu</string>
     <string name="onboarding_setup_step3_body">Zalecane: Tailscale — zainstaluj Tailscale na komputerze i telefonie, a potem użyj adresu IP Tailscale komputera lub nazwy MagicDNS jako adresu URL serwera.\n\nMożna też użyć tej samej sieci LAN, VPN-u, HTTPS lub innego tunelu, którym zarządzasz. Aplikacja nie tworzy dla Ciebie przekaźnika.</string>
     <string name="onboarding_setup_step4_title">Połącz w aplikacji</string>
-    <string name="onboarding_setup_step4_body">Wpisz bazowy adres URL i hasło. Aplikacja sprawdzi GET /global/health, a potem zapisze na tym urządzeniu zapisane połączenie z serwerem.</string>
+    <string name="onboarding_setup_step4_body">Wpisz bazowy adres URL i hasło. Aplikacja sprawdzi GET /global/health, a potem zapisze na tym urządzeniu połączenie z serwerem.</string>
     <string name="onboarding_setup_open_docs">Otwórz dokumentację serwera</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile jest zablokowany</string>
@@ -140,7 +140,7 @@
     <string name="server_health_error_rate">Odsetek błędów</string>
     <string name="server_health_error_rate_detail">%1$d z %2$d sprawdzeń nie powiodło się</string>
     <string name="server_health_between_drops">Między zerwaniami</string>
-    <string name="server_health_between_drops_detail">średni czas działania na żywo</string>
+    <string name="server_health_between_drops_detail">średni czas ciągłego połączenia</string>
     <string name="server_health_latency">Opóźnienie</string>
     <string name="server_health_latency_summary">mediana %1$s · p95 %2$s</string>
     <string name="server_health_legend_median">Mediana</string>
@@ -169,7 +169,7 @@
     <string name="server_health_error_log_show_less">Pokaż mniej</string>
     <string name="server_health_error_log_capped">Ostatnie %1$d z %2$d</string>
     <string name="server_health_category_network">Sieć</string>
-    <string name="server_health_category_timeout">Przekroczony czas</string>
+    <string name="server_health_category_timeout">Przekroczenie czasu</string>
     <string name="server_health_category_heartbeat">Zanik heartbeatu</string>
     <string name="server_health_category_server">Błąd serwera</string>
     <string name="server_health_category_auth">Uwierzytelnianie</string>
@@ -201,7 +201,7 @@
         <item quantity="many">Czas działania %1$s · %2$d ponownych połączeń dziś</item>
         <item quantity="other">Czas działania %1$s · %2$d ponownego połączenia dziś</item>
     </plurals>
-    <string name="server_health_quick_view_measuring">Pomiar…</string>
+    <string name="server_health_quick_view_measuring">Mierzenie…</string>
     <string name="server_health_details">Szczegóły</string>
     <string name="server_health_open_details">Otwórz stan serwera</string>
     <string name="server_health_unknown_value">—</string>
@@ -353,8 +353,8 @@
         <item quantity="other">Pokazano pierwszych %1$d folderu. Wpisz więcej z nazwy, aby zawęzić listę.</item>
     </plurals>
     <string name="add_project_in_folder">W: %1$s</string>
-    <string name="add_project_root_home">Katalog domowy</string>
-    <string name="add_project_error_add_failed">Nie można dodać tego katalogu</string>
+    <string name="add_project_root_home">Folder domowy</string>
+    <string name="add_project_error_add_failed">Nie można dodać tego folderu</string>
     <string name="worktree_new_row">Nowy worktree…</string>
     <string name="worktree_run_in_subtitle">Utwórz checkout i zacznij tam</string>
     <string name="worktree_move_subtitle">Utwórz checkout i przenieś się tam</string>
@@ -366,8 +366,8 @@
     <string name="worktree_form_title">Nowy worktree</string>
     <string name="worktree_name">Nazwa</string>
     <string name="worktree_branch">Gałąź</string>
-    <string name="worktree_base">Utwórz z</string>
-    <string name="worktree_v1_branch_note">opencode v1 nazywa ją tak jak worktree</string>
+    <string name="worktree_base">Utwórz na podstawie</string>
+    <string name="worktree_v1_branch_note">opencode v1 nazywa ją tak samo jak worktree</string>
     <string name="worktree_v2_no_branch">Bez gałęzi (detached)</string>
     <string name="worktree_v2_branch_note">Checkouty opencode v2 nie mają gałęzi</string>
     <string name="worktree_current_checkout">Bieżący checkout</string>
@@ -379,10 +379,10 @@
     <string name="worktree_name_empty">Wpisz nazwę</string>
     <string name="worktree_name_chars">Użyj liter, cyfr, kropek, myślników lub podkreślników</string>
     <plurals name="worktree_name_long">
-        <item quantity="one">Użyj najwyżej %1$d znaku</item>
-        <item quantity="few">Użyj najwyżej %1$d znaków</item>
-        <item quantity="many">Użyj najwyżej %1$d znaków</item>
-        <item quantity="other">Użyj najwyżej %1$d znaku</item>
+        <item quantity="one">Maksymalna długość: %1$d znak</item>
+        <item quantity="few">Maksymalna długość: %1$d znaki</item>
+        <item quantity="many">Maksymalna długość: %1$d znaków</item>
+        <item quantity="other">Maksymalna długość: %1$d znaku</item>
     </plurals>
     <string name="worktree_submit_run_in">Utwórz i zacznij</string>
     <string name="worktree_submit_move">Utwórz i przenieś</string>
@@ -538,13 +538,13 @@
     <string name="session_chat_move_worktree_menu_title">Przenieś do worktree…</string>
     <string name="session_chat_move_worktree_sheet_title">Przenieś do worktree</string>
     <string name="session_chat_move_worktree_no_other">Ten projekt nie ma innych worktree</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Po tej turze przeniesie do: %1$s.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Po zakończeniu tej odpowiedzi sesja zostanie przeniesiona do: %1$s.</string>
     <string name="session_chat_move_worktree_failed">Nie udało się przenieść sesji: %1$s</string>
     <string name="session_chat_variant_default">Domyślny</string>
     <string name="session_chat_model_chip_placeholder">Model</string>
     <string name="session_chat_model_chip_loading">Wczytywanie modelu…</string>
     <string name="session_chat_model_notice_load_failed">Nie udało się wczytać modeli. Stuknij Model, aby spróbować ponownie.</string>
-    <string name="session_chat_model_notice_none_usable">Brak dostępnych modeli, których można użyć. Stuknij Model, aby spróbować ponownie.</string>
+    <string name="session_chat_model_notice_none_usable">Brak modeli nadających się do użycia. Stuknij Model, aby spróbować ponownie.</string>
     <string name="session_chat_model_notice_variant_unavailable">Zapamiętany wariant jest niedostępny. Używam domyślnego.</string>
     <string name="session_chat_model_notice_model_unavailable">Wybrany model jest niedostępny. Używam: %1$s.</string>
     <string name="session_chat_side_question_unsupported">/btw wymaga serwera opencode v2, który odpowiada na pytania poboczne. Ten serwer nie potrafi odpowiedzieć bez dopisywania do rozmowy.</string>
@@ -561,7 +561,7 @@
     <string name="attachment_error_unreadable">Nie można odczytać załącznika.</string>
     <string name="attachment_error_upload_failed">Przesyłanie nie powiodło się</string>
     <string name="attachment_drop_reject_one">Nie można tego załączyć</string>
-    <string name="attachment_drop_reject_many">Nie można tego załączyć</string>
+    <string name="attachment_drop_reject_many">Nie można ich załączyć</string>
     <plurals name="attachment_drop_attach_images_count">
         <item quantity="one">Upuść, aby załączyć %1$d obraz</item>
         <item quantity="few">Upuść, aby załączyć %1$d obrazy</item>
@@ -607,17 +607,17 @@
     </plurals>
     <string name="session_chat_activity_side_question_failed">Pytanie poboczne nie powiodło się</string>
     <plurals name="session_chat_activity_side_questions_failed">
-        <item quantity="one">Pytania poboczne nie powiodły się: %1$d</item>
-        <item quantity="few">Pytania poboczne nie powiodły się: %1$d</item>
-        <item quantity="many">Pytania poboczne nie powiodły się: %1$d</item>
-        <item quantity="other">Pytania poboczne nie powiodły się: %1$d</item>
+        <item quantity="one">Nieudane pytania poboczne: %1$d</item>
+        <item quantity="few">Nieudane pytania poboczne: %1$d</item>
+        <item quantity="many">Nieudane pytania poboczne: %1$d</item>
+        <item quantity="other">Nieudane pytania poboczne: %1$d</item>
     </plurals>
     <string name="session_chat_activity_side_question_ready">Odpowiedź na pytanie poboczne gotowa</string>
     <plurals name="session_chat_activity_side_questions_ready">
-        <item quantity="one">Odpowiedzi na pytania poboczne gotowe: %1$d</item>
-        <item quantity="few">Odpowiedzi na pytania poboczne gotowe: %1$d</item>
-        <item quantity="many">Odpowiedzi na pytania poboczne gotowe: %1$d</item>
-        <item quantity="other">Odpowiedzi na pytania poboczne gotowe: %1$d</item>
+        <item quantity="one">Gotowe odpowiedzi na pytania poboczne: %1$d</item>
+        <item quantity="few">Gotowe odpowiedzi na pytania poboczne: %1$d</item>
+        <item quantity="many">Gotowe odpowiedzi na pytania poboczne: %1$d</item>
+        <item quantity="other">Gotowe odpowiedzi na pytania poboczne: %1$d</item>
     </plurals>
     <string name="session_chat_activity_side_question_running">Pytanie poboczne w toku</string>
     <plurals name="session_chat_activity_side_questions_running">
@@ -681,7 +681,7 @@
     <string name="new_session_run_in_project">Uruchom w %1$s</string>
     <string name="new_session_current_checkout">%1$s · bieżący checkout</string>
     <string name="new_session_new_worktree_subtitle">Izolowana kopia, tworzona po wysłaniu</string>
-    <string name="new_session_worktrees_section">Worktrees</string>
+    <string name="new_session_worktrees_section">Worktree</string>
     <string name="timeline_state_loading_title">Wczytywanie wiadomości</string>
     <string name="timeline_state_loading_subtitle">Pobieranie osi czasu…</string>
     <string name="timeline_state_error_title">Nie można wczytać wiadomości</string>
@@ -741,7 +741,7 @@
     <string name="tool_title_read">Odczyt</string>
     <string name="tool_title_grep">Grep</string>
     <string name="tool_title_glob">Glob</string>
-    <string name="tool_title_search">Szukaj</string>
+    <string name="tool_title_search">Wyszukiwanie</string>
     <string name="tool_title_fetch">Pobranie</string>
     <string name="tool_title_shell">Terminal</string>
     <string name="tool_title_execute">Wykonanie</string>
@@ -755,7 +755,7 @@
     <string name="tool_title_save_issue">Zapisz zgłoszenie</string>
     <string name="tool_title_question">Pytanie</string>
     <string name="tool_title_agent">Agent</string>
-    <string name="tool_title_thought">Myśl</string>
+    <string name="tool_title_thought">Myślenie</string>
     <plurals name="tool_title_asked_questions">
         <item quantity="one">Zadano %1$d pytanie</item>
         <item quantity="few">Zadano %1$d pytania</item>
@@ -837,7 +837,7 @@
     <plurals name="tool_count_patch">
         <item quantity="one">%1$d patch</item>
         <item quantity="few">%1$d patche</item>
-        <item quantity="many">%1$d patchy</item>
+        <item quantity="many">%1$d patchów</item>
         <item quantity="other">%1$d patcha</item>
     </plurals>
     <plurals name="tool_count_get_issue">
@@ -898,23 +898,23 @@
     <string name="tool_unknown_detail">Narzędzie niedostępne</string>
     <string name="tool_result_pull_request_opened">Otwarto pull request</string>
     <string name="tool_result_file">Plik</string>
-    <string name="tool_result_lines_range">linie %1$d–%2$d</string>
+    <string name="tool_result_lines_range">wiersze %1$d–%2$d</string>
     <plurals name="tool_result_first_lines">
-        <item quantity="one">pierwsza %1$d linia</item>
-        <item quantity="few">pierwsze %1$d linie</item>
-        <item quantity="many">pierwszych %1$d linii</item>
-        <item quantity="other">pierwszych %1$d linii</item>
+        <item quantity="one">pierwszy %1$d wiersz</item>
+        <item quantity="few">pierwsze %1$d wiersze</item>
+        <item quantity="many">pierwszych %1$d wierszy</item>
+        <item quantity="other">pierwszych %1$d wierszy</item>
     </plurals>
-    <string name="timeline_step_reading">Odczyt…</string>
-    <string name="timeline_step_reading_named">Odczyt %1$s</string>
+    <string name="timeline_step_reading">Odczytywanie…</string>
+    <string name="timeline_step_reading_named">Odczytywanie %1$s</string>
     <string name="timeline_step_searching">Szukanie…</string>
     <string name="timeline_step_searching_named">Szukanie %1$s</string>
-    <string name="timeline_step_listing">Listowanie…</string>
-    <string name="timeline_step_listing_named">Listowanie %1$s</string>
-    <string name="timeline_step_editing">Edycja…</string>
-    <string name="timeline_step_editing_named">Edycja %1$s</string>
-    <string name="timeline_step_writing">Zapis…</string>
-    <string name="timeline_step_writing_named">Zapis %1$s</string>
+    <string name="timeline_step_listing">Wyświetlanie zawartości…</string>
+    <string name="timeline_step_listing_named">Wyświetlanie %1$s</string>
+    <string name="timeline_step_editing">Edytowanie…</string>
+    <string name="timeline_step_editing_named">Edytowanie %1$s</string>
+    <string name="timeline_step_writing">Zapisywanie…</string>
+    <string name="timeline_step_writing_named">Zapisywanie %1$s</string>
     <string name="timeline_step_fetching">Pobieranie…</string>
     <string name="timeline_step_fetching_named">Pobieranie %1$s</string>
     <string name="timeline_step_running">Uruchamianie…</string>
@@ -974,7 +974,7 @@
     <string name="timeline_compaction_title">Kontekst skompaktowany</string>
     <string name="timeline_compaction_automatic">Automatycznie</string>
     <string name="timeline_syncing">Synchronizacja…</string>
-    <string name="timeline_failure_session_work_failed">Praca sesji nie powiodła się</string>
+    <string name="timeline_failure_session_work_failed">Zadanie sesji nie powiodło się</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Wybierz model</string>
     <string name="timeline_failure_compact">Kompaktuj</string>
@@ -1015,7 +1015,7 @@
     <string name="session_chat_copy_too_long">Za długi do skopiowania. Zaznacz jego fragment.</string>
     <string name="session_chat_sheet_message_actions_clip_label_code">Kod</string>
     <string name="session_chat_sheet_mcp_loading_title">Sprawdzanie serwerów MCP</string>
-    <string name="session_chat_sheet_mcp_loading_subtitle">Odczyt stanu z serwera opencode</string>
+    <string name="session_chat_sheet_mcp_loading_subtitle">Odczytywanie stanu z serwera opencode</string>
     <string name="session_chat_sheet_mcp_error_title">Nie można wczytać serwerów MCP</string>
     <string name="session_chat_sheet_mcp_error_message">Nie udało się wczytać listy serwerów MCP.</string>
     <string name="session_chat_sheet_mcp_empty_title">Brak serwerów MCP</string>
@@ -1088,7 +1088,7 @@
     <string name="session_chat_goal_clear">Wyczyść</string>
     <string name="session_chat_goal_clearing">Czyszczenie…</string>
     <string name="session_chat_goal_new">Nowy cel…</string>
-    <string name="session_chat_goal_footnote_active">Po każdej turze recenzent sprawdza pracę pod kątem celu. Agent działa dalej, aż cel zostanie osiągnięty, będzie potrzebować Ciebie albo minie %1$d rund.</string>
+    <string name="session_chat_goal_footnote_active">Po każdej turze recenzent sprawdza pracę pod kątem celu. Agent działa dalej, dopóki cel nie zostanie osiągnięty, nie będzie potrzebował Twojej odpowiedzi lub nie minie %1$d rund.</string>
     <string name="session_chat_goal_footnote_paused">Wznowienie daje nowy limit: %1$d rund.</string>
     <string name="session_chat_goal_footnote_met">Nowy cel zastąpi ten.</string>
     <string name="session_chat_goal_paused">Cel wstrzymany</string>
@@ -1099,7 +1099,7 @@
     <string name="session_chat_goal_paused_round_limit">Cel wstrzymany po %1$d rundach</string>
     <string name="session_chat_goal_paused_restart">Cel wstrzymany: serwer został zrestartowany</string>
     <string name="session_chat_goal_paused_reviewer">Cel wstrzymany: recenzent nie mógł zdecydować</string>
-    <string name="session_chat_goal_paused_quiet">Cel wstrzymany: praca w tle ucichła</string>
+    <string name="session_chat_goal_paused_quiet">Cel wstrzymany: praca w tle ustała</string>
     <string name="session_chat_goal_met">Cel osiągnięty</string>
     <string name="session_chat_goal_set">Cel ustawiony</string>
     <string name="session_chat_goal_ended">zakończony</string>
@@ -1165,14 +1165,14 @@
     <string name="session_chat_question_tree_failed">Nie można odświeżyć drzewa sesji pytań</string>
     <string name="session_chat_sheet_timeline_style_picker_title">Nowość: wybierz oś czasu</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Ta aktualizacja dodaje nowe sposoby śledzenia pracy agenta.</string>
-    <string name="session_chat_sheet_timeline_style_picker_footnote">Możesz to zmienić w Ustawienia → Styl osi czasu.</string>
+    <string name="session_chat_sheet_timeline_style_picker_footnote">Możesz to zmienić w dowolnym momencie w Ustawieniach → Styl osi czasu.</string>
     <string name="session_chat_sheet_timeline_style_picker_use">Użyj: %1$s</string>
     <string name="session_chat_sheet_timeline_style_picker_recommended">Polecany</string>
     <string name="session_chat_sheet_timeline_style_picker_current">Obecny</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_title">Standardowy</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">Karty narzędzi i grupy między wiadomościami agenta</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Szyna kroków</string>
-    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Jedna linia na krok na szynie, na żywo podczas pracy agenta</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Jedna linia na krok, na żywo podczas pracy agenta</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Karta aktywności</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Trwające kroki na jednej karcie na żywo, składanej do podsumowania</string>
     <string name="session_chat_sheet_picker_model">Model</string>
@@ -1207,7 +1207,7 @@
     <string name="session_chat_sheet_tool_result_line_accessibility">Linia %1$d, %2$s</string>
     <string name="session_chat_sheet_shell_title">Terminal</string>
     <string name="session_chat_sheet_shell_command_accessibility">Polecenie, %1$s</string>
-    <string name="session_chat_sheet_shell_no_output">Brak danych wyjściowych</string>
+    <string name="session_chat_sheet_shell_no_output">Brak jeszcze danych wyjściowych</string>
     <string name="session_chat_sheet_shell_truncated">Pokazano najnowsze dane wyjściowe</string>
     <string name="session_chat_sheet_shell_stop">Zatrzymaj terminal</string>
     <string name="session_chat_sheet_shell_stopping">Zatrzymywanie…</string>
@@ -1278,7 +1278,7 @@
     <string name="session_context_breakdown_tool_calls">Wywołania narzędzi</string>
     <string name="session_context_breakdown_other">Inne</string>
     <string name="session_context_breakdown_legend">%1$s %2$s</string>
-    <string name="session_context_breakdown_footnote">Przybliżony podział tokenów wejściowych. Inne obejmuje definicje narzędzi i narzut.</string>
+    <string name="session_context_breakdown_footnote">Przybliżony podział tokenów wejściowych. Kategoria „Inne” obejmuje definicje narzędzi i narzut.</string>
     <string name="settings_title">Ustawienia</string>
     <string name="settings_section_server">Serwer</string>
     <string name="settings_section_help_feedback">Pomoc i opinie</string>
@@ -1319,7 +1319,7 @@
     <string name="settings_timeline_style_standard_title">Standardowy</string>
     <string name="settings_timeline_style_standard_subtitle">Karty narzędzi i grupy między wiadomościami agenta</string>
     <string name="settings_timeline_style_step_rail_title">Szyna kroków</string>
-    <string name="settings_timeline_style_step_rail_subtitle">Jedna linia na krok na szynie, na żywo podczas pracy agenta</string>
+    <string name="settings_timeline_style_step_rail_subtitle">Jedna linia na krok, na żywo podczas pracy agenta</string>
     <string name="settings_timeline_style_activity_card_title">Karta aktywności</string>
     <string name="settings_timeline_style_activity_card_subtitle">Trwające kroki na jednej karcie na żywo, składanej do podsumowania</string>
     <string name="settings_follow_up_title">Wysyłanie kolejnych wiadomości</string>
@@ -1352,7 +1352,7 @@
     <string name="settings_analytics_title">Analityka i raporty awarii</string>
     <string name="settings_analytics_subtitle">Zezwól na opcjonalne zdarzenia użycia produktu i raporty awarii. Po wyłączeniu nic nie jest wysyłane do Firebase.</string>
     <string name="settings_analytics_label">Analityka produktu</string>
-    <string name="settings_diagnostic_logs_subtitle">Udostępnij zredagowane okno ostatnich logów działania</string>
+    <string name="settings_diagnostic_logs_subtitle">Udostępnij zamaskowane okno ostatnich logów działania</string>
     <string name="settings_clear_all_data_title">Wyczyść wszystkie dane</string>
     <string name="settings_clear_all_data_subtitle">Usuń połączenie i pamięć podręczną</string>
     <string name="settings_clear_all_data_dialog_title">Wyczyścić wszystkie dane?</string>
@@ -1369,10 +1369,10 @@
     <string name="diagnostics_loading">Wczytywanie logów diagnostycznych</string>
     <string name="diagnostics_entries_title">Wpisy</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d zredagowana linia w zachowanym oknie</item>
-        <item quantity="few">%1$d zredagowane linie w zachowanym oknie</item>
-        <item quantity="many">%1$d zredagowanych linii w zachowanym oknie</item>
-        <item quantity="other">%1$d zredagowanej linii w zachowanym oknie</item>
+        <item quantity="one">%1$d zamaskowana linia w zachowanym oknie</item>
+        <item quantity="few">%1$d zamaskowane linie w zachowanym oknie</item>
+        <item quantity="many">%1$d zamaskowanych linii w zachowanym oknie</item>
+        <item quantity="other">%1$d zamaskowanej linii w zachowanym oknie</item>
     </plurals>
     <string name="diagnostics_entries_empty">Brak wpisów w zachowanym oknie</string>
     <string name="diagnostics_kept_title">Zachowane</string>
@@ -1392,7 +1392,7 @@
         <item quantity="other">maks. %1$d · nic nie odrzucono</item>
     </plurals>
     <string name="diagnostics_format_title">Format</string>
-    <string name="diagnostics_format_value">JSONL · sekrety i treści wiadomości zredagowane</string>
+    <string name="diagnostics_format_value">JSONL · sekrety i treści wiadomości zamaskowane</string>
     <string name="diagnostics_range_title">Zakres</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
     <string name="diagnostics_areas_title">Obszary</string>
@@ -1467,9 +1467,9 @@
     <string name="feedback_title_listening">Słucham</string>
     <string name="feedback_kind_bug">Błąd</string>
     <string name="feedback_kind_idea">Pomysł</string>
-    <string name="feedback_placeholder_bug">Co się stało? Czego się spodziewałeś?</string>
+    <string name="feedback_placeholder_bug">Co się stało? Co miało się stać?</string>
     <string name="feedback_placeholder_idea">Co sprawiłoby, że OpenCode byłby dla Ciebie lepszy?</string>
-    <string name="feedback_privacy_note">Trafia tylko do zespołu OpenCode Mobile. Nigdy nie zawiera adresu serwera, nazwy użytkownika ani hasła. Logi są redagowane na tym telefonie.</string>
+    <string name="feedback_privacy_note">Trafia tylko do zespołu OpenCode Mobile. Nigdy nie zawiera adresu serwera, nazwy użytkownika ani hasła. Logi są maskowane na tym telefonie.</string>
     <string name="feedback_error_offline">Jesteś offline. Twoje zgłoszenie zostaje tutaj — spróbuj ponownie po połączeniu.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">Właśnie wysłano zgłoszenie. Spróbuj ponownie za %1$d s.</item>
@@ -1523,10 +1523,10 @@
         <item quantity="other">Zrzut ekranu, %1$d ukrytego obszaru</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">Ostatnia %1$d minuta · spakowane gzip przy wysyłaniu. Zredagowane na tym telefonie.</item>
-        <item quantity="few">Ostatnie %1$d minuty · spakowane gzip przy wysyłaniu. Zredagowane na tym telefonie.</item>
-        <item quantity="many">Ostatnich %1$d minut · spakowane gzip przy wysyłaniu. Zredagowane na tym telefonie.</item>
-        <item quantity="other">Ostatnich %1$d minut · spakowane gzip przy wysyłaniu. Zredagowane na tym telefonie.</item>
+        <item quantity="one">Ostatnia %1$d minuta · skompresowane gzipem przy wysyłaniu. Zamaskowane na tym telefonie.</item>
+        <item quantity="few">Ostatnie %1$d minuty · skompresowane gzipem przy wysyłaniu. Zamaskowane na tym telefonie.</item>
+        <item quantity="many">Ostatnich %1$d minut · skompresowane gzipem przy wysyłaniu. Zamaskowane na tym telefonie.</item>
+        <item quantity="other">Ostatnich %1$d minut · skompresowane gzipem przy wysyłaniu. Zamaskowane na tym telefonie.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Wczytywanie…</string>
     <string name="feedback_log_preview_empty_title">Brak linii logu</string>
@@ -1547,7 +1547,7 @@
     <string name="session_search_title">Szukaj sesji</string>
     <string name="session_search_clear">Wyczyść wyszukiwanie</string>
     <string name="session_search_placeholder">Szukaj w: %1$s</string>
-    <string name="session_search_hint">Dopasowuje tytuły sesji w: %1$s.</string>
+    <string name="session_search_hint">Szuka w tytułach sesji: %1$s.</string>
     <string name="session_search_searching">Szukanie…</string>
     <plurals name="session_search_results">
         <item quantity="one">%1$d wynik</item>
@@ -1583,7 +1583,7 @@
     <string name="keyboard_shortcuts_toggle_sidebar">Przełącz panel boczny</string>
     <string name="keyboard_shortcuts_next_session">Następna sesja</string>
     <string name="keyboard_shortcuts_previous_session">Poprzednia sesja</string>
-    <string name="keyboard_shortcuts_focus_composer">Aktywuj pole wiadomości</string>
+    <string name="keyboard_shortcuts_focus_composer">Przejdź do pola wiadomości</string>
     <string name="keyboard_shortcuts_search_sessions">Szukaj sesji</string>
     <string name="changes_title">Zmiany</string>
     <string name="changes_source_menu_label">Wybierz źródło zmian</string>
@@ -1615,7 +1615,7 @@
     <string name="changes_error_title">Nie udało się wczytać zmian</string>
     <string name="changes_error_fallback">Zmiany nie zostały wczytane.</string>
     <string name="changes_error_request_failed">Żądanie nie powiodło się</string>
-    <string name="changes_error_turn_moved_folders">Ta tura zmieniła foldery, więc jej zmian nie można pokazać razem.</string>
+    <string name="changes_error_turn_moved_folders">Ta tura przeszła do innych folderów, więc jej zmian nie można pokazać razem.</string>
     <string name="changes_refresh_failed">Nie udało się odświeżyć: %1$s</string>
     <string name="changes_filter_hint">Filtruj</string>
     <string name="changes_filter_accessibility_label">Filtruj zmienione pliki</string>
@@ -1667,7 +1667,7 @@
     <string name="component_todo_item_status_cancelled">anulowane</string>
     <string name="component_todos_pill_accessibility_label">Zadania sesji, ukończono %1$d z %2$d</string>
     <string name="component_todos_pill_accessibility_label_active">Zadania sesji, ukończono %1$d z %2$d, %3$s</string>
-    <string name="component_reasoning_row_thought_duration">Myślenie · %1$s</string>
+    <string name="component_reasoning_row_thought_duration">Rozumowanie · %1$s</string>
     <string name="component_reasoning_row_duration_seconds">%1$s s</string>
     <string name="component_reasoning_row_duration_ms">%1$d ms</string>
     <string name="component_reasoning_row_duration_minutes_seconds">%1$d min %2$d s</string>
@@ -1725,7 +1725,7 @@
     <string name="component_outgoing_message_shows_actions_hint">Pokazuje akcje wiadomości</string>
     <string name="component_activity_status_stopped">zatrzymano</string>
     <string name="dictation_action_try_again">Spróbuj ponownie</string>
-    <string name="component_composer_model_effort">Model %1$s, wysiłek %2$s</string>
+    <string name="component_composer_model_effort">Model %1$s, poziom rozumowania %2$s</string>
     <string name="component_activity_card_working">Pracuje</string>
     <string name="component_activity_card_opens_activity">%1$s, otwiera aktywność</string>
     <string name="component_image_loading_label">%1$s, wczytywanie</string>
@@ -1752,7 +1752,7 @@
     <string name="component_composer_question_position">%1$d z %2$d</string>
     <string name="session_list_status_ready">Gotowe</string>
     <string name="session_list_dock_hint_swipe">Otwiera filtr projektów. Przesuń, aby przełączać projekty.</string>
-    <string name="component_composer_select_one">Wybierz jedną</string>
+    <string name="component_composer_select_one">Wybierz jedną opcję</string>
     <string name="component_session_list_skeleton_row">Wczytywanie sesji</string>
     <string name="component_split_pane_resize_sidebar">Zmień rozmiar panelu bocznego</string>
     <string name="session_list_section_recent">Ostatnie</string>
@@ -1886,7 +1886,7 @@
     <string name="session_list_dock_new_session_hint">Użyj opcji „Wybierz projekt lub worktree”, aby zacząć gdzie indziej.</string>
     <string name="session_list_section_yesterday">Wczoraj</string>
     <string name="component_code_file_line_label">Linia %1$d, %2$s</string>
-    <string name="share_feedback_subject_idea">Pomysł dla OpenCode Mobile</string>
+    <string name="share_feedback_subject_idea">Zgłoszenie pomysłu dla OpenCode Mobile</string>
     <string name="component_hunk_navigation_previous">Poprzedni fragment</string>
     <string name="session_list_section_week_of">Tydzień %1$s – %2$s</string>
     <string name="dictation_model_download_failed_title">System (%1$s) nie mógł pobrać: %2$s</string>
@@ -1976,7 +1976,7 @@
         <item quantity="many">%1$d worktree</item>
         <item quantity="other">%1$d worktree</item>
     </plurals>
-    <string name="worktrees_main_checkout">Główny katalog</string>
+    <string name="worktrees_main_checkout">Główne repozytorium</string>
     <string name="worktrees_cannot_remove">Nie można usunąć</string>
     <plurals name="worktrees_changed">
         <item quantity="one">%1$d zmieniony</item>
@@ -2016,7 +2016,7 @@
     <string name="whats_new_title">Co nowego</string>
     <string name="whats_new_version">Wersja %1$s</string>
     <string name="whats_new_skipped_one">Pominięto jedną aktualizację, więc jest uwzględniona poniżej.</string>
-    <string name="whats_new_skipped_many">Pominięto aktualizacje (%1$d), więc są uwzględnione poniżej.</string>
+    <string name="whats_new_skipped_many">Pominięte aktualizacje: %1$d. Są uwzględnione poniżej.</string>
     <string name="whats_new_in_version">W wersji %1$s</string>
     <string name="whats_new_also_since">Nowe od ostatniej aktualizacji · %1$s</string>
     <string name="whats_new_fixes">Poprawki</string>

@@ -29,7 +29,7 @@
     <string name="connection_setup_instructions_run">Na počítači spustite toto a potom naskenujte QR.</string>
     <string name="connection_setup_instructions_first_run">Prvé spustenie trvá asi minútu. Vyžaduje OpenCode 2.0.25 alebo novší. Služba sa spustí, ak ešte nebeží.</string>
     <string name="connection_setup_instructions_same_wifi_title">Radšej tá istá Wi-Fi</string>
-    <string name="connection_setup_instructions_same_wifi_body">Obyčajné pair zobrazí QR, až keď je server dostupný aj mimo localhost.</string>
+    <string name="connection_setup_instructions_same_wifi_body">Samotné pair zobrazí QR, až keď je server dostupný aj mimo localhost.</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">Hostiteľ</string>
     <string name="connection_setup_host_help">LAN, Tailscale MagicDNS alebo tunel – nie localhost na telefóne.</string>
@@ -76,7 +76,7 @@
     <string name="connection_error_unhealthy">Server hlási zlý stav</string>
     <string name="connection_scanner_title">Skenovať párovací QR</string>
     <string name="connection_scanner_card_title">Párovací QR OpenCode</string>
-    <string name="connection_scanner_card_body">Z opencode pair --remote. Obyčajné pair zobrazí QR, len keď je server dostupný aj mimo localhost.</string>
+    <string name="connection_scanner_card_body">Z opencode pair --remote. Samotné pair zobrazí QR, len keď je server dostupný aj mimo localhost.</string>
     <string name="connection_onboarding_title">Pripojte sa k serveru</string>
     <string name="connection_onboarding_body">OpenCode Mobile ovláda relácie na serveri opencode, ktorý beží na vašom vývojovom počítači.</string>
     <string name="connection_onboarding_connect">Pripojiť k serveru</string>
@@ -108,7 +108,7 @@
     <string name="onboarding_setup_step2_title">Vyžadujte heslo</string>
     <string name="onboarding_setup_step2_body">Nastavte OPENCODE_SERVER_PASSWORD. Používateľské meno je predvolene opencode, ak nenastavíte OPENCODE_SERVER_USERNAME.</string>
     <string name="onboarding_setup_step3_title">Sprístupnite ho telefónu</string>
-    <string name="onboarding_setup_step3_body">Odporúčané: Tailscale – nainštalujte Tailscale na počítač aj telefón a ako URL servera použite Tailscale IP počítača alebo jeho názov MagicDNS.\n\nVhodné je aj rovnaké LAN, VPN, HTTPS alebo iný tunel, ktorý spravujete. Aplikácia pre vás nevytvára relay.</string>
+    <string name="onboarding_setup_step3_body">Odporúčané: Tailscale – nainštalujte Tailscale na počítač aj telefón a ako URL servera použite Tailscale IP počítača alebo jeho názov MagicDNS.\n\nVhodná je aj tá istá sieť LAN, VPN, HTTPS alebo iný tunel, ktorý spravujete. Aplikácia pre vás nevytvára relay.</string>
     <string name="onboarding_setup_step4_title">Pripojte sa v aplikácii</string>
     <string name="onboarding_setup_step4_body">Zadajte základnú URL a heslo. Aplikácia skontroluje GET /global/health a potom uloží pripojenie k serveru do tohto zariadenia.</string>
     <string name="onboarding_setup_open_docs">Otvoriť dokumentáciu servera</string>
@@ -300,7 +300,7 @@
     <string name="home_session_error_unreadable_response">Odpoveď servera sa nepodarilo prečítať</string>
     <string name="home_session_error_generic">Niečo sa pokazilo</string>
     <string name="archived_sessions_title">Archivované relácie</string>
-    <string name="home_menu_archived_count">%1$d v: %2$s</string>
+    <string name="home_menu_archived_count">%1$d · %2$s</string>
     <string name="archived_sessions_section_this_week">Tento týždeň</string>
     <string name="archived_sessions_section_earlier">Skôr</string>
     <string name="archived_sessions_unarchive">Zrušiť archiváciu</string>
@@ -354,7 +354,7 @@
     </plurals>
     <string name="add_project_in_folder">V %1$s</string>
     <string name="add_project_root_home">Domov</string>
-    <string name="add_project_error_add_failed">Tento adresár sa nepodarilo pridať</string>
+    <string name="add_project_error_add_failed">Tento priečinok sa nepodarilo pridať</string>
     <string name="worktree_new_row">Nový worktree…</string>
     <string name="worktree_run_in_subtitle">Vytvoriť checkout a začať v ňom</string>
     <string name="worktree_move_subtitle">Vytvoriť checkout a presunúť sa doň</string>
@@ -551,31 +551,31 @@
     <string name="session_chat_side_question_unavailable">/btw vyžaduje novší server opencode.</string>
     <string name="session_chat_side_question_copied">Odpoveď skopírovaná</string>
     <string name="session_chat_side_question_failed">/btw zlyhalo: „%1$s“</string>
-    <string name="attachment_error_folder">Priečinky sa nedajú pripojiť.</string>
+    <string name="attachment_error_folder">Priečinky sa nedajú priložiť.</string>
     <string name="attachment_error_duplicate">Tento súbor už bol nahraný</string>
     <string name="attachment_error_too_large">Tento súbor je väčší ako %1$d MB.</string>
-    <string name="attachment_error_unsupported_type">Sem je možné pripojiť iba obrázky, PDF alebo textové súbory.</string>
+    <string name="attachment_error_unsupported_type">Sem je možné priložiť iba obrázky, PDF alebo textové súbory.</string>
     <string name="attachment_error_model_no_images">Tento model nepodporuje prílohy s obrázkami.</string>
     <string name="attachment_error_model_no_pdf">Tento model nepodporuje prílohy PDF.</string>
     <string name="attachment_error_model_some">Tento model nepodporuje niektoré z vybraných príloh.</string>
     <string name="attachment_error_unreadable">Prílohu sa nepodarilo prečítať.</string>
     <string name="attachment_error_upload_failed">Nahrávanie zlyhalo</string>
-    <string name="attachment_drop_reject_one">Toto sa nedá pripojiť</string>
-    <string name="attachment_drop_reject_many">Tieto sa nedajú pripojiť</string>
+    <string name="attachment_drop_reject_one">Toto sa nedá priložiť</string>
+    <string name="attachment_drop_reject_many">Tieto sa nedajú priložiť</string>
     <plurals name="attachment_drop_attach_images_count">
-        <item quantity="one">Pustením pripojíte %1$d obrázok</item>
-        <item quantity="few">Pustením pripojíte %1$d obrázky</item>
-        <item quantity="many">Pustením pripojíte %1$d obrázka</item>
-        <item quantity="other">Pustením pripojíte %1$d obrázkov</item>
+        <item quantity="one">Pustením priložíte %1$d obrázok</item>
+        <item quantity="few">Pustením priložíte %1$d obrázky</item>
+        <item quantity="many">Pustením priložíte %1$d obrázka</item>
+        <item quantity="other">Pustením priložíte %1$d obrázkov</item>
     </plurals>
     <plurals name="attachment_drop_attach_files_count">
-        <item quantity="one">Pustením pripojíte %1$d súbor</item>
-        <item quantity="few">Pustením pripojíte %1$d súbory</item>
-        <item quantity="many">Pustením pripojíte %1$d súboru</item>
-        <item quantity="other">Pustením pripojíte %1$d súborov</item>
+        <item quantity="one">Pustením priložíte %1$d súbor</item>
+        <item quantity="few">Pustením priložíte %1$d súbory</item>
+        <item quantity="many">Pustením priložíte %1$d súboru</item>
+        <item quantity="other">Pustením priložíte %1$d súborov</item>
     </plurals>
-    <string name="attachment_drop_attach_images">Pustením pripojíte obrázky</string>
-    <string name="attachment_drop_attach_files">Pustením pripojíte súbory</string>
+    <string name="attachment_drop_attach_images">Pustením priložíte obrázky</string>
+    <string name="attachment_drop_attach_files">Pustením priložíte súbory</string>
     <string name="attachment_drop_adds_to_draft">Pridá ich k správe, ktorú píšete</string>
     <plurals name="attachment_drop_skipped_count">
         <item quantity="one">%1$d sa preskočí</item>
@@ -681,7 +681,7 @@
     <string name="new_session_run_in_project">Spustiť v %1$s</string>
     <string name="new_session_current_checkout">%1$s · aktuálny checkout</string>
     <string name="new_session_new_worktree_subtitle">Izolovaná kópia, vytvorí sa po odoslaní</string>
-    <string name="new_session_worktrees_section">Worktrees</string>
+    <string name="new_session_worktrees_section">Worktree</string>
     <string name="timeline_state_loading_title">Načítavajú sa správy</string>
     <string name="timeline_state_loading_subtitle">Sťahuje sa časová os…</string>
     <string name="timeline_state_error_title">Správy sa nepodarilo načítať</string>
@@ -703,10 +703,10 @@
         <item quantity="other">%1$d subagentov</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
-        <item quantity="one">%1$d škrupina</item>
-        <item quantity="few">%1$d škrupiny</item>
-        <item quantity="many">%1$d škrupiny</item>
-        <item quantity="other">%1$d škrupín</item>
+        <item quantity="one">%1$d shell</item>
+        <item quantity="few">%1$d shelly</item>
+        <item quantity="many">%1$d shellu</item>
+        <item quantity="other">%1$d shellov</item>
     </plurals>
     <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
     <string name="timeline_background_work_subagents_and_shells_spoken">%1$s a %2$s</string>
@@ -743,7 +743,7 @@
     <string name="tool_title_glob">Glob</string>
     <string name="tool_title_search">Hľadanie</string>
     <string name="tool_title_fetch">Načítanie</string>
-    <string name="tool_title_shell">Škrupina</string>
+    <string name="tool_title_shell">Shell</string>
     <string name="tool_title_execute">Spustenie</string>
     <string name="tool_title_lsp">LSP</string>
     <string name="tool_title_plan">Plán</string>
@@ -793,10 +793,10 @@
         <item quantity="other">%1$d načítaní</item>
     </plurals>
     <plurals name="tool_count_shell">
-        <item quantity="one">%1$d škrupina</item>
-        <item quantity="few">%1$d škrupiny</item>
-        <item quantity="many">%1$d škrupiny</item>
-        <item quantity="other">%1$d škrupín</item>
+        <item quantity="one">%1$d shell</item>
+        <item quantity="few">%1$d shelly</item>
+        <item quantity="many">%1$d shellu</item>
+        <item quantity="other">%1$d shellov</item>
     </plurals>
     <plurals name="tool_count_execute">
         <item quantity="one">%1$d spustenie</item>
@@ -989,9 +989,9 @@
     <string name="session_chat_revert_redo_failed">Nepodarilo sa to urobiť znovu.</string>
     <string name="session_chat_revert_cancel_failed">Vrátenie sa nepodarilo zrušiť.</string>
     <string name="session_chat_revert_commit_failed">Vrátenie sa nepodarilo potvrdiť.</string>
-    <string name="session_chat_fork_rename_failed">Fork bol vytvorený, ale nepodarilo sa ho premenovať.</string>
+    <string name="session_chat_fork_rename_failed">Rozvetvenie bolo vytvorené, ale nepodarilo sa ho premenovať.</string>
     <string name="session_chat_pending_prompt_update_failed">Čakajúcu výzvu sa nepodarilo aktualizovať</string>
-    <string name="session_chat_shell_stop_failed">Škrupinu sa nepodarilo zastaviť. Skúste to znova.</string>
+    <string name="session_chat_shell_stop_failed">Shell sa nepodarilo zastaviť. Skúste to znova.</string>
     <string name="session_chat_shell_status_running">Beží</string>
     <string name="session_chat_shell_status_exited">Ukončené</string>
     <string name="session_chat_shell_status_timed_out">Vypršal čas</string>
@@ -1005,7 +1005,7 @@
     <string name="session_chat_sheet_copy_output">Kopírovať výstup</string>
     <string name="session_chat_sheet_message_actions_title">Správa</string>
     <string name="session_chat_sheet_message_actions_revert">Vrátiť správu</string>
-    <string name="session_chat_sheet_message_actions_fork">Forknúť odtiaľto</string>
+    <string name="session_chat_sheet_message_actions_fork">Rozvetviť odtiaľto</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Kopírovať blok kódu</string>
     <string name="session_chat_sheet_message_actions_copy_message">Kopírovať správu</string>
     <string name="session_chat_sheet_message_actions_select_text">Vybrať text</string>
@@ -1040,7 +1040,7 @@
     </plurals>
     <string name="session_chat_sheet_pending_prompts_clear_all">Vymazať všetko</string>
     <string name="session_chat_sheet_pending_prompts_sending">Odosiela sa…</string>
-    <string name="session_chat_sheet_pending_prompts_move_to_queue">Presunúť do frontu</string>
+    <string name="session_chat_sheet_pending_prompts_move_to_queue">Presunúť do fronty</string>
     <string name="session_chat_sheet_pending_prompts_steer_now">Usmerniť teraz</string>
     <string name="session_chat_sheet_pending_prompts_delete">Odstrániť</string>
     <string name="session_chat_sheet_side_question_done">Hotovo</string>
@@ -1074,7 +1074,7 @@
         <item quantity="other">Bez pokroku %1$d kôl; pozastaví sa po %2$d</item>
     </plurals>
     <string name="session_chat_goal_waiting">Čaká sa</string>
-    <string name="session_chat_goal_waiting_shell">Na dokončenie škrupiny na pozadí: %1$s. Pozastaví sa, ak nič nebeží %2$d min.</string>
+    <string name="session_chat_goal_waiting_shell">Na dokončenie shellu na pozadí: %1$s. Pozastaví sa, ak nič nebeží %2$d min.</string>
     <string name="session_chat_goal_waiting_subagent">Na dokončenie subagenta. Pozastaví sa, ak nič nebeží %1$d min.</string>
     <string name="session_chat_goal_waiting_on_you">Čaká sa na vás</string>
     <string name="session_chat_goal_waiting_permission">Čaká sa na vaše povolenie. Cieľ bude pokračovať po vašej odpovedi.</string>
@@ -1088,14 +1088,14 @@
     <string name="session_chat_goal_clear">Vymazať</string>
     <string name="session_chat_goal_clearing">Maže sa…</string>
     <string name="session_chat_goal_new">Nový cieľ…</string>
-    <string name="session_chat_goal_footnote_active">Po každom ťahu recenzent skontroluje prácu voči cieľu. Agent pokračuje, kým nie je cieľ splnený, nepotrebuje vás alebo neprejde %1$d kôl.</string>
-    <string name="session_chat_goal_footnote_paused">Pokračovaním sa začne nový rozpočet %1$d kôl.</string>
+    <string name="session_chat_goal_footnote_active">Po každom ťahu recenzent skontroluje prácu voči cieľu. Agent pokračuje, kým nie je cieľ splnený, nepotrebuje vás alebo nedosiahne limit kôl (%1$d).</string>
+    <string name="session_chat_goal_footnote_paused">Pokračovaním sa začne nový rozpočet kôl: %1$d.</string>
     <string name="session_chat_goal_footnote_met">Nový cieľ nahradí tento.</string>
     <string name="session_chat_goal_paused">Cieľ pozastavený</string>
     <string name="session_chat_goal_paused_by_user">Cieľ ste pozastavili vy</string>
     <string name="session_chat_goal_paused_stopped">Zastavili ste ťah, takže sa cieľ pozastavil</string>
     <string name="session_chat_goal_paused_failed">Cieľ pozastavený po chybe</string>
-    <string name="session_chat_goal_paused_no_progress">Cieľ pozastavený: bez pokroku %1$d kôl</string>
+    <string name="session_chat_goal_paused_no_progress">Cieľ pozastavený: bez pokroku v %1$d kolách</string>
     <string name="session_chat_goal_paused_round_limit">Cieľ pozastavený po %1$d kolách</string>
     <string name="session_chat_goal_paused_restart">Cieľ pozastavený: server sa reštartoval</string>
     <string name="session_chat_goal_paused_reviewer">Cieľ pozastavený: recenzent sa nevedel rozhodnúť</string>
@@ -1114,19 +1114,19 @@
     <string name="session_chat_goal_command_replaces_met">Nahradí váš aktuálny cieľ (splnený)</string>
     <string name="session_chat_goal_pause_failed">Cieľ sa nepodarilo pozastaviť</string>
     <string name="session_chat_goal_pause_failed_reason">Cieľ sa nepodarilo pozastaviť: %1$s</string>
-    <string name="session_chat_goal_resume_failed">V cieli sa nepodarilo pokračovať</string>
-    <string name="session_chat_goal_resume_failed_reason">V cieli sa nepodarilo pokračovať: %1$s</string>
+    <string name="session_chat_goal_resume_failed">Cieľ sa nepodarilo obnoviť</string>
+    <string name="session_chat_goal_resume_failed_reason">Cieľ sa nepodarilo obnoviť: %1$s</string>
     <string name="session_chat_goal_clear_failed">Cieľ sa nepodarilo vymazať</string>
     <string name="session_chat_goal_clear_failed_reason">Cieľ sa nepodarilo vymazať: %1$s</string>
     <string name="session_chat_timeline_style_notice">Časová os: %1$s. Zmeniť ju môžete kedykoľvek v Nastaveniach.</string>
     <string name="session_chat_branch_copied">Názov vetvy skopírovaný</string>
     <string name="session_chat_follow_up_switched_steer">Prepnuté na Usmerniť</string>
-    <string name="session_chat_follow_up_switched_queue">Prepnuté na Front</string>
+    <string name="session_chat_follow_up_switched_queue">Prepnuté na frontu</string>
     <string name="session_chat_failure_retry_after_seconds">Skúste znova o %1$d s</string>
     <string name="session_chat_failure_retry_after_minutes">Skúste znova o %1$d min</string>
     <string name="component_outgoing_message_pending_caption">Čaká · odošle sa pri ďalšom kroku</string>
     <string name="component_keyboard_hint_prompt">Odpovedzte pomocou klávesnice stlačením Tab</string>
-    <string name="component_session_status_bar_context_usage">Využitie kontextu %1$d percent</string>
+    <string name="component_session_status_bar_context_usage">Využitie kontextu %1$d %%</string>
     <string name="component_session_status_bar_context_usage_unavailable">Využitie kontextu nie je k dispozícii</string>
     <string name="app_lock_prompt_title">Odomknúť OpenCode Mobile</string>
     <plurals name="component_branch_pill_files">
@@ -1152,7 +1152,7 @@
     <string name="session_chat_mcp_load_failed">Servery MCP sa nepodarilo načítať. Skontrolujte pripojenie a skúste to znova.</string>
     <string name="session_chat_create_failed">Reláciu sa nepodarilo vytvoriť</string>
     <string name="session_chat_send_timed_out">Odoslanie zlyhalo. Skúste to znova.</string>
-    <string name="session_chat_shell_cannot_queue">Príkazy škrupiny sa nedajú zaradiť do frontu. Prepnite na Usmerniť, aby sa spustili hneď.</string>
+    <string name="session_chat_shell_cannot_queue">Shell príkazy sa nedajú zaradiť do frontu. Prepnite na Usmerniť, aby sa spustili hneď.</string>
     <string name="session_chat_reply_error_permission">Odpoveď sa nepodarilo odoslať. Skúste to znova.</string>
     <string name="session_chat_reply_error_permission_reason">Odpoveď sa nepodarilo odoslať. %1$s.</string>
     <string name="session_chat_reply_error_question">Odpoveď sa nepodarilo odoslať. Skúste to znova.</string>
@@ -1165,11 +1165,11 @@
     <string name="session_chat_question_tree_failed">Strom relácií otázok sa nepodarilo obnoviť</string>
     <string name="session_chat_sheet_timeline_style_picker_title">Novinka: vyberte si časovú os</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Táto aktualizácia prináša nové spôsoby, ako sledovať, čo agent robí.</string>
-    <string name="session_chat_sheet_timeline_style_picker_footnote">Zmeniť to môžete kedykoľvek v Nastavenia → Štýl časovej osi.</string>
+    <string name="session_chat_sheet_timeline_style_picker_footnote">Zmeniť to môžete kedykoľvek v Nastaveniach → Štýl časovej osi.</string>
     <string name="session_chat_sheet_timeline_style_picker_use">Použiť %1$s</string>
     <string name="session_chat_sheet_timeline_style_picker_recommended">Odporúčané</string>
     <string name="session_chat_sheet_timeline_style_picker_current">Aktuálne</string>
-    <string name="session_chat_sheet_timeline_style_picker_standard_title">Štandardná</string>
+    <string name="session_chat_sheet_timeline_style_picker_standard_title">Štandardný</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">Karty nástrojov a skupiny medzi správami agenta</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Lišta krokov</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Jeden riadok na krok na lište, naživo počas práce agenta</string>
@@ -1183,7 +1183,7 @@
     <string name="session_chat_sheet_picker_filter_models_hint">Filtrovať modely...</string>
     <string name="session_chat_sheet_tool_detail_provider_response">Odpoveď poskytovateľa</string>
     <string name="session_chat_sheet_tool_detail_tool">Nástroj</string>
-    <string name="session_chat_sheet_tool_result_exit_code">kód %1$d</string>
+    <string name="session_chat_sheet_tool_result_exit_code">kód ukončenia %1$d</string>
     <plurals name="session_chat_sheet_tool_result_matches">
         <item quantity="one">%1$d zhoda</item>
         <item quantity="few">%1$d zhody</item>
@@ -1205,15 +1205,15 @@
     <string name="session_chat_sheet_tool_result_copy_link">Kopírovať %1$s</string>
     <string name="session_chat_sheet_tool_result_copies_link_hint">Skopíruje odkaz</string>
     <string name="session_chat_sheet_tool_result_line_accessibility">Riadok %1$d, %2$s</string>
-    <string name="session_chat_sheet_shell_title">Škrupina</string>
+    <string name="session_chat_sheet_shell_title">Shell</string>
     <string name="session_chat_sheet_shell_command_accessibility">Príkaz, %1$s</string>
     <string name="session_chat_sheet_shell_no_output">Zatiaľ žiadny výstup</string>
     <string name="session_chat_sheet_shell_truncated">Zobrazuje sa najnovší výstup</string>
-    <string name="session_chat_sheet_shell_stop">Zastaviť škrupinu</string>
+    <string name="session_chat_sheet_shell_stop">Zastaviť shell</string>
     <string name="session_chat_sheet_shell_stopping">Zastavuje sa…</string>
     <string name="session_chat_sheet_background_work_title">Práca na pozadí</string>
     <string name="session_chat_sheet_background_work_subagents">Subagenti</string>
-    <string name="session_chat_sheet_background_work_shells">Škrupiny</string>
+    <string name="session_chat_sheet_background_work_shells">Shelly</string>
     <string name="session_chat_sheet_background_work_tab_running">Beží</string>
     <string name="session_chat_sheet_background_work_tab_done">Hotové</string>
     <string name="session_chat_sheet_background_work_running_empty">Nič nebeží. Dokončená práca je v časti Hotové.</string>
@@ -1306,7 +1306,7 @@
     <string name="settings_hide_user_directory_title">Skryť používateľský adresár</string>
     <string name="settings_hide_user_directory_subtitle">Zobraziť ~/Projects/… namiesto /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">Okno nedávnych</string>
-    <string name="settings_recent_window_message">Relácie zostanú v Nedávnych, kým beží alebo je pripravená, alebo ak boli aktualizované v tomto okne.</string>
+    <string name="settings_recent_window_message">Relácie zostanú v Nedávnych, kým bežia alebo sú pripravené, alebo ak boli aktualizované v tomto okne.</string>
     <plurals name="settings_recent_window_hours">
         <item quantity="one">%1$d hodina</item>
         <item quantity="few">%1$d hodiny</item>
@@ -1316,7 +1316,7 @@
     <string name="settings_collapse_tool_calls_title">Zbaliť po sebe idúce volania nástrojov</string>
     <string name="settings_collapse_tool_calls_subtitle">Zoskupiť nástroje za sebou do jednej súhrnnej karty</string>
     <string name="settings_timeline_style_title">Štýl časovej osi</string>
-    <string name="settings_timeline_style_standard_title">Štandardná</string>
+    <string name="settings_timeline_style_standard_title">Štandardný</string>
     <string name="settings_timeline_style_standard_subtitle">Karty nástrojov a skupiny medzi správami agenta</string>
     <string name="settings_timeline_style_step_rail_title">Lišta krokov</string>
     <string name="settings_timeline_style_step_rail_subtitle">Jeden riadok na krok na lište, naživo počas práce agenta</string>
@@ -1424,7 +1424,7 @@
     <string name="appearance_syntax_blurb_neon">Rodina Dracula</string>
     <string name="appearance_preview_light">Svetlý</string>
     <string name="appearance_preview_dark">Tmavý</string>
-    <string name="appearance_preview_sample_message">Prejdi úložisko tokenov.</string>
+    <string name="appearance_preview_sample_message">Prejdite úložisko tokenov.</string>
     <string name="appearance_preview_sample_reply">Obnoví sa raz, potom skúsi znova.</string>
     <string name="appearance_more_options">Ďalšie možnosti</string>
     <string name="appearance_reset_text_sizes">Obnoviť veľkosti textu</string>
@@ -1469,7 +1469,7 @@
     <string name="feedback_kind_idea">Nápad</string>
     <string name="feedback_placeholder_bug">Čo sa stalo? Čo ste očakávali?</string>
     <string name="feedback_placeholder_idea">Čo by pre vás zlepšilo OpenCode?</string>
-    <string name="feedback_privacy_note">Ide iba tímu OpenCode Mobile. Nikdy neobsahuje adresu servera, používateľské meno ani heslo. Logy sa upravujú v tomto telefóne.</string>
+    <string name="feedback_privacy_note">Odošle sa iba tímu OpenCode Mobile. Nikdy neobsahuje adresu servera, používateľské meno ani heslo. Logy sa upravujú na tomto telefóne.</string>
     <string name="feedback_error_offline">Ste offline. Vaše hlásenie zostáva tu — skúste to znova, keď budete pripojení.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">Práve ste odoslali hlásenie. Skúste to znova o %1$d s.</item>
@@ -1523,10 +1523,10 @@
         <item quantity="other">Snímka obrazovky, %1$d skrytých oblastí</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">Posledná %1$d minúta · pri nahrávaní skomprimované (gzip). Upravené v tomto telefóne.</item>
-        <item quantity="few">Posledné %1$d minúty · pri nahrávaní skomprimované (gzip). Upravené v tomto telefóne.</item>
-        <item quantity="many">Posledných %1$d minúty · pri nahrávaní skomprimované (gzip). Upravené v tomto telefóne.</item>
-        <item quantity="other">Posledných %1$d minút · pri nahrávaní skomprimované (gzip). Upravené v tomto telefóne.</item>
+        <item quantity="one">Posledná %1$d minúta · pri nahrávaní skomprimované (gzip). Upravené na tomto telefóne.</item>
+        <item quantity="few">Posledné %1$d minúty · pri nahrávaní skomprimované (gzip). Upravené na tomto telefóne.</item>
+        <item quantity="many">Posledných %1$d minúty · pri nahrávaní skomprimované (gzip). Upravené na tomto telefóne.</item>
+        <item quantity="other">Posledných %1$d minút · pri nahrávaní skomprimované (gzip). Upravené na tomto telefóne.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Načítava sa…</string>
     <string name="feedback_log_preview_empty_title">Žiadne riadky logu</string>
@@ -1547,7 +1547,7 @@
     <string name="session_search_title">Hľadať relácie</string>
     <string name="session_search_clear">Vymazať hľadanie</string>
     <string name="session_search_placeholder">Hľadať v: %1$s</string>
-    <string name="session_search_hint">Zhoduje sa s názvami relácií v: %1$s.</string>
+    <string name="session_search_hint">Hľadá sa v názvoch relácií: %1$s.</string>
     <string name="session_search_searching">Hľadá sa…</string>
     <plurals name="session_search_results">
         <item quantity="one">%1$d výsledok</item>
@@ -1700,7 +1700,7 @@
     <string name="component_filter_tabs_unseen">nové</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Včera</string>
-    <string name="component_composer_reverting_title">Vracia sa táto správa</string>
+    <string name="component_composer_reverting_title">Táto správa sa vracia späť</string>
     <string name="session_new_title">Nová relácia</string>
     <string name="session_list_dock_add_project">Pridať projekt</string>
     <string name="theme_error_preset_not_found">Predvoľba témy sa nenašla</string>
@@ -1721,7 +1721,7 @@
     <string name="component_composer_hide_question">Skryť otázku</string>
     <string name="live_updates_status_connecting">pripája sa</string>
     <string name="dictation_model_queued_detail">%1$s zaradil sťahovanie do fronty. Môže čakať na Wi-Fi, nabíjanie alebo voľné miesto. Skontrolujte to znova o pár minút.</string>
-    <string name="dictation_model_not_installed_detail">Diktovanie beží v tomto zariadení, takže váš hlas sa nikdy nenahráva. %1$s stiahne model raz a ponechá ho pre všetky aplikácie.</string>
+    <string name="dictation_model_not_installed_detail">Diktovanie beží v tomto zariadení, takže sa váš hlas nikdy neodosiela inam. %1$s stiahne model raz a ponechá ho pre všetky aplikácie.</string>
     <string name="component_outgoing_message_shows_actions_hint">Zobrazí akcie správy</string>
     <string name="component_activity_status_stopped">zastavené</string>
     <string name="dictation_action_try_again">Skúsiť znova</string>
@@ -1765,18 +1765,18 @@
     <string name="component_image_could_not_load_label">%1$s, nepodarilo sa načítať</string>
     <string name="component_composer_question">Otázka</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Zrušte filter a zobrazia sa relácie z iných worktree.</string>
+    <string name="session_list_worktree_empty_other_worktrees">Zrušte filter a zobrazia sa relácie z iných worktrees.</string>
     <string name="component_composer_side_question_mode">Režim vedľajšej otázky</string>
     <string name="component_page_indicator_label">Strana %1$d z %2$d</string>
     <string name="component_composer_next">Ďalej</string>
     <string name="component_message_image_label">Obrázok %1$s</string>
-    <string name="component_composer_leave_shell_mode">Opustiť režim škrupiny</string>
+    <string name="component_composer_leave_shell_mode">Opustiť režim shellu</string>
     <string name="dictation_action_downloading">Sťahuje sa…</string>
     <string name="component_image_viewer_share">Zdieľať</string>
     <string name="session_list_status_failed">Zlyhalo</string>
     <string name="component_composer_custom_answer_title">Napíšte vlastnú odpoveď</string>
     <string name="component_composer_always">Vždy</string>
-    <string name="component_composer_send_side_question">Opýtať sa vedľajšiu otázku</string>
+    <string name="component_composer_send_side_question">Položiť vedľajšiu otázku</string>
     <string name="component_composer_select_exactly">Vyberte %1$d</string>
     <string name="dictation_action_open_settings">Otvoriť nastavenia</string>
     <string name="component_composer_open_commands">Otvoriť príkazy</string>
@@ -1793,7 +1793,7 @@
     <string name="session_list_scope_load_failed_title">Nepodarilo sa načítať: %1$s</string>
     <string name="dictation_status_listening">Počúva sa</string>
     <string name="dictation_downloading_model">Sťahuje sa model rozpoznávania reči</string>
-    <string name="session_list_worktree_empty_every_worktree">Zrušte filter a zobrazia sa všetky worktree.</string>
+    <string name="session_list_worktree_empty_every_worktree">Zrušte filter a zobrazia sa všetky worktrees.</string>
     <string name="component_overflow_menu_more_options">Ďalšie možnosti</string>
     <string name="session_list_status_retrying_attempt">Opakuje sa · %1$d</string>
     <string name="live_updates_status_offline">offline</string>
@@ -1821,19 +1821,19 @@
     <string name="session_list_status_done">Hotovo</string>
     <string name="session_list_status_idle">Nečinná</string>
     <string name="component_attachment_kind_file">Súbor</string>
-    <string name="component_composer_run_shell_command">Spustiť príkaz v škrupine</string>
+    <string name="component_composer_run_shell_command">Spustiť príkaz v shelli</string>
     <string name="component_image_could_not_load">Nepodarilo sa načítať</string>
     <string name="component_outgoing_message_show_actions">Zobraziť akcie správy</string>
     <string name="live_updates_accessibility_label">Živé aktualizácie: %1$s</string>
     <string name="component_composer_previous_question">Predchádzajúca otázka</string>
     <string name="component_activity_card_agent">Agent</string>
     <string name="session_list_section_today">Dnes</string>
-    <string name="component_composer_child_lockout">Podrelácie nemožno zadávať výzvy.</string>
+    <string name="component_composer_child_lockout">Do podrelácií nemožno odosielať výzvy.</string>
     <string name="component_attachment_uploading_percent">Nahráva sa %1$d %%</string>
     <string name="component_composer_custom_answer_hint">Zadajte vlastnú odpoveď</string>
     <string name="component_composer_cancel_revert">Zrušiť vrátenie</string>
     <string name="session_list_scope_load_slow_caption">Stále sa načítava — veľké projekty môžu chvíľu trvať</string>
-    <string name="component_outgoing_message_label_with_actions">Odchádzajúca správa. Zobrazí akcie správy</string>
+    <string name="component_outgoing_message_label_with_actions">Odosielaná správa. Zobrazí akcie správy</string>
     <string name="session_list_scope_load_failed_subtitle">Relácie sa nepodarilo načítať</string>
     <plurals name="component_activity_card_more_running">
         <item quantity="one">Beží ešte %1$d</item>
@@ -1877,16 +1877,16 @@
     <string name="component_composer_select_up_to">Vyberte najviac %1$d</string>
     <string name="live_updates_status_live">naživo</string>
     <string name="component_image_viewer_could_not_load_this">Tento obrázok sa nepodarilo načítať</string>
-    <string name="component_image_viewer_could_not_load_full">Plný obrázok sa nepodarilo načítať</string>
+    <string name="component_image_viewer_could_not_load_full">Celý obrázok sa nepodarilo načítať</string>
     <string name="component_image_viewer_retry">Skúste znova</string>
-    <string name="component_image_viewer_loading_full">Načítava sa plný obrázok</string>
+    <string name="component_image_viewer_loading_full">Načítava sa celý obrázok</string>
     <string name="session_list_worktree_empty_action">Zrušiť filter</string>
     <string name="dictation_model_download_failed_detail">Skontrolujte pripojenie a voľné miesto v tomto zariadení a skúste to znova.</string>
     <string name="component_composer_send_queue">Odoslať do fronty</string>
     <string name="session_list_dock_new_session_hint">Ak chcete začať inde, použite Vybrať projekt alebo worktree.</string>
     <string name="session_list_section_yesterday">Včera</string>
     <string name="component_code_file_line_label">Riadok %1$d, %2$s</string>
-    <string name="share_feedback_subject_idea">Nápad na OpenCode Mobile</string>
+    <string name="share_feedback_subject_idea">Hlásenie nápadu pre OpenCode Mobile</string>
     <string name="component_hunk_navigation_previous">Predchádzajúci blok zmien</string>
     <string name="session_list_section_week_of">Týždeň %1$s – %2$s</string>
     <string name="dictation_model_download_failed_title">%1$s nemohol stiahnuť model %2$s</string>
@@ -1894,10 +1894,10 @@
     <string name="component_composer_revert_tag">Vrátiť</string>
     <string name="component_composer_model">Model %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
-        <item quantity="one">%1$d skorší krok</item>
-        <item quantity="few">%1$d skoršie kroky</item>
-        <item quantity="many">%1$d skoršieho kroku</item>
-        <item quantity="other">%1$d skorších krokov</item>
+        <item quantity="one">%1$d predchádzajúci krok</item>
+        <item quantity="few">%1$d predchádzajúce kroky</item>
+        <item quantity="many">%1$d predchádzajúceho kroku</item>
+        <item quantity="other">%1$d predchádzajúcich krokov</item>
     </plurals>
     <string name="component_outgoing_message_long_press_hint">Dlhým stlačením zobrazíte akcie správy</string>
     <string name="component_composer_hide_permission">Skryť žiadosť o povolenie</string>
@@ -1906,18 +1906,18 @@
     <string name="component_truncation_row_full_message_title">Zobraziť celú správu</string>
     <string name="component_truncation_row_full_message_caption">Zobrazených %1$s z %2$s znakov</string>
     <string name="component_truncation_row_full_message_hint">Otvorí celú správu</string>
-    <string name="component_outgoing_message_label">Odchádzajúca správa</string>
+    <string name="component_outgoing_message_label">Odosielaná správa</string>
     <string name="session_list_status_stopped">Zastavená</string>
     <string name="component_attachment_cancel_upload">Zrušiť nahrávanie súboru %1$s</string>
     <string name="dictation_cancel_description">Zrušiť diktovanie</string>
-    <string name="component_composer_shell_mode">Režim škrupiny</string>
+    <string name="component_composer_shell_mode">Režim shellu</string>
     <string name="component_skeleton_illustration_connect">Pripojiť</string>
     <string name="component_composer_not_selected">Nevybrané</string>
-    <string name="component_composer_shell_mode_description">Režim škrupiny. Opustiť režim škrupiny</string>
+    <string name="component_composer_shell_mode_description">Režim shellu. Opustiť režim shellu</string>
     <string name="component_branch_pill_based_on">Založené na %1$s</string>
     <string name="component_composer_add_attachment">Pridať prílohu</string>
     <string name="dictation_microphone_off">Prístup k mikrofónu je vypnutý</string>
-    <string name="component_composer_shell">Škrupina</string>
+    <string name="component_composer_shell">Shell</string>
     <string name="live_updates_status_auth_failed">Overenie zlyhalo</string>
     <string name="component_branch_pill_view_all_changes">Zobraziť všetky zmeny</string>
     <string name="component_composer_send">Odoslať</string>
@@ -1931,7 +1931,7 @@
     <string name="component_server_address_scheme_button">Schéma %1$s</string>
     <string name="component_composer_open_subagent_session">Otvoriť reláciu podagenta</string>
     <string name="component_composer_question_step">Krok %1$d z %2$d</string>
-    <string name="share_feedback_subject_bug">Hlásenie chyby OpenCode Mobile</string>
+    <string name="share_feedback_subject_bug">Hlásenie chyby v aplikácii OpenCode Mobile</string>
     <string name="component_activity_card_opens_child_session_hint">Otvorí podreláciu</string>
     <string name="component_activity_status_failed">zlyhalo</string>
     <string name="dictation_model_not_installed_title">%1$s potrebuje model: %2$s</string>
@@ -1968,13 +1968,13 @@
     <string name="dictation_status_line_on_device">%1$s · %2$s · v zariadení</string>
     <string name="component_composer_select_at_least">Vyberte aspoň %1$d</string>
     <string name="dictation_insert_description">Vložiť prepis</string>
-    <string name="worktrees_title">Worktree</string>
+    <string name="worktrees_title">Worktrees</string>
     <string name="worktrees_subtitle">%1$s · %2$s</string>
     <plurals name="worktrees_count">
         <item quantity="one">%1$d worktree</item>
-        <item quantity="few">%1$d worktree</item>
-        <item quantity="many">%1$d worktree</item>
-        <item quantity="other">%1$d worktree</item>
+        <item quantity="few">%1$d worktrees</item>
+        <item quantity="many">%1$d worktrees</item>
+        <item quantity="other">%1$d worktrees</item>
     </plurals>
     <string name="worktrees_main_checkout">Hlavný checkout</string>
     <string name="worktrees_cannot_remove">Nedá sa odstrániť</string>
@@ -1984,7 +1984,7 @@
         <item quantity="many">%1$d zmeneného</item>
         <item quantity="other">%1$d zmenených</item>
     </plurals>
-    <string name="worktrees_none_in_project">Žiadne worktree. Nová relácia → Vybrať projekt alebo worktree ho vytvorí.</string>
+    <string name="worktrees_none_in_project">Žiadne worktrees. Nová relácia → Vybrať projekt alebo worktree ho vytvorí.</string>
     <string name="worktrees_footer">Odstránením worktree sa na serveri zmaže jeho priečinok. Relácie zostanú, ale už v ňom nebudú môcť bežať.</string>
     <string name="worktrees_more">Ďalšie akcie pre %1$s</string>
     <string name="worktrees_removing">Odstraňuje sa…</string>
@@ -2016,7 +2016,7 @@
     <string name="whats_new_title">Čo je nové</string>
     <string name="whats_new_version">Verzia %1$s</string>
     <string name="whats_new_skipped_one">Vynechali ste jednu aktualizáciu, preto je uvedená nižšie.</string>
-    <string name="whats_new_skipped_many">Vynechali ste %1$d aktualizácií, preto sú uvedené nižšie.</string>
+    <string name="whats_new_skipped_many">Vynechali ste aktualizácie (%1$d), preto sú uvedené nižšie.</string>
     <string name="whats_new_in_version">Vo verzii %1$s</string>
     <string name="whats_new_also_since">Novinky od poslednej aktualizácie · %1$s</string>
     <string name="whats_new_fixes">Opravy</string>

@@ -43,7 +43,7 @@
     <string name="connection_setup_segment_pairing_code">Кôд за упаривање</string>
     <string name="connection_setup_addresses_hint_tunnel_only">Удаљени тунел је сачуван. Нема шта друго да се изабере. Остаје док не искључите удаљени приступ.</string>
     <string name="connection_setup_addresses_hint_tailscale_fallback">Tailscale се користи када одговара. Локална мрежа је резерва.</string>
-    <string name="connection_setup_addresses_hint_default">Сачуване адресе се пробавају док једна не одговори. Tailscale има предност када одговара.</string>
+    <string name="connection_setup_addresses_hint_default">Покушава се са сачуваним адресама док једна не одговори. Tailscale има предност када одговара.</string>
     <string name="connection_setup_address_tailscale">Tailscale</string>
     <string name="connection_setup_address_remote_tunnel">Удаљени тунел</string>
     <string name="connection_setup_address_local_network">Локална мрежа</string>
@@ -56,7 +56,7 @@
     <string name="connection_cleartext_message_one_host">%1$s користи обичан http ван ваше локалне мреже или Tailscale-а. Лозинка сервера и све у вашим сесијама путовали би нешифровано. Боље је користити https, VPN или тунел.</string>
     <string name="connection_cleartext_message_hosts">%1$s користе обичан http ван ваше локалне мреже или Tailscale-а. Лозинка сервера и све у вашим сесијама путовали би нешифровано. Боље је користити https, VPN или тунел.</string>
     <string name="connection_cleartext_message_this_address">Ова адреса користи обичан http ван ваше локалне мреже или Tailscale-а. Лозинка сервера и све у вашим сесијама путовали би нешифровано. Боље је користити https, VPN или тунел.</string>
-    <string name="connection_cleartext_connect_anyway">Ипак се повежи</string>
+    <string name="connection_cleartext_connect_anyway">Ипак се повежите</string>
     <string name="connection_error_invalid_qr">Ово није QR за упаривање са OpenCode 2</string>
     <string name="connection_error_localhost_qr">Тај QR садржи само localhost адресу</string>
     <string name="connection_error_camera_denied">Дозволите приступ камери да бисте скенирали QR за упаривање</string>
@@ -93,7 +93,7 @@
     <string name="onboarding_features_sessions_title">Сесије</string>
     <string name="onboarding_features_sessions_detail">Прикажи, отвори, направи, преименуј, гранај, архивирај, избриши</string>
     <string name="onboarding_features_chat_title">Ћаскање и прекид</string>
-    <string name="onboarding_features_chat_detail">Шаљите упите и зауставите рад који је у току</string>
+    <string name="onboarding_features_chat_detail">Шаљите упите и заустављајте рад који је у току</string>
     <string name="onboarding_features_permissions_title">Дозволе</string>
     <string name="onboarding_features_permissions_detail">Одобрите или одбијте захтеве (без трајног памћења)</string>
     <string name="onboarding_features_changes_title">Измене</string>
@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">Приступите му са телефона</string>
     <string name="onboarding_setup_step3_body">Препоручено: Tailscale — инсталирајте Tailscale на рачунар и телефон, па као URL сервера користите Tailscale IP или MagicDNS назив рачунара.\n\nУ реду је и иста LAN мрежа, VPN, HTTPS или други тунел којим сами управљате. Апликација вам не прави релеј.</string>
     <string name="onboarding_setup_step4_title">Повежите се у апликацији</string>
-    <string name="onboarding_setup_step4_body">Унесите основни URL и лозинку. Апликација проверава GET /global/health, па чува сачувану везу са сервером на овом уређају.</string>
+    <string name="onboarding_setup_step4_body">Унесите основни URL и лозинку. Апликација проверава GET /global/health, па на овом уређају чува везу са сервером.</string>
     <string name="onboarding_setup_open_docs">Отвори документацију сервера</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile је закључан</string>
@@ -167,7 +167,7 @@
     <string name="server_health_error_log_show_less">Прикажи мање</string>
     <string name="server_health_error_log_capped">Последњих %1$d од %2$d</string>
     <string name="server_health_category_network">Мрежа</string>
-    <string name="server_health_category_timeout">Истек времена</string>
+    <string name="server_health_category_timeout">Истекло време</string>
     <string name="server_health_category_heartbeat">Застој heartbeat-а</string>
     <string name="server_health_category_server">Грешка сервера</string>
     <string name="server_health_category_auth">Потврда идентитета</string>
@@ -304,7 +304,7 @@
     <string name="archived_sessions_empty_title">Нема архивираних сесија</string>
     <string name="archived_sessions_empty_message">Сесије које архивирате у %1$s појавиће се овде.</string>
     <string name="archived_sessions_show_all_projects">Прикажи све пројекте</string>
-    <string name="archived_sessions_footer">Додирните сесију за више опција. „Врати из архиве“ је враћа на почетни екран.</string>
+    <string name="archived_sessions_footer">Додирните сесију за више опција. „Врати из архиве“ враћа сесију на почетни екран.</string>
     <string name="archived_sessions_load_failed">Архивиране сесије нису учитане.</string>
     <string name="archived_sessions_unarchive_failed">Враћање сесије из архиве није успело.</string>
     <string name="session_chat_archived_banner">Архивирано %1$s</string>
@@ -344,7 +344,7 @@
     </plurals>
     <string name="add_project_in_folder">У %1$s</string>
     <string name="add_project_root_home">Почетна</string>
-    <string name="add_project_error_add_failed">Директоријум није могао да се дода</string>
+    <string name="add_project_error_add_failed">Ова фасцикла није могла да се дода</string>
     <string name="worktree_new_row">Нови worktree…</string>
     <string name="worktree_run_in_subtitle">Направи checkout и започни тамо</string>
     <string name="worktree_move_subtitle">Направи checkout и пређи тамо</string>
@@ -356,7 +356,7 @@
     <string name="worktree_form_title">Нови worktree</string>
     <string name="worktree_name">Назив</string>
     <string name="worktree_branch">Грана</string>
-    <string name="worktree_base">Направи из</string>
+    <string name="worktree_base">Направи од</string>
     <string name="worktree_v1_branch_note">opencode v1 је именује по worktree-у</string>
     <string name="worktree_v2_no_branch">Без гране (detached)</string>
     <string name="worktree_v2_branch_note">opencode v2 checkout-ови немају грану</string>
@@ -398,7 +398,7 @@
     <string name="files_find_no_match">Ниједна датотека не одговара „%1$s“</string>
     <string name="files_find_no_match_detail">Претрага на серверу прескаче игнорисане фасцикле.</string>
     <string name="files_error_check_server_connection">Проверите везу са сервером и покушајте поново.</string>
-    <string name="files_error_server_status">Сервер је одговорио са %1$d.</string>
+    <string name="files_error_server_status">Сервер је одговорио статусом %1$d.</string>
     <string name="files_no_file_title">Отворите датотеку из стабла</string>
     <string name="files_no_file_message">Отворене датотеке остају као картице</string>
     <string name="files_path_copied">Путања је копирана</string>
@@ -420,8 +420,8 @@
     <string name="file_viewer_binary_message">Нема прегледа за ову врсту датотеке.</string>
     <string name="file_viewer_binary_message_type">%1$s\nНема прегледа за ову врсту датотеке.</string>
     <string name="file_viewer_too_large_title">Превелика за преглед</string>
-    <string name="file_viewer_too_large_message">Ова датотека је већа од оног што апликација може да прикаже.</string>
-    <string name="file_viewer_too_large_message_size">Ова датотека је већа од оног што апликација може да прикаже.\n%1$s</string>
+    <string name="file_viewer_too_large_message">Ова датотека је већа од величине коју апликација може да прикаже.</string>
+    <string name="file_viewer_too_large_message_size">Ова датотека је већа од величине коју апликација може да прикаже.\n%1$s</string>
     <plurals name="file_viewer_line_count">
         <item quantity="one">%1$d ред</item>
         <item quantity="few">%1$d реда</item>
@@ -548,7 +548,7 @@
     <string name="attachment_error_unreadable">Прилог није могао да се прочита.</string>
     <string name="attachment_error_upload_failed">Отпремање није успело</string>
     <string name="attachment_drop_reject_one">Ово не може да се приложи</string>
-    <string name="attachment_drop_reject_many">Ово не може да се приложи</string>
+    <string name="attachment_drop_reject_many">Ово не могу да се приложе</string>
     <plurals name="attachment_drop_attach_images_count">
         <item quantity="one">Отпустите да приложите %1$d слику</item>
         <item quantity="few">Отпустите да приложите %1$d слике</item>
@@ -677,34 +677,34 @@
         <item quantity="other">%1$d субагената</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
-        <item quantity="one">%1$d схелл</item>
-        <item quantity="few">%1$d схелла</item>
-        <item quantity="other">%1$d схелова</item>
+        <item quantity="one">%1$d shell</item>
+        <item quantity="few">%1$d shell-а</item>
+        <item quantity="other">%1$d shell-ова</item>
     </plurals>
     <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
     <string name="timeline_background_work_subagents_and_shells_spoken">%1$s и %2$s</string>
-    <string name="timeline_background_work_running_spoken">%1$s ради</string>
+    <string name="timeline_background_work_running_spoken">%1$s у раду</string>
     <string name="timeline_background_work_agent_needs_input">%1$s чека унос</string>
     <plurals name="timeline_background_work_subagents_need_input">
         <item quantity="one">%1$d субагент чека унос</item>
         <item quantity="few">%1$d субагента чекају унос</item>
         <item quantity="other">%1$d субагената чека унос</item>
     </plurals>
-    <string name="timeline_background_work_needs_input_running">%1$s · %2$d ради</string>
-    <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s ради</string>
+    <string name="timeline_background_work_needs_input_running">%1$s · %2$d у раду</string>
+    <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s у раду</string>
     <plurals name="timeline_tool_result_files_modified">
-        <item quantity="one">%1$d измењен</item>
-        <item quantity="few">%1$d измењена</item>
+        <item quantity="one">%1$d измењена</item>
+        <item quantity="few">%1$d измењене</item>
         <item quantity="other">%1$d измењених</item>
     </plurals>
     <plurals name="timeline_tool_result_files_added">
-        <item quantity="one">%1$d додат</item>
-        <item quantity="few">%1$d додата</item>
+        <item quantity="one">%1$d додата</item>
+        <item quantity="few">%1$d додате</item>
         <item quantity="other">%1$d додатих</item>
     </plurals>
     <plurals name="timeline_tool_result_files_deleted">
-        <item quantity="one">%1$d обрисан</item>
-        <item quantity="few">%1$d обрисана</item>
+        <item quantity="one">%1$d обрисана</item>
+        <item quantity="few">%1$d обрисане</item>
         <item quantity="other">%1$d обрисаних</item>
     </plurals>
     <string name="tool_title_read">Читање</string>
@@ -712,14 +712,14 @@
     <string name="tool_title_glob">Glob</string>
     <string name="tool_title_search">Претрага</string>
     <string name="tool_title_fetch">Преузимање</string>
-    <string name="tool_title_shell">Схелл</string>
+    <string name="tool_title_shell">Shell</string>
     <string name="tool_title_execute">Извршавање</string>
     <string name="tool_title_lsp">LSP</string>
     <string name="tool_title_plan">План</string>
     <string name="tool_title_edit">Измена</string>
     <string name="tool_title_write">Писање</string>
     <string name="tool_title_skill">Вештина</string>
-    <string name="tool_title_patch">Закрпа</string>
+    <string name="tool_title_patch">Patch</string>
     <string name="tool_title_get_issue">Преузми задатак</string>
     <string name="tool_title_save_issue">Сачувај задатак</string>
     <string name="tool_title_question">Питање</string>
@@ -756,9 +756,9 @@
         <item quantity="other">%1$d преузимања</item>
     </plurals>
     <plurals name="tool_count_shell">
-        <item quantity="one">%1$d схелл</item>
-        <item quantity="few">%1$d схелла</item>
-        <item quantity="other">%1$d схелова</item>
+        <item quantity="one">%1$d shell</item>
+        <item quantity="few">%1$d shell-а</item>
+        <item quantity="other">%1$d shell-ова</item>
     </plurals>
     <plurals name="tool_count_execute">
         <item quantity="one">%1$d извршавање</item>
@@ -791,9 +791,9 @@
         <item quantity="other">%1$d вештина</item>
     </plurals>
     <plurals name="tool_count_patch">
-        <item quantity="one">%1$d закрпа</item>
-        <item quantity="few">%1$d закрпе</item>
-        <item quantity="other">%1$d закрпи</item>
+        <item quantity="one">%1$d patch</item>
+        <item quantity="few">%1$d patch-а</item>
+        <item quantity="other">%1$d patch-ева</item>
     </plurals>
     <plurals name="tool_count_get_issue">
         <item quantity="one">%1$d преузимање задатка</item>
@@ -848,7 +848,7 @@
     <string name="tool_result_file">Датотека</string>
     <string name="tool_result_lines_range">линије %1$d–%2$d</string>
     <plurals name="tool_result_first_lines">
-        <item quantity="one">првa %1$d линија</item>
+        <item quantity="one">прва %1$d линија</item>
         <item quantity="few">прве %1$d линије</item>
         <item quantity="other">првих %1$d линија</item>
     </plurals>
@@ -856,10 +856,10 @@
     <string name="timeline_step_reading_named">Читање %1$s</string>
     <string name="timeline_step_searching">Претраживање…</string>
     <string name="timeline_step_searching_named">Претраживање %1$s</string>
-    <string name="timeline_step_listing">Листање…</string>
-    <string name="timeline_step_listing_named">Листање %1$s</string>
-    <string name="timeline_step_editing">Измена…</string>
-    <string name="timeline_step_editing_named">Измена %1$s</string>
+    <string name="timeline_step_listing">Излиставање…</string>
+    <string name="timeline_step_listing_named">Излиставање %1$s</string>
+    <string name="timeline_step_editing">Уређивање…</string>
+    <string name="timeline_step_editing_named">Уређивање %1$s</string>
     <string name="timeline_step_writing">Писање…</string>
     <string name="timeline_step_writing_named">Писање %1$s</string>
     <string name="timeline_step_fetching">Преузимање…</string>
@@ -934,7 +934,7 @@
     <string name="session_chat_revert_commit_failed">Враћање није могло да се потврди.</string>
     <string name="session_chat_fork_rename_failed">Гранање је направљено, али није могло да се преименује.</string>
     <string name="session_chat_pending_prompt_update_failed">Промпт на чекању није могао да се ажурира</string>
-    <string name="session_chat_shell_stop_failed">Схелл није могао да се заустави. Покушајте поново.</string>
+    <string name="session_chat_shell_stop_failed">Shell није могао да се заустави. Покушајте поново.</string>
     <string name="session_chat_shell_status_running">Ради</string>
     <string name="session_chat_shell_status_exited">Изашао</string>
     <string name="session_chat_shell_status_timed_out">Истекло време</string>
@@ -1014,7 +1014,7 @@
         <item quantity="other">Нема напретка %1$d кругова; пауза после %2$d</item>
     </plurals>
     <string name="session_chat_goal_waiting">Чека</string>
-    <string name="session_chat_goal_waiting_shell">Да се заврши схелл у позадини: %1$s. Пауза ако ништа не ради %2$d минута.</string>
+    <string name="session_chat_goal_waiting_shell">Да се заврши shell у позадини: %1$s. Пауза ако ништа не ради %2$d минута.</string>
     <string name="session_chat_goal_waiting_subagent">Да се заврши субагент. Пауза ако ништа не ради %1$d минута.</string>
     <string name="session_chat_goal_waiting_on_you">Чека вас</string>
     <string name="session_chat_goal_waiting_permission">Захтев за дозволу је отворен. Циљ се наставља када одговорите.</string>
@@ -1066,7 +1066,7 @@
     <string name="session_chat_failure_retry_after_minutes">Покушајте поново за %1$d мин</string>
     <string name="component_outgoing_message_pending_caption">На чекању · шаље се у следећем кораку</string>
     <string name="component_keyboard_hint_prompt">Притисните Tab да одговорите тастатуром</string>
-    <string name="component_session_status_bar_context_usage">Искоришћеност контекста %1$d процената</string>
+    <string name="component_session_status_bar_context_usage">Искоришћеност контекста: %1$d%%</string>
     <string name="component_session_status_bar_context_usage_unavailable">Искоришћеност контекста није доступна</string>
     <string name="app_lock_prompt_title">Откључај OpenCode Mobile</string>
     <plurals name="component_branch_pill_files">
@@ -1090,7 +1090,7 @@
     <string name="session_chat_mcp_load_failed">MCP сервери нису учитани. Проверите везу и покушајте поново.</string>
     <string name="session_chat_create_failed">Сесија није направљена</string>
     <string name="session_chat_send_timed_out">Слање није успело. Покушајте поново.</string>
-    <string name="session_chat_shell_cannot_queue">Схелл команде не могу да се стављају у ред. Пређите на Усмери да бисте је покренули одмах.</string>
+    <string name="session_chat_shell_cannot_queue">Схелл команде не могу да се стављају у ред. Пређите на Усмери да бисте их покренули одмах.</string>
     <string name="session_chat_reply_error_permission">Одговор није послат. Покушајте поново.</string>
     <string name="session_chat_reply_error_permission_reason">Одговор није послат. %1$s.</string>
     <string name="session_chat_reply_error_question">Одговор није послат. Покушајте поново.</string>
@@ -1112,7 +1112,7 @@
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Шина корака</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Један ред по кораку на шини, уживо док агент ради</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Картица активности</string>
-    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Кораци који теку на једној картици уживо која се скупља у сажетак</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Кораци у току на једној картици уживо која се на крају скупља у сажетак</string>
     <string name="session_chat_sheet_picker_model">Модел</string>
     <string name="session_chat_sheet_picker_agent_mode">Режим агента</string>
     <string name="session_chat_sheet_picker_variant">Варијанта</string>
@@ -1149,9 +1149,9 @@
     <string name="session_chat_sheet_background_work_title">Рад у позадини</string>
     <string name="session_chat_sheet_background_work_subagents">Субагенти</string>
     <string name="session_chat_sheet_background_work_shells">Схеллови</string>
-    <string name="session_chat_sheet_background_work_tab_running">Раде</string>
+    <string name="session_chat_sheet_background_work_tab_running">У току</string>
     <string name="session_chat_sheet_background_work_tab_done">Готово</string>
-    <string name="session_chat_sheet_background_work_running_empty">Ништа не ради. Завршен рад је у Готово.</string>
+    <string name="session_chat_sheet_background_work_running_empty">Ништа није у току. Завршен рад је у одељку Готово.</string>
     <string name="session_chat_sheet_background_work_done_empty">Још ништа није завршено.</string>
     <string name="session_chat_sheet_background_work_waiting_for_input">Чека унос</string>
     <string name="session_chat_sheet_background_work_stopped">Заустављено</string>
@@ -1249,7 +1249,7 @@
     <string name="settings_timeline_style_step_rail_title">Шина корака</string>
     <string name="settings_timeline_style_step_rail_subtitle">Један ред по кораку на шини, уживо док агент ради</string>
     <string name="settings_timeline_style_activity_card_title">Картица активности</string>
-    <string name="settings_timeline_style_activity_card_subtitle">Кораци који теку на једној картици уживо која се скупља у сажетак</string>
+    <string name="settings_timeline_style_activity_card_subtitle">Кораци у току на једној картици уживо која се на крају скупља у сажетак</string>
     <string name="settings_follow_up_title">Слање наставка</string>
     <string name="settings_follow_up_steer">Усмери</string>
     <string name="settings_follow_up_queue">Ред чекања</string>
@@ -1278,9 +1278,9 @@
     <string name="settings_privacy_policy_title">Политика приватности</string>
     <string name="settings_privacy_policy_subtitle">Како апликације рукују подацима</string>
     <string name="settings_analytics_title">Аналитика и извештаји о падовима</string>
-    <string name="settings_analytics_subtitle">Дозволи опционе догађаје о коришћењу производа и извештаје о падовима. Када је искључено, ништа се не шаље у Firebase.</string>
+    <string name="settings_analytics_subtitle">Дозволи необавезне догађаје о коришћењу производа и извештаје о падовима. Када је искључено, ништа се не шаље у Firebase.</string>
     <string name="settings_analytics_label">Аналитика производа</string>
-    <string name="settings_diagnostic_logs_subtitle">Подели уклоњен клизни прозор извршног дневника</string>
+    <string name="settings_diagnostic_logs_subtitle">Подели редиговани клизни прозор дневника извршавања</string>
     <string name="settings_clear_all_data_title">Обриши све податке</string>
     <string name="settings_clear_all_data_subtitle">Уклони везу и кеш</string>
     <string name="settings_clear_all_data_dialog_title">Обрисати све податке?</string>
@@ -1297,9 +1297,9 @@
     <string name="diagnostics_loading">Учитавање дневника дијагностике</string>
     <string name="diagnostics_entries_title">Уноси</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d уклоњена линија у задржаном прозору</item>
-        <item quantity="few">%1$d уклоњене линије у задржаном прозору</item>
-        <item quantity="other">%1$d уклоњених линија у задржаном прозору</item>
+        <item quantity="one">%1$d редигована линија у задржаном прозору</item>
+        <item quantity="few">%1$d редиговане линије у задржаном прозору</item>
+        <item quantity="other">%1$d редигованих линија у задржаном прозору</item>
     </plurals>
     <string name="diagnostics_entries_empty">У задржаном прозору још нема уноса</string>
     <string name="diagnostics_kept_title">Задржано</string>
@@ -1339,7 +1339,7 @@
     <string name="appearance_theme_blurb_porcelain">Скоро бело / скоро црно</string>
     <string name="appearance_theme_blurb_linen">Топли папир / еспресо</string>
     <string name="appearance_theme_blurb_signal">Право бело / право црно</string>
-    <string name="appearance_theme_blurb_hotline">Неутралан оквир, гласна розе</string>
+    <string name="appearance_theme_blurb_hotline">Неутралан оквир, јарко розе</string>
     <string name="appearance_theme_blurb_phosphor">Неутралан оквир, CRT зелена</string>
     <string name="appearance_syntax_name_match">Као тема</string>
     <string name="appearance_syntax_blurb_match">Користи сопствене токене UI теме</string>
@@ -1382,9 +1382,9 @@
     <string name="appearance_sample_assistant_message">Тест чита колачић сесије одмах пошто се `login()` разреши, али се колачић записује један такт касније.</string>
     <string name="appearance_sample_tool_title">Измењено</string>
     <string name="feature_flags_title">Флагови функција</string>
-    <string name="feature_flags_clear_overrides">Обриши замене</string>
+    <string name="feature_flags_clear_overrides">Обриши надјачавања</string>
     <string name="feature_flags_more_options">Више опција</string>
-    <string name="feature_flags_intro">Пребацивање флага поставља замену на уређају која има предност над удаљеном вредношћу. Удаљене вредности се преузимају при покретању и примењују при следећем покретању.</string>
+    <string name="feature_flags_intro">Укључивање или искључивање флага поставља локално надјачавање на уређају које има предност над удаљеном вредношћу. Удаљене вредности се преузимају при покретању и примењују при следећем покретању.</string>
     <string name="feature_flags_section_flags">Флагови</string>
     <string name="feedback_title_report">Пријави проблем</string>
     <string name="feedback_title_hide_parts">Сакриј делове</string>
@@ -1394,7 +1394,7 @@
     <string name="feedback_kind_idea">Идеја</string>
     <string name="feedback_placeholder_bug">Шта се догодило? Шта сте очекивали?</string>
     <string name="feedback_placeholder_idea">Шта би OpenCode учинило бољим за вас?</string>
-    <string name="feedback_privacy_note">Иде само тиму OpenCode Mobile. Никада не укључује адресу сервера, корисничко име или лозинку. Дневници се уклањају на овом телефону.</string>
+    <string name="feedback_privacy_note">Иде само тиму OpenCode Mobile. Никада не укључује адресу сервера, корисничко име или лозинку. Осетљиви подаци се из дневника уклањају на овом телефону.</string>
     <string name="feedback_error_offline">Нисте на мрежи. Извештај је сачуван овде — покушајте поново када се повежете.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">Управо сте послали извештај. Покушајте поново за %1$d с.</item>
@@ -1442,9 +1442,9 @@
         <item quantity="other">Снимак екрана, %1$d области сакривено</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">Последњи %1$d минут · gzip при отпремању. Уклоњени подаци на овом телефону.</item>
-        <item quantity="few">Последња %1$d минута · gzip при отпремању. Уклоњени подаци на овом телефону.</item>
-        <item quantity="other">Последњих %1$d минута · gzip при отпремању. Уклоњени подаци на овом телефону.</item>
+        <item quantity="one">Последњи %1$d минут · gzip при отпремању. Осетљиви подаци уклоњени на овом телефону.</item>
+        <item quantity="few">Последња %1$d минута · gzip при отпремању. Осетљиви подаци уклоњени на овом телефону.</item>
+        <item quantity="other">Последњих %1$d минута · gzip при отпремању. Осетљиви подаци уклоњени на овом телефону.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Учитавање…</string>
     <string name="feedback_log_preview_empty_title">Нема линија дневника</string>
@@ -1506,7 +1506,7 @@
     <string name="changes_source_menu_selected">%1$s, изабрано</string>
     <string name="changes_source_working_tree_name">Git измене</string>
     <string name="changes_source_working_tree_empty_title">Нема Git измена</string>
-    <string name="changes_source_working_tree_empty_message">Радно стабло нема измена које нису комитоване.</string>
+    <string name="changes_source_working_tree_empty_message">Радно стабло нема измена без commit-а.</string>
     <string name="changes_source_last_turn_name">Измене последњег потеза</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">Git измене имају %1$d измењену датотеку.</item>
@@ -1525,7 +1525,7 @@
     <string name="changes_loading_title">Учитавање измена</string>
     <string name="changes_loading_message">Преузимање diff-а…</string>
     <string name="changes_no_turn_title">Нема завршеног потеза</string>
-    <string name="changes_no_turn_message">Пошаљи промпт, сачекај да се заврши, па покушај поново.</string>
+    <string name="changes_no_turn_message">Пошаљите промпт, сачекајте да се заврши, па покушајте поново.</string>
     <string name="changes_error_title">Измене се не могу учитати</string>
     <string name="changes_error_fallback">Измене нису учитане.</string>
     <string name="changes_error_request_failed">Захтев није успео</string>
@@ -1534,10 +1534,10 @@
     <string name="changes_filter_hint">Филтер</string>
     <string name="changes_filter_accessibility_label">Филтрирај измењене датотеке</string>
     <string name="changes_no_matches_title">Нема одговарајућих датотека</string>
-    <string name="changes_no_matches_message">Пробај другу путању или обриши филтер.</string>
+    <string name="changes_no_matches_message">Пробајте другу путању или обришите филтер.</string>
     <string name="changes_no_matches_clear_filter">Обриши филтер</string>
     <string name="changes_select_file_title">Изабери датотеку</string>
-    <string name="changes_select_file_message">Изабери измењену датотеку да видиш diff.</string>
+    <string name="changes_select_file_message">Изаберите измењену датотеку да видите diff.</string>
     <string name="changes_preview_unavailable_title">Преглед није доступан</string>
     <string name="changes_preview_unavailable_message">Текстуални преглед није доступан за ову датотеку.</string>
     <string name="changes_file_viewer_truncated">Приказан је први 1 MB измена ове датотеке.</string>
@@ -1588,8 +1588,8 @@
     <string name="component_unified_diff_row_kind_context">контекст</string>
     <string name="component_unified_diff_row_kind_addition">додавање</string>
     <string name="component_unified_diff_row_kind_deletion">брисање</string>
-    <string name="component_unified_diff_old_line">стари ред %1$d</string>
-    <string name="component_unified_diff_new_line">нови ред %1$d</string>
+    <string name="component_unified_diff_old_line">стара линија %1$d</string>
+    <string name="component_unified_diff_new_line">нова линија %1$d</string>
     <string name="component_floating_pill_state_live">У току</string>
     <string name="component_floating_pill_state_ready">Спремно</string>
     <string name="component_floating_pill_state_needs_attention">Захтева пажњу</string>
@@ -1615,12 +1615,12 @@
     <string name="session_list_dock_add_project">Додај пројекат</string>
     <string name="theme_error_preset_not_found">Предефинисана тема није пронађена</string>
     <string name="component_composer_submit">Пошаљи</string>
-    <string name="component_composer_select_all_that_apply">Изабери све што важи</string>
+    <string name="component_composer_select_all_that_apply">Изаберите све што важи</string>
     <string name="component_unified_diff_summary_modified">Измењена датотека %1$s, %2$s, %3$s</string>
     <string name="component_hunk_navigation_collapse_context">Скупи контекст</string>
     <string name="component_top_bar_project_subtitle">Пројекат %1$s %2$s</string>
     <string name="component_composer_dismiss">Одбаци</string>
-    <string name="dictation_model_downloading_detail">Ово је преузимање система. Наставља се и ако затвориш ову картицу.</string>
+    <string name="dictation_model_downloading_detail">Ово је преузимање система. Наставља се и ако затворите ову картицу.</string>
     <string name="session_list_scope_load_loading">Учитавање сесија…</string>
     <string name="dictation_insert">Уметни</string>
     <string name="dictation_action_check_again">Провери поново</string>
@@ -1630,26 +1630,26 @@
     <string name="component_attachment_kind_image">Слика</string>
     <string name="component_composer_hide_question">Сакриј питање</string>
     <string name="live_updates_status_connecting">повезивање</string>
-    <string name="dictation_model_queued_detail">%1$s је ставио преузимање у ред чекања. Можда чека Wi-Fi, пуњење или слободан простор. Провери поново за пар минута.</string>
-    <string name="dictation_model_not_installed_detail">Диктирање ради на овом уређају, па се твој глас никада не отпрема. %1$s једном преузима модел и чува га за све апликације.</string>
+    <string name="dictation_model_queued_detail">%1$s је ставио преузимање у ред чекања. Можда чека Wi-Fi, пуњење или слободан простор. Проверите поново за пар минута.</string>
+    <string name="dictation_model_not_installed_detail">Диктирање ради на овом уређају, па се ваш глас никада не отпрема. %1$s једном преузима модел и чува га за све апликације.</string>
     <string name="component_outgoing_message_shows_actions_hint">Приказује радње за поруку</string>
     <string name="component_activity_status_stopped">заустављено</string>
     <string name="dictation_action_try_again">Покушај поново</string>
     <string name="component_composer_model_effort">Модел %1$s, напор %2$s</string>
-    <string name="component_activity_card_working">Радим</string>
+    <string name="component_activity_card_working">Ради</string>
     <string name="component_activity_card_opens_activity">%1$s, отвара активност</string>
     <string name="component_image_loading_label">%1$s, учитавање</string>
     <string name="session_list_dock_new_session">Нова сесија</string>
     <string name="component_composer_always_allows">Увек дозвољава: %1$s</string>
     <string name="component_composer_leave_side_question_mode">Изађи из режима споредног питања</string>
-    <string name="session_list_worktree_empty_other_projects">Обриши филтер да видиш сесије у другим пројектима.</string>
+    <string name="session_list_worktree_empty_other_projects">Обришите филтер да видите сесије у другим пројектима.</string>
     <string name="component_attachment_uploading">Отпремање…</string>
     <string name="component_composer_deny">Дени</string>
     <string name="component_composer_deny_options">Још опција за одбијање</string>
     <string name="component_composer_deny_with_note_menu">Дени с напоменом…</string>
-    <string name="component_composer_deny_with_note_menu_subtitle">Реци агенту шта да уради уместо тога</string>
+    <string name="component_composer_deny_with_note_menu_subtitle">Реците агенту шта да ради уместо тога</string>
     <string name="component_composer_deny_with_note_title">Дени с напоменом</string>
-    <string name="component_composer_deny_note_placeholder">Реци OpenCode-у шта да уради другачије</string>
+    <string name="component_composer_deny_note_placeholder">Реците OpenCode-у шта да ради другачије</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="one">Такође одбија још %1$d захтев на чекању.</item>
         <item quantity="few">Такође одбија још %1$d захтева на чекању.</item>
@@ -1660,21 +1660,21 @@
     <string name="dictation_busy">Диктирање је заузето</string>
     <string name="component_composer_question_position">%1$d од %2$d</string>
     <string name="session_list_status_ready">Спремно</string>
-    <string name="session_list_dock_hint_swipe">Отвара филтер пројеката. Превуци да промениш пројекат.</string>
-    <string name="component_composer_select_one">Изабери једно</string>
+    <string name="session_list_dock_hint_swipe">Отвара филтер пројеката. Превуците да промените пројекат.</string>
+    <string name="component_composer_select_one">Изаберите једно</string>
     <string name="component_session_list_skeleton_row">Учитавање сесије</string>
     <string name="component_split_pane_resize_sidebar">Промени величину бочне траке</string>
     <string name="session_list_section_recent">Недавно</string>
     <string name="session_list_section_recent_hint">Вреди погледати</string>
     <string name="component_activity_status_completed">завршено</string>
-    <string name="share_diagnostics_chooser_title">Подели дијагностичке логове</string>
+    <string name="share_diagnostics_chooser_title">Подели дневнике дијагностике</string>
     <string name="dictation_model_queued_title">%1$s ће касније преузети %2$s</string>
     <string name="session_list_dock_choose_project_or_worktree">Изабери пројекат или worktree</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
     <string name="component_image_could_not_load_label">%1$s, није могуће учитати</string>
     <string name="component_composer_question">Питање</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Обриши филтер да видиш сесије у другим worktree-овима.</string>
+    <string name="session_list_worktree_empty_other_worktrees">Обришите филтер да видите сесије у другим worktree-овима.</string>
     <string name="component_composer_side_question_mode">Режим споредног питања</string>
     <string name="component_page_indicator_label">Страна %1$d од %2$d</string>
     <string name="component_composer_next">Даље</string>
@@ -1683,10 +1683,10 @@
     <string name="dictation_action_downloading">Преузимање…</string>
     <string name="component_image_viewer_share">Подели</string>
     <string name="session_list_status_failed">Неуспешно</string>
-    <string name="component_composer_custom_answer_title">Упиши свој одговор</string>
+    <string name="component_composer_custom_answer_title">Упишите свој одговор</string>
     <string name="component_composer_always">Увек</string>
     <string name="component_composer_send_side_question">Постави споредно питање</string>
-    <string name="component_composer_select_exactly">Изабери %1$d</string>
+    <string name="component_composer_select_exactly">Изаберите %1$d</string>
     <string name="dictation_action_open_settings">Отвори подешавања</string>
     <string name="component_composer_open_commands">Отвори команде</string>
     <string name="component_thinking_ellipsis">Размишљање…</string>
@@ -1696,19 +1696,19 @@
         <item quantity="other">пре %1$d д</item>
     </plurals>
     <string name="component_server_address_scheme_button_description">Шема %1$s. Отвара избор шеме</string>
-    <string name="share_diagnostics_subject">OpenCode дијагностички логови</string>
+    <string name="share_diagnostics_subject">OpenCode дневници дијагностике</string>
     <string name="component_reorderable_list_move_up">Помери горе</string>
     <string name="session_list_scope_load_failed_title">Није могуће учитати: %1$s</string>
     <string name="dictation_status_listening">Слушање</string>
     <string name="dictation_downloading_model">Преузимање модела говора</string>
-    <string name="session_list_worktree_empty_every_worktree">Обриши филтер да видиш све worktree-ове.</string>
+    <string name="session_list_worktree_empty_every_worktree">Обришите филтер да видите све worktree-ове.</string>
     <string name="component_overflow_menu_more_options">Више опција</string>
     <string name="session_list_status_retrying_attempt">Поновни покушај · %1$d</string>
     <string name="live_updates_status_offline">ван мреже</string>
     <string name="component_attachment_kind_text">Текст</string>
     <string name="component_composer_next_question">Следеће питање</string>
     <string name="component_split_pane_show_sidebar">Прикажи бочну траку</string>
-    <string name="component_composer_placeholder">Питај шта год хоћеш...</string>
+    <string name="component_composer_placeholder">Питајте шта год желите...</string>
     <string name="component_server_address_host">Хост</string>
     <plurals name="relative_time_hours_ago">
         <item quantity="one">пре %1$d ч</item>
@@ -1736,7 +1736,7 @@
     <string name="session_list_section_today">Данас</string>
     <string name="component_composer_child_lockout">Подсесијама се не могу слати промпти.</string>
     <string name="component_attachment_uploading_percent">Отпремање %1$d%%</string>
-    <string name="component_composer_custom_answer_hint">Унеси свој одговор</string>
+    <string name="component_composer_custom_answer_hint">Унесите свој одговор</string>
     <string name="component_composer_cancel_revert">Откажи враћање</string>
     <string name="session_list_scope_load_slow_caption">Још се учитава — велики пројекти могу да потрају</string>
     <string name="component_outgoing_message_label_with_actions">Послата порука. Приказује радње за поруку</string>
@@ -1775,23 +1775,23 @@
     </plurals>
     <string name="component_composer_request_position">%1$d од %2$d</string>
     <string name="component_composer_side_question_placeholder">Споредно питање, не додаје се у ћаскање</string>
-    <string name="session_list_worktree_empty_every_project">Обриши филтер да видиш све пројекте.</string>
+    <string name="session_list_worktree_empty_every_project">Обришите филтер да видите све пројекте.</string>
     <string name="component_image_viewer_could_not_load_named">Није могуће учитати %1$s</string>
-    <string name="component_composer_select_up_to">Изабери до %1$d</string>
+    <string name="component_composer_select_up_to">Изаберите до %1$d</string>
     <string name="live_updates_status_live">уживо</string>
     <string name="component_image_viewer_could_not_load_this">Ова слика се не може учитати</string>
     <string name="component_image_viewer_could_not_load_full">Цела слика се не може учитати</string>
     <string name="component_image_viewer_retry">Покушај поново</string>
     <string name="component_image_viewer_loading_full">Учитавање целе слике</string>
     <string name="session_list_worktree_empty_action">Обриши филтер</string>
-    <string name="dictation_model_download_failed_detail">Провери везу и слободан простор на овом уређају, па покушај поново.</string>
+    <string name="dictation_model_download_failed_detail">Проверите везу и слободан простор на овом уређају, па покушајте поново.</string>
     <string name="component_composer_send_queue">Пошаљи у ред чекања</string>
-    <string name="session_list_dock_new_session_hint">Користи „Изабери пројекат или worktree“ да почнеш негде другде.</string>
+    <string name="session_list_dock_new_session_hint">Користите „Изабери пројекат или worktree“ да почнете негде другде.</string>
     <string name="session_list_section_yesterday">Јуче</string>
-    <string name="component_code_file_line_label">Ред %1$d, %2$s</string>
+    <string name="component_code_file_line_label">Линија %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">Предлог за OpenCode Mobile</string>
     <string name="component_hunk_navigation_previous">Претходни блок измена</string>
-    <string name="session_list_section_week_of">Недеља %1$s – %2$s</string>
+    <string name="session_list_section_week_of">Седмица %1$s – %2$s</string>
     <string name="dictation_model_download_failed_title">%1$s није могао да преузме %2$s</string>
     <string name="component_activity_status_pending">на чекању</string>
     <string name="component_composer_revert_tag">Врати</string>
@@ -1801,7 +1801,7 @@
         <item quantity="few">%1$d ранија корака</item>
         <item quantity="other">%1$d ранијих корака</item>
     </plurals>
-    <string name="component_outgoing_message_long_press_hint">Дуго притисни да прикажеш радње за поруку</string>
+    <string name="component_outgoing_message_long_press_hint">Дуго притисните да прикажете радње за поруку</string>
     <string name="component_composer_hide_permission">Сакриј захтев за дозволу</string>
     <string name="dictation_downloading_model_progress">Преузимање модела говора, %1$s</string>
     <string name="component_branch_pill_copy_branch_name">Копирај назив гране</string>
@@ -1813,7 +1813,7 @@
     <string name="component_attachment_cancel_upload">Откажи отпремање датотеке %1$s</string>
     <string name="dictation_cancel_description">Откажи диктирање</string>
     <string name="component_composer_shell_mode">Схелл режим</string>
-    <string name="component_skeleton_illustration_connect">Повежи се</string>
+    <string name="component_skeleton_illustration_connect">Повежите се</string>
     <string name="component_composer_not_selected">Није изабрано</string>
     <string name="component_composer_shell_mode_description">Схелл режим. Изађи из Схелл режима</string>
     <string name="component_branch_pill_based_on">Заснована на %1$s</string>
@@ -1831,20 +1831,20 @@
     <string name="component_composer_side_question_mode_description">Режим споредног питања. Изађи из режима споредног питања</string>
     <string name="component_composer_abort">Прекини активан рад</string>
     <string name="component_server_address_scheme_button">Шема %1$s</string>
-    <string name="component_composer_open_subagent_session">Отвори сесију подагента</string>
+    <string name="component_composer_open_subagent_session">Отвори сесију субагента</string>
     <string name="component_composer_question_step">Корак %1$d од %2$d</string>
     <string name="share_feedback_subject_bug">Пријава грешке за OpenCode Mobile</string>
     <string name="component_activity_card_opens_child_session_hint">Отвара подсесију</string>
     <string name="component_activity_status_failed">неуспешно</string>
     <string name="dictation_model_not_installed_title">%1$s треба %2$s</string>
     <string name="component_composer_back_to_main_session">Назад на главну сесију</string>
-    <string name="component_activity_sheet_working_count">Радим %1$d</string>
+    <string name="component_activity_sheet_working_count">Рад %1$d</string>
     <string name="session_list_status_retrying">Поновни покушај</string>
     <string name="component_attachment_remove">Уклони %1$s</string>
     <string name="component_composer_send_steer">Пошаљи као усмеравање</string>
     <string name="component_composer_next_permission">Следећи захтев за дозволу</string>
     <string name="session_list_dock_project_filter">Филтер пројеката</string>
-    <string name="component_split_pane_resize_hint">Дупло додирни да сакријеш бочну траку</string>
+    <string name="component_split_pane_resize_hint">Двапут додирните да сакријете бочну траку</string>
     <string name="component_branch_pill_shows_details_hint">Приказује детаље гране</string>
     <string name="component_composer_permission_requested">Затражена дозвола</string>
     <string name="component_thinking">Размишљање</string>
@@ -1864,10 +1864,10 @@
     <string name="component_server_address_scheme">Шема</string>
     <string name="component_server_address_scheme_picker_hint">Отвара избор шеме</string>
     <string name="component_split_pane_hide_sidebar">Сакриј бочну траку</string>
-    <string name="component_composer_select_range">Изабери од %1$d до %2$d</string>
+    <string name="component_composer_select_range">Изаберите од %1$d до %2$d</string>
     <string name="component_image_viewer_position">%1$d од %2$d</string>
     <string name="dictation_status_line_on_device">%1$s · %2$s · на уређају</string>
-    <string name="component_composer_select_at_least">Изабери најмање %1$d</string>
+    <string name="component_composer_select_at_least">Изаберите најмање %1$d</string>
     <string name="dictation_insert_description">Уметни транскрипт</string>
     <string name="worktrees_title">Worktree-ови</string>
     <string name="worktrees_subtitle">%1$s · %2$s</string>
@@ -1893,33 +1893,33 @@
     <string name="worktrees_remove_title">Уклонити worktree „%1$s“?</string>
     <string name="worktrees_remove_message">Брише %1$s на серверу.</string>
     <plurals name="worktrees_remove_changes">
-        <item quantity="one">%1$d измена која није комитована биће изгубљена.</item>
-        <item quantity="few">%1$d измене које нису комитоване биће изгубљене.</item>
-        <item quantity="other">%1$d измена које нису комитоване биће изгубљено.</item>
+        <item quantity="one">%1$d измена без commit-а биће изгубљена.</item>
+        <item quantity="few">%1$d измене без commit-а биће изгубљене.</item>
+        <item quantity="other">%1$d измена без commit-а биће изгубљено.</item>
     </plurals>
-    <string name="worktrees_remove_changes_unknown">Измене које нису комитоване биће изгубљене.</string>
-    <string name="worktrees_remove_changes_unchecked">Провера измена које нису комитоване није успела. Све такве измене биће изгубљене.</string>
+    <string name="worktrees_remove_changes_unknown">Измене без commit-а биће изгубљене.</string>
+    <string name="worktrees_remove_changes_unchecked">Провера измена без commit-а није успела. Све такве измене биће изгубљене.</string>
     <string name="worktrees_remove_sessions_stay">Сесије које користе овај worktree остају на почетном екрану, али се овде више не могу покретати.</string>
     <string name="worktrees_remove_confirm_anyway">Ипак уклони</string>
     <string name="worktrees_blocked_title">„%1$s“ се још не може уклонити</string>
-    <string name="worktrees_blocked_message">У овом worktree-у је покренута сесија. Заустави је, па уклони worktree.</string>
+    <string name="worktrees_blocked_message">У овом worktree-у је покренута сесија. Зауставите је, па уклоните worktree.</string>
     <string name="worktrees_blocked_ok">У реду</string>
     <string name="worktrees_blocked_show_session">Прикажи сесију</string>
     <string name="worktrees_removed">Worktree „%1$s“ је уклоњен</string>
     <string name="worktrees_remove_failed">„%1$s“ се не може уклонити. %2$s</string>
-    <string name="worktrees_remove_failed_connection">„%1$s“ се не може уклонити. Провери везу и покушај поново.</string>
+    <string name="worktrees_remove_failed_connection">„%1$s“ се не може уклонити. Проверите везу и покушајте поново.</string>
     <string name="worktrees_menu_subtitle">%1$d у %2$s</string>
     <string name="worktrees_menu_none">Нема</string>
     <string name="session_list_worktree_removed">worktree је уклоњен</string>
     <string name="whats_new_title">Шта је ново</string>
     <string name="whats_new_version">Верзија %1$s</string>
-    <string name="whats_new_skipped_one">Прескочио/ла си једно ажурирање, па је укључено испод.</string>
-    <string name="whats_new_skipped_many">Прескочио/ла си %1$d ажурирања, па су укључена испод.</string>
+    <string name="whats_new_skipped_one">Прескочили сте једно ажурирање, па је укључено испод.</string>
+    <string name="whats_new_skipped_many">Прескочили сте %1$d ажурирања, па су укључена испод.</string>
     <string name="whats_new_in_version">У верзији %1$s</string>
     <string name="whats_new_also_since">Такође ново од последњег ажурирања · %1$s</string>
     <string name="whats_new_fixes">Исправке</string>
     <string name="whats_new_done">Готово</string>
-    <string name="whats_new_find_again">Ово поново пронађи у Подешавања → Шта је ново</string>
+    <string name="whats_new_find_again">Ово можете поново пронаћи у Подешавања → Шта је ново</string>
     <string name="whats_new_installed">Инсталирано</string>
     <string name="whats_new_settings_subtitle">Белешке о издању за сваку верзију</string>
 </resources>
