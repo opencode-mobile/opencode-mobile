@@ -12,11 +12,12 @@
 // with their current translation, so a reviewer can pick one word per term and fix the strings
 // that use another. It writes <dir>/<ios code>/consistency-001.prompt.md; the answer goes next to
 // it as consistency-001.answer.json ({"fixes": {...}, "reasons": {...}}) and is applied with
-// `node scripts/translate.mjs <codes> --review --answers <dir>`.
+// `node scripts/translate.mjs apply <dir>` (it writes the task.json and plan.json apply reads).
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveLanguages } from "./languages.mjs";
+import { writeReviewTask } from "./consistency-task.mjs";
 import { ROOT, loadUnits, textsOf, readCatalog, readAndroidNeutral, readIosNeutral } from "./strings.mjs";
 
 const TERMS = [
@@ -102,5 +103,6 @@ ${JSON.stringify(groups, null, 1)}`;
   mkdirSync(folder, { recursive: true });
   const base = join(folder, "consistency-001");
   writeFileSync(`${base}.prompt.md`, `${prompt}\n\nWrite only the JSON object to ${base}.answer.json (UTF-8, no code fences). Make sure it parses as JSON.\n`);
+  writeReviewTask(dir, base, language, groups.flatMap((g) => g.strings));
   console.log(`${language.ios}: ${groups.length} term groups, ${groups.reduce((n, g) => n + g.strings.length, 0)} strings`);
 }

@@ -8,11 +8,12 @@
 // chosen term, all English strings that use the term but whose translation doesn't contain the
 // chosen word's stem, and writes them as <out dir>/<code>/sweep-001.prompt.md for a reviewer to
 // fix (only where the string means that term). The answer is applied with
-// `node scripts/translate.mjs <code> --review --answers <out dir>`.
+// `node scripts/translate.mjs apply <out dir>`.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveLanguages } from "./languages.mjs";
+import { writeReviewTask } from "./consistency-task.mjs";
 import { loadUnits, textsOf, readCatalog, readAndroidNeutral, readIosNeutral } from "./strings.mjs";
 
 const [inDir, outDir, ...codes] = process.argv.slice(2);
@@ -72,5 +73,6 @@ ${JSON.stringify(groups, null, 1)}`;
   mkdirSync(folder, { recursive: true });
   const base = join(folder, "sweep-001");
   writeFileSync(`${base}.prompt.md`, `${prompt}\n\nWrite only the JSON object to ${base}.answer.json (UTF-8, no code fences). Make sure it parses as JSON.\n`);
+  writeReviewTask(outDir, base, language, groups.flatMap((g) => g.strings));
   console.log(`${language.ios}: ${count} strings in ${groups.length} terms`);
 }
