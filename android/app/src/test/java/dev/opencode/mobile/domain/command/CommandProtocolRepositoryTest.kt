@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.command
 
 import dev.opencode.mobile.data.remote.CommandsApi
 import dev.opencode.mobile.data.remote.MessagesApi
+import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
@@ -47,6 +48,7 @@ class CommandProtocolRepositoryTest {
                     CommandsApi(client, json),
                     CommandDomainAdapter(),
                     MessagesApi(client, json),
+                    SessionsApi(client, json),
                     activeConnectionManager = manager(ServerProtocol.V1),
                 )
 
@@ -77,6 +79,7 @@ class CommandProtocolRepositoryTest {
                     CommandsApi(client, json),
                     CommandDomainAdapter(),
                     MessagesApi(client, json),
+                    SessionsApi(client, json),
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
@@ -101,6 +104,7 @@ class CommandProtocolRepositoryTest {
                     CommandsApi(client, json),
                     CommandDomainAdapter(),
                     MessagesApi(client, json),
+                    SessionsApi(client, json),
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
@@ -132,6 +136,7 @@ class CommandProtocolRepositoryTest {
                     CommandsApi(client, json),
                     CommandDomainAdapter(),
                     MessagesApi(client, json),
+                    SessionsApi(client, json),
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
@@ -156,6 +161,7 @@ class CommandProtocolRepositoryTest {
                     CommandsApi(client, json),
                     CommandDomainAdapter(),
                     MessagesApi(client, json),
+                    SessionsApi(client, json),
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
@@ -193,6 +199,7 @@ class CommandProtocolRepositoryTest {
                     CommandsApi(client, json),
                     CommandDomainAdapter(),
                     MessagesApi(client, json),
+                    SessionsApi(client, json),
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
@@ -208,20 +215,64 @@ class CommandProtocolRepositoryTest {
                 "/repo",
             )
 
-            assertEquals(3, requests.size)
-            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_1/agent"))
-            assertTrue((requests[0].body as io.ktor.http.content.TextContent).text.contains("\"agent\":\"build\""))
-            assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_1/model"))
-            val model = (requests[1].body as io.ktor.http.content.TextContent).text
+            assertEquals(4, requests.size)
+            assertEquals(HttpMethod.Get, requests[0].method)
+            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_1"))
+            assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_1/agent"))
+            assertTrue((requests[1].body as io.ktor.http.content.TextContent).text.contains("\"agent\":\"build\""))
+            assertTrue(requests[2].url.encodedPath.endsWith("/api/session/ses_1/model"))
+            val model = (requests[2].body as io.ktor.http.content.TextContent).text
             assertTrue(model.contains("\"id\":\"gpt-4\""))
             assertTrue(model.contains("\"providerID\":\"openai\""))
             assertTrue(model.contains("\"variant\":\"high\""))
-            assertTrue(requests[2].url.encodedPath.endsWith("/api/session/ses_1/command"))
-            val command = (requests[2].body as io.ktor.http.content.TextContent).text
+            assertTrue(requests[3].url.encodedPath.endsWith("/api/session/ses_1/command"))
+            val command = (requests[3].body as io.ktor.http.content.TextContent).text
             assertTrue(command.contains("\"name\":\"init\""))
             assertTrue(command.contains("\"text\":\"\""))
             assertTrue(!command.contains("\"agent\""))
             assertTrue(!command.contains("\"model\""))
+        }
+
+    @Test
+    fun v2RunCommand_sessionAlreadyOnAgentAndModel_postsOnlyCommand() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    if (request.method == HttpMethod.Get) {
+                        respondJson(
+                            """{"data":{"id":"ses_1","agent":"build","model":{"id":"gpt-4","providerID":"openai","variant":"high"}}}""",
+                        )
+                    } else {
+                        respond("", HttpStatusCode.NoContent)
+                    }
+                }
+            val repository =
+                DefaultCommandRepository(
+                    CommandsApi(client, json),
+                    CommandDomainAdapter(),
+                    MessagesApi(client, json),
+                    SessionsApi(client, json),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            repository.runCommand(
+                "ses_1",
+                CommandRunOptions(
+                    command = "init",
+                    arguments = "",
+                    model = PromptModelSelection(providerId = "openai", modelId = "gpt-4"),
+                    variant = "high",
+                    mode = "build",
+                ),
+                "/repo",
+            )
+
+            assertEquals(
+                listOf("GET /api/session/ses_1", "POST /api/session/ses_1/command"),
+                requests.map { "${it.method.value} ${it.url.encodedPath}" },
+            )
         }
 
     @Test
@@ -236,6 +287,7 @@ class CommandProtocolRepositoryTest {
                     CommandsApi(client, json),
                     CommandDomainAdapter(),
                     MessagesApi(client, json),
+                    SessionsApi(client, json),
                     activeConnectionManager = manager(ServerProtocol.V1),
                 )
 
@@ -262,6 +314,7 @@ class CommandProtocolRepositoryTest {
                     CommandsApi(client, json),
                     CommandDomainAdapter(),
                     MessagesApi(client, json),
+                    SessionsApi(client, json),
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
@@ -276,8 +329,8 @@ class CommandProtocolRepositoryTest {
                 assertEquals(400, error.statusCode)
                 assertEquals("unknown agent", error.message)
             }
-            assertEquals(1, requests.size)
-            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_1/agent"))
+            assertEquals(2, requests.size)
+            assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_1/agent"))
         }
 
     private suspend fun manager(protocol: ServerProtocol): ActiveConnectionManager {

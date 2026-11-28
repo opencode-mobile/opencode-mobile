@@ -391,6 +391,7 @@ struct MessageProtocolRepositoryTests {
 
     @Test func v2SendPromptSwitchesAgentModelThenPostsPrompt() async throws {
         MessageProtocolURLProtocol.reset(responses: [
+            .json(#"{"data":{"id":"ses_2","agent":"plan","model":{"id":"gpt-4","providerID":"openai"}}}"#),
             MessageStubResponse(statusCode: 204, body: ""),
             MessageStubResponse(statusCode: 204, body: ""),
             MessageStubResponse(statusCode: 200, body: #"{"data":{"id":"msg_1","sessionID":"ses_2","prompt":{"text":"Hello"},"delivery":"steer","admittedSeq":1,"timeCreated":1}}"#)
@@ -416,10 +417,109 @@ struct MessageProtocolRepositoryTests {
             directory: "/repo"
         )
 
-        #expect(MessageProtocolURLProtocol.requests.count == 3)
-        #expect(MessageProtocolURLProtocol.requests[0].url?.path.hasSuffix("/api/session/ses_2/agent") == true)
-        #expect(MessageProtocolURLProtocol.requests[1].url?.path.hasSuffix("/api/session/ses_2/model") == true)
-        #expect(MessageProtocolURLProtocol.requests[2].url?.path.hasSuffix("/api/session/ses_2/prompt") == true)
+        #expect(requestLines() == [
+            "GET /api/session/ses_2",
+            "POST /api/session/ses_2/agent",
+            "POST /api/session/ses_2/model",
+            "POST /api/session/ses_2/prompt"
+        ])
+    }
+
+    @Test func v2SendPromptSessionAlreadyOnAgentAndModelPostsOnlyPrompt() async throws {
+        let session = #"{"data":{"id":"ses_2","agent":"build","model":{"id":"gpt-5","providerID":"openai","variant":"high"}}}"#
+        let prompt = #"{"data":{"id":"msg_1","sessionID":"ses_2","prompt":{"text":"Hello"},"delivery":"steer","admittedSeq":1,"timeCreated":1}}"#
+        MessageProtocolURLProtocol.reset(responses: [.json(session), .json(prompt), .json(session), .json(prompt)])
+        let router = makeRouter(serverProtocol: .v2)
+        let options = PromptSendOptions(
+            text: "Hello",
+            model: PromptModelSelection(providerID: "openai", modelID: "gpt-5"),
+            variant: "high",
+            mode: "build"
+        )
+
+        try await router.sendPromptAsync(sessionID: "ses_2", options: options, directory: "/repo")
+        try await router.sendPromptAsync(sessionID: "ses_2", options: options, directory: "/repo")
+
+        #expect(requestLines() == [
+            "GET /api/session/ses_2",
+            "POST /api/session/ses_2/prompt",
+            "GET /api/session/ses_2",
+            "POST /api/session/ses_2/prompt"
+        ])
+    }
+
+    @Test func v2SendPromptChangedAgentOnlyPostsAgentNotModel() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"{"data":{"id":"ses_2","agent":"build","model":{"id":"gpt-5","providerID":"openai"}}}"#),
+            MessageStubResponse(statusCode: 204, body: ""),
+            .json(#"{"data":{"id":"msg_1","sessionID":"ses_2","prompt":{"text":"Hello"},"delivery":"steer","admittedSeq":1,"timeCreated":1}}"#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        try await router.sendPromptAsync(
+            sessionID: "ses_2",
+            options: PromptSendOptions(
+                text: "Hello",
+                model: PromptModelSelection(providerID: "openai", modelID: "gpt-5"),
+                mode: "plan"
+            ),
+            directory: "/repo"
+        )
+
+        #expect(requestLines() == [
+            "GET /api/session/ses_2",
+            "POST /api/session/ses_2/agent",
+            "POST /api/session/ses_2/prompt"
+        ])
+        #expect(MessageProtocolURLProtocol.bodies[1]?.contains(#""agent":"plan""#) == true)
+    }
+
+    @Test func v2SendPromptSessionReadFailurePostsEveryPick() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            MessageStubResponse(statusCode: 500, body: "boom"),
+            MessageStubResponse(statusCode: 204, body: ""),
+            MessageStubResponse(statusCode: 204, body: ""),
+            .json(#"{"data":{"id":"msg_1","sessionID":"ses_2","prompt":{"text":"Hello"},"delivery":"steer","admittedSeq":1,"timeCreated":1}}"#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        try await router.sendPromptAsync(
+            sessionID: "ses_2",
+            options: PromptSendOptions(
+                text: "Hello",
+                model: PromptModelSelection(providerID: "openai", modelID: "gpt-5"),
+                mode: "build"
+            ),
+            directory: "/repo"
+        )
+
+        #expect(requestLines() == [
+            "GET /api/session/ses_2",
+            "POST /api/session/ses_2/agent",
+            "POST /api/session/ses_2/model",
+            "POST /api/session/ses_2/prompt"
+        ])
+    }
+
+    @Test func v2SendPromptFailedAgentSwitchFailsSendWithoutPrompt() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"{"data":{"id":"ses_2","agent":"build"}}"#),
+            MessageStubResponse(statusCode: 400, body: "unknown agent")
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        await #expect(throws: (any Error).self) {
+            try await router.sendPromptAsync(
+                sessionID: "ses_2",
+                options: PromptSendOptions(text: "Hello", mode: "missing"),
+                directory: "/repo"
+            )
+        }
+        #expect(requestLines() == ["GET /api/session/ses_2", "POST /api/session/ses_2/agent"])
+    }
+
+    private func requestLines() -> [String] {
+        MessageProtocolURLProtocol.requests.map { "\($0.httpMethod ?? "") \($0.url?.path ?? "")" }
     }
 
     @Test func v1RunShellPostsAgentCommandAndModelToSessionShell() async throws {

@@ -132,12 +132,12 @@ struct V2MessageRemote: MessageRemote, Sendable {
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
-        if let agent = options.mode, !agent.isEmpty {
-            try await api.switchSessionAgent(sessionID: sessionID, agent: agent, directory: directory)
-        }
-        if let model = adapter.v2SwitchModelRequest(options: options) {
-            try await api.switchSessionModel(sessionID: sessionID, body: model, directory: directory)
-        }
+        try await V2SessionSelectionApplier(api: api).apply(
+            sessionID: sessionID,
+            agent: options.mode,
+            model: adapter.v2SwitchModelRequest(options: options),
+            directory: directory
+        )
         try await api.sendPromptV2(
             sessionID: sessionID,
             body: adapter.v2PromptRequest(options: options),

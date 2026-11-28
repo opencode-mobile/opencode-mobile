@@ -2,7 +2,9 @@ package dev.opencode.mobile.domain.command
 
 import dev.opencode.mobile.data.remote.CommandsApi
 import dev.opencode.mobile.data.remote.MessagesApi
+import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.message.V2SessionSelectionApplier
 import dev.opencode.mobile.domain.message.inlineAttachments
 import dev.opencode.mobile.network.ActiveConnectionManager
 import javax.inject.Inject
@@ -14,9 +16,12 @@ class DefaultCommandRepository
     constructor(
         private val api: CommandsApi,
         private val adapter: CommandDomainAdapter,
-        private val messagesApi: MessagesApi,
+        messagesApi: MessagesApi,
+        sessionsApi: SessionsApi,
         private val activeConnectionManager: ActiveConnectionManager? = null,
     ) : CommandRepository {
+        private val selection = V2SessionSelectionApplier(messagesApi, sessionsApi)
+
         override suspend fun listCommands(directory: String?): List<ServerCommand> =
             try {
                 if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) {
@@ -37,12 +42,7 @@ class DefaultCommandRepository
         ) {
             try {
                 if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) {
-                    options.mode?.takeIf { it.isNotBlank() }?.let { agent ->
-                        messagesApi.switchSessionAgent(sessionId, agent, directory)
-                    }
-                    adapter.toV2SwitchModelRequest(options)?.let { model ->
-                        messagesApi.switchSessionModel(sessionId, model, directory)
-                    }
+                    selection.apply(sessionId, options.mode, adapter.toV2SwitchModelRequest(options), directory)
                     api.runCommandV2(sessionId, adapter.toV2RunRequest(options), options.attachments.inlineAttachments())
                 } else {
                     api.runCommand(sessionId, adapter.toRunRequest(options), directory, options.attachments)

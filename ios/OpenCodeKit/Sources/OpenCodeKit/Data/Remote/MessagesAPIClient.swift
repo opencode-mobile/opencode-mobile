@@ -31,6 +31,8 @@ public protocol MessagesAPI: Sendable {
     func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws
     func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws
+    /// v2 `GET /api/session/{sessionID}`, read for the session's current agent and model only.
+    func getSessionSelectionV2(sessionID: String) async throws -> V2SessionSelectionDTO
     func listInboxV2(sessionID: String) async throws -> [V2InboxItemDTO]
     func runShell(sessionID: String, body: V1ShellRequestDTO, directory: String?) async throws
     func runShellV2(sessionID: String, body: V2ShellRequestDTO) async throws
@@ -73,6 +75,10 @@ extension MessagesAPI {
     public func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws {}
 
     public func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws {}
+
+    public func getSessionSelectionV2(sessionID _: String) async throws -> V2SessionSelectionDTO {
+        throw MessagesAPIError.invalidResponse
+    }
 
     public func listInboxV2(sessionID _: String) async throws -> [V2InboxItemDTO] { [] }
 
@@ -268,6 +274,11 @@ public nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
 
     public func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String? = nil) async throws {
         try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: nil)
+    }
+
+    public func getSessionSelectionV2(sessionID: String) async throws -> V2SessionSelectionDTO {
+        let envelope: APIDataEnvelope<V2SessionSelectionDTO> = try await get(path: "api/session/\(sessionID)")
+        return envelope.data
     }
 
     /// Both protocols run the command before they answer, so the request stays open for as
