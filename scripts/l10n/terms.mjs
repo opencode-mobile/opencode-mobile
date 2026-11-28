@@ -35,11 +35,9 @@ export function mentions(text, term) {
   return new RegExp(`\\b${escapeRegExp(term).replace(/ /g, "\\s+")}(e?s|ed|ing)?\\b`, "i").test(text);
 }
 
+// Glossary entries ("diff / Change Set": meaning) whose term the text uses as a word.
 export function glossaryFor(text) {
-  const lower = text.toLowerCase();
-  return Object.entries(glossary.terms).filter(([term]) =>
-    term.split(/\s*\/\s*/).some((t) => lower.includes(t.toLowerCase().split(" ")[0])),
-  );
+  return Object.entries(glossary.terms).filter(([term]) => term.split(/\s*\/\s*/).some((t) => mentions(text, t)));
 }
 
 export function formOfAddress(language) {
@@ -63,12 +61,14 @@ function stem(word, language) {
   return first.slice(0, Math.max(3, Math.min(first.length, Math.ceil(first.length * 0.65))));
 }
 
-// Terms the English uses whose chosen word the translation doesn't contain. A hint, not an
-// error: the English may use the word in another sense.
+// Terms the English uses whose word the translation doesn't contain: the language's chosen
+// word, or the desktop app's word where it has chosen none. A hint, not an error: the English
+// may use the word in another sense.
 export function termMisses(english, translation, language) {
   const en = englishText(english);
   const text = englishText(translation).toLowerCase();
-  return Object.entries(chosenTerms[language.ios] ?? {})
-    .filter(([term, word]) => term !== ADDRESS && mentions(en, term) && !text.includes(stem(word, language)))
-    .map(([term, word]) => ({ term, word }));
+  const { chosen, desktop } = termsFor(language, en);
+  return [...chosen.map(([term, word]) => ({ term, word, source: "chosen" })), ...desktop.map(([term, word]) => ({ term, word, source: "desktop" }))].filter(
+    ({ word }) => !text.includes(stem(word, language)),
+  );
 }

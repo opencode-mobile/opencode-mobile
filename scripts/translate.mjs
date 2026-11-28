@@ -130,7 +130,7 @@ const TRANSLATE_RULES = `You translate the user interface of OpenCode Mobile, a 
 
 Rules:
 - Translate the meaning the way a well-made native app in that language would say it, not word for word. Keep the tone short, plain and friendly. Use the language's mobile UI conventions (imperative verbs or infinitives on buttons, as its iOS and Android apps do).
-- Read each string's context (id, note, used_in) to decide whether it is a button, a title, a label, a status or a sentence, and whether a word is a verb or a noun.
+- Read each string's context (id, note, and used_in where given) to decide whether it is a button, a title, a label, a status or a sentence, and whether a word is a verb or a noun.
 - Keep placeholders exactly: {1}, {2}, … each must appear in your text as often as in the English. You may move them within the sentence. Never add new ones.
 - Keep these as written, never translated or transliterated: {keep}. Keep slash commands (/compact), shell commands, file names, paths, code, model and provider names, and text in backticks exactly as written.
 - Use each language's "Words" and form of address so the strings match the rest of the app, and its "Desktop app words" so they match the OpenCode desktop app. Follow the "Product terms" meanings.
@@ -156,13 +156,19 @@ Keep placeholders {1}, {2}, … exactly as in the English (they may move). Keep 
 
 Answer with one JSON object only: {"fixes": {"<language code>": {"<id>": "<corrected text>" or {"<form>": "<text>"}}}, "reasons": {"<language code>": {"<id>": "<few words>"}}}. Only include ids you changed. Use {"fixes": {}, "reasons": {}} when everything is right. No prose, no code fences.`;
 
-function itemFor(unit, text, usage) {
+// lean (agent tasks): a code line only for a bare short string with no note ("Open",
+// "{1} queued"), the kind an agent would otherwise have to look up or guess.
+function itemFor(unit, text, usage, lean = false) {
   const item = { id: text.id, english: text.english };
+  const english = englishText(text.english);
   if (unit.plural) item.plural = true;
   if (text.platform !== "both") item.platform = text.platform === "ios" ? "iPhone app only" : "Android app only";
-  if (unit.notes.length) item.note = [...new Set(unit.notes)].join(" / ");
+  // A heading that only repeats the English ("Changes" above changes.title) says nothing.
+  const notes = [...new Set(unit.notes)].filter((n) => n.toLowerCase() !== english.toLowerCase());
+  if (notes.length) item.note = notes.join(" / ");
   const use = usage?.get(unit.key)?.[0];
-  if (use) item.used_in = use;
+  const words = (typeof text.english === "string" ? text.english : text.english.other ?? english).split(/\s+/).length;
+  if (use && (!lean || (!item.note && words <= 3))) item.used_in = use;
   return item;
 }
 
@@ -451,8 +457,10 @@ function chunksOf(work, size) {
   return chunks;
 }
 
-// Translations one request may carry when it covers many languages.
+// Translations one request may carry when it covers many languages, and at most how many
+// languages: past that, quality drifts in the last ones.
 const MAX_STRINGS = 150;
+const MAX_LANGUAGES = 10;
 // At most this many different strings to do: send them for many languages per request.
 const FEW_STRINGS = 20;
 
@@ -463,7 +471,11 @@ function planRequests(workByLanguage, batch) {
   const busy = [...workByLanguage].filter(([, work]) => work.length);
   const ids = new Set(busy.flatMap(([, work]) => work.map((w) => w.text.id)));
   if (busy.length > 1 && ids.size <= FEW_STRINGS) {
-    const per = Math.max(1, Math.floor(MAX_STRINGS / ids.size));
+    const per = Math.max(1, Math.min(MAX_LANGUAGES, Math.floor(MAX_STRINGS / ids.size)));
+    // Languages with the same script and plural forms side by side, so a request's languages
+    // share their decisions about gender, plurals and word order.
+    const family = ([language]) => `${language.script} ${language.plurals.join(",")}`;
+    busy.sort((a, b) => family(a).localeCompare(family(b)));
     const requests = [];
     for (let i = 0; i < busy.length; i += per) requests.push(busy.slice(i, i + per).map(([language, work]) => ({ language, work })));
     return requests;
@@ -472,9 +484,9 @@ function planRequests(workByLanguage, batch) {
 }
 
 // The strings of a request, each once.
-function itemsOf(sections, usage) {
+function itemsOf(sections, usage, lean = false) {
   const items = new Map();
-  for (const s of sections) for (const w of s.work) if (!items.has(w.text.id)) items.set(w.text.id, itemFor(w.unit, w.text, usage));
+  for (const s of sections) for (const w of s.work) if (!items.has(w.text.id)) items.set(w.text.id, itemFor(w.unit, w.text, usage, lean));
   return [...items.values()];
 }
 
@@ -568,11 +580,11 @@ async function pool(tasks, jobs) {
 }
 
 // The strings and per-language sections of a translate request. One language: some of its
-// translations from the same screens set the tone. Many languages, or an agent task (usage
-// null; the agent looks context up): the chosen words do that job at a fraction of the size.
-function translateSpec(sections, usage, states) {
-  const items = itemsOf(sections, usage);
-  const sample = usage && sections.length === 1;
+// translations from the same screens set the tone. Many languages, or an agent task (lean; the
+// agent looks context up): the chosen words do that job at a fraction of the size.
+function translateSpec(sections, usage, states, lean = false) {
+  const items = itemsOf(sections, usage, lean);
+  const sample = !lean && sections.length === 1;
   return { items, specs: sections.map((s) => ({ language: s.language, ids: idsOf(s, items), existing: sample ? existingSample(states.get(s.language.ios), s.work) : [] })) };
 }
 
@@ -632,7 +644,7 @@ async function translate(args, languages, units, catalog, lock) {
 
   const progress = { done: 0, total };
   const tasks = requests.map((sections) => async () => {
-    if (args.handoff) return writeHandoff(args.handoff, "translate", TRANSLATE_RULES, translateSpec(sections, null, states));
+    if (args.handoff) return writeHandoff(args.handoff, "translate", TRANSLATE_RULES, translateSpec(sections, usage, states, true));
     let pending = sections;
     for (let attempt = 1; attempt <= (args.answers ? 1 : 3) && pending.length; attempt++) {
       let answer = null;
@@ -783,8 +795,8 @@ function readAnswers(dir, language, field) {
 // ---------------------------------------------------------------------------------------------
 // Review
 
-function reviewSpec(sections, usage) {
-  const items = itemsOf(sections, usage);
+function reviewSpec(sections, usage, lean = false) {
+  const items = itemsOf(sections, usage, lean);
   return { items, specs: sections.map((s) => ({ language: s.language, ids: idsOf(s, items), current: Object.fromEntries(s.work.map((w) => [w.text.id, w.value])) })) };
 }
 
@@ -825,7 +837,7 @@ async function review(args, languages, units, catalog, keys, recordStatus) {
   }
   const fixesLog = [];
   const tasks = requests.map((sections) => async () => {
-    if (args.handoff) return writeHandoff(args.handoff, "review", REVIEW_RULES, reviewSpec(sections, null));
+    if (args.handoff) return writeHandoff(args.handoff, "review", REVIEW_RULES, reviewSpec(sections, usage, true));
     let answer = null;
     if (!args.answers) {
       for (let attempt = 1; attempt <= 3 && !answer; attempt++) {

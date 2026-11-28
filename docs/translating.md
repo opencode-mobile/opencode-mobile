@@ -79,16 +79,24 @@ the string files.
 A task holds what most strings need: each string with its notes, and each language's form of
 address and words for the terms it uses. The agent pulls more only for strings that need it:
 
-- `node scripts/l10n/lookup.mjs <id> <language>` shows where a string is used in code, the
-  strings next to it on the same screen with their translations, and the language's words for
-  its terms.
-- `node scripts/l10n/lookup.mjs --find "<English words>" <language>` shows how the app already
-  translates a word or phrase.
+- `node scripts/l10n/lookup.mjs <id>,<id> <language>,<language>` shows where each string is used
+  in code (with the function or view around it), the strings near it with their translations,
+  its current translations, and each language's words for its terms. One call takes several
+  strings and languages, since each call costs the agent a turn.
+- `node scripts/l10n/lookup.mjs --find "<English words>" <language>,<language>` shows how the app
+  already translates a word or phrase.
+
+A bare short string with no note ("Open", "{1} queued") gets one code line in the task itself,
+since an agent would otherwise have to look it up or guess. A task covers at most 10 languages,
+with languages of the same script and plural forms together.
 
 The agent then runs `node scripts/l10n/check-answer.mjs <task>.answer.json` on its answer and
-fixes what it reports before handing back. Errors are what CI would reject: a missing string, a
-broken placeholder or plural. Hints are worth a second look, such as a translation that doesn't
-use the language's word for a term.
+fixes what it reports before handing back. Errors are what CI would reject (a missing string, a
+broken placeholder, a plural answered with one text) and language codes the task doesn't have.
+Hints are worth a second look: a translation that doesn't use the language's word for a term,
+one that differs from how the app translates the same English elsewhere, stray spaces, or a
+dropped … or ·. The checker can't catch a wrong sense ("Offen" for the verb "Open"); the
+same-English hint and the code line on bare short strings are the defence there.
 
 Give each agent one task file. An agent keeps every file it reads in its context and sends all
 of it again on each turn, so one agent working through a list of files costs many times what

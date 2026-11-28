@@ -80,5 +80,5 @@ test("answers are read per language, flat only for a one-language task", () => {
   assert.deepEqual(answerFor(nested, "translations", de, false), { a: "x" });
   assert.deepEqual(answerFor({ translations: { a: "x" } }, "translations", de, true), { a: "x" });
   assert.deepEqual(answerFor({ translations: { a: "x" } }, "translations", de, false), {});
-  assert.deepEqual(normalizeAnswer("x", ru, true), { one: "x", few: "x", many: "x", other: "x" });
+  assert.equal(normalizeAnswer("x", ru, true), null);
 });

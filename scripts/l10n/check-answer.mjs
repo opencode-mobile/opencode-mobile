@@ -9,7 +9,8 @@
 // Reads <task>.task.json next to it. Exits 1 when there are errors.
 
 import { readFileSync } from "node:fs";
-import { resolveLanguages } from "./languages.mjs";
+import { languageByCode, resolveLanguages } from "./languages.mjs";
+import { loadUnits, textsOf, readCatalog, readAndroidNeutral, readIosNeutral } from "./strings.mjs";
 import { problemsOf } from "./rules.mjs";
 import { termMisses } from "./terms.mjs";
 import { answerFor, normalizeAnswer, parseAnswerText } from "./answers.mjs";
@@ -32,10 +33,39 @@ const field = reviewing ? "fixes" : "translations";
 const codes = Object.keys(task.languages);
 let errors = 0;
 let hints = 0;
+// Language keys the task doesn't have ("jp" for ja) would otherwise only show as missing strings.
+const top = Object.keys(answer[field] ?? {});
+const strayCodes = codes.length === 1 && !top.some((k) => k in task.strings || languageByCode(k)) ? [] : top.filter((k) => !(k in task.strings) && !codes.includes(k));
+for (const code of strayCodes) {
+  errors++;
+  console.log(`error "${code}": not a language of this task (${codes.join(", ")})`);
+}
+
+// How the app already translates each English text elsewhere, per language, so a new string
+// with the same English can match it.
+const units = loadUnits();
+const catalog = readCatalog();
+function translationsByEnglish(language) {
+  const android = readAndroidNeutral(language);
+  const byEnglish = new Map();
+  for (const unit of units) {
+    for (const text of textsOf(unit)) {
+      if (text.id in task.strings) continue;
+      const value = (text.platform !== "ios" && unit.android ? android.get(unit.android.name) : undefined) ?? (text.platform !== "android" && unit.ios ? readIosNeutral(catalog, unit, language)?.text : undefined);
+      if (value === undefined || value === null) continue;
+      const key = JSON.stringify(text.english);
+      if (!byEnglish.has(key)) byEnglish.set(key, new Set());
+      byEnglish.get(key).add(JSON.stringify(value));
+    }
+  }
+  return byEnglish;
+}
+const flat = (v) => (typeof v === "string" ? [v] : Object.values(v));
 for (const code of codes) {
   const [language] = resolveLanguages([code]);
   const got = answerFor(answer, field, language, codes.length === 1);
   const asked = new Set(task.languages[code]);
+  const elsewhere = translationsByEnglish(language);
   const lines = [];
   const error = (message) => (errors++, lines.push(`  error ${message}`));
   const hint = (message) => (hints++, lines.push(`  hint  ${message}`));
@@ -54,9 +84,15 @@ for (const code of codes) {
     const problems = problemsOf(string.english, value, language, string.plural);
     for (const e of problems.errors) error(`${id}: ${e}`);
     for (const w of problems.warnings) hint(`${id}: ${w}`);
-    for (const { term, word } of termMisses(string.english, value, language)) {
-      hint(`${id}: doesn't use "${word}" for "${term}" (fine where the English means something else)`);
+    for (const { term, word, source } of termMisses(string.english, value, language)) {
+      hint(`${id}: doesn't use ${source === "desktop" ? "the desktop app's" : "the chosen"} word "${word}" for "${term}" (fine where the English means something else)`);
     }
+    const english = flat(string.english);
+    const texts = flat(value);
+    if (texts.some((t) => t !== t.trim())) hint(`${id}: leading or trailing spaces`);
+    for (const mark of ["…", "·"]) if (english.some((e) => e.includes(mark)) && !texts.some((t) => t.includes(mark))) hint(`${id}: the English has ${mark}, the translation doesn't`);
+    const same = elsewhere.get(JSON.stringify(string.english));
+    if (same && !same.has(JSON.stringify(value))) hint(`${id}: the same English is translated elsewhere as ${[...same].slice(0, 3).join(" or ")}`);
   }
   console.log(lines.length ? `${code}:\n${lines.join("\n")}` : `${code}: ok`);
 }
