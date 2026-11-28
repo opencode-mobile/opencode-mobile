@@ -12,17 +12,17 @@
     <string name="common_loading_sessions">Се вчитуваат сесиите</string>
     <string name="common_checking_server">Се проверува серверот…</string>
     <string name="connection_setup_title_first">Поврзете се со сервер</string>
-    <string name="connection_setup_title_add">Додај сервер</string>
+    <string name="connection_setup_title_add">Додајте сервер</string>
     <string name="connection_setup_title_edit">Уреди сервер</string>
     <string name="connection_setup_action_connect">Поврзете се</string>
     <string name="connection_setup_action_connecting">Се поврзува…</string>
     <string name="connection_setup_action_save">Зачувај</string>
     <string name="connection_setup_action_saving">Се зачувува…</string>
-    <string name="connection_setup_action_scan_qr">Скенирај QR</string>
-    <string name="connection_setup_action_scan_new_qr">Скенирај нов QR</string>
-    <string name="connection_setup_action_enter_pairing_code">Внеси код за спарување</string>
-    <string name="connection_setup_action_use_host_password">Користи хост и лозинка</string>
-    <string name="connection_setup_action_scan_qr_instead">Наместо тоа, скенирај QR</string>
+    <string name="connection_setup_action_scan_qr">Скенирајте QR</string>
+    <string name="connection_setup_action_scan_new_qr">Скенирајте нов QR</string>
+    <string name="connection_setup_action_enter_pairing_code">Внесете код за спарување</string>
+    <string name="connection_setup_action_use_host_password">Користете хост и лозинка</string>
+    <string name="connection_setup_action_scan_qr_instead">Наместо тоа, скенирајте QR</string>
     <string name="connection_setup_scan_qr_instead_hint">Од opencode pair</string>
     <string name="connection_setup_remove_server">Отстрани сервер</string>
     <string name="connection_setup_remove_dialog_title_unnamed">Да се отстрани „серверот“?</string>
@@ -74,7 +74,7 @@
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Автентикацијата не успеа</string>
     <string name="connection_error_unhealthy">Серверот пријави дека не е здрав</string>
-    <string name="connection_scanner_title">Скенирај QR за спарување</string>
+    <string name="connection_scanner_title">Скенирајте QR за спарување</string>
     <string name="connection_scanner_card_title">QR за спарување на OpenCode</string>
     <string name="connection_scanner_card_body">Од opencode pair --remote. Обичниот pair прикажува QR само кога серверот е достапен надвор од localhost.</string>
     <string name="connection_onboarding_title">Поврзете се со вашиот сервер</string>
@@ -95,9 +95,9 @@
     <string name="onboarding_features_chat_title">Разговор и прекин</string>
     <string name="onboarding_features_chat_detail">Испраќајте промпти и запрете ја работата во тек</string>
     <string name="onboarding_features_permissions_title">Дозволи</string>
-    <string name="onboarding_features_permissions_detail">Одобрете или негирајте барања (без траен избор)</string>
+    <string name="onboarding_features_permissions_detail">Одобрете или одбијте барања (без траен избор)</string>
     <string name="onboarding_features_changes_title">Промени</string>
-    <string name="onboarding_features_changes_detail">Прегледајте ги разликите во сесијата</string>
+    <string name="onboarding_features_changes_detail">Прегледајте ги diff-овите на сесијата</string>
     <string name="onboarding_features_live_title">Во живо кога е отворена</string>
     <string name="onboarding_features_live_detail">Проток на настани во преден план; освежување по повторно поврзување</string>
     <string name="onboarding_setup_title">Поставете opencode serve</string>
@@ -111,17 +111,17 @@
     <string name="onboarding_setup_step3_body">Препорачано: Tailscale — инсталирајте го Tailscale на компјутерот и телефонот, па користете ја Tailscale IP адресата или MagicDNS името на компјутерот како URL на серверот.\n\nМоже и иста LAN мрежа, VPN, HTTPS или друг тунел што го управувате сами. Апликацијата не создава релеј за вас.</string>
     <string name="onboarding_setup_step4_title">Поврзете се во апликацијата</string>
     <string name="onboarding_setup_step4_body">Внесете основен URL + лозинка. Апликацијата проверува GET /global/health, па зачувува врска со серверот на овој уред.</string>
-    <string name="onboarding_setup_open_docs">Отвори документација за серверот</string>
+    <string name="onboarding_setup_open_docs">Отворете ја документацијата за серверот</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile е заклучен</string>
     <string name="privacy_cover_unlock">Отклучи</string>
     <string name="servers_title">Сервери</string>
     <plurals name="servers_profile_count">
-        <item quantity="one">%1$d серверска врска</item>
-        <item quantity="other">%1$d серверски врски</item>
+        <item quantity="one">%1$d зачувана врска со сервер</item>
+        <item quantity="other">%1$d зачувани врски со сервер</item>
     </plurals>
     <string name="servers_saved">Зачувани</string>
-    <string name="server_health_title">Здравје на серверот</string>
+    <string name="server_health_title">Состојба на серверот</string>
     <string name="server_health_ms_ping">ms пинг</string>
     <string name="server_health_last_30_min">Последни 30 мин</string>
     <string name="server_health_30_min_ago">пред 30 мин</string>
@@ -130,7 +130,7 @@
     <string name="server_health_range_hour">1 ч</string>
     <string name="server_health_range_day">24 ч</string>
     <string name="server_health_range_week">7 д</string>
-    <string name="server_health_uptime">Достапност</string>
+    <string name="server_health_uptime">Време на работа</string>
     <string name="server_health_uptime_detail">од %1$s измерено</string>
     <string name="server_health_reconnects">Повторни поврзувања</string>
     <string name="server_health_reconnects_detail">медијанно враќање за %1$s</string>
@@ -192,17 +192,17 @@
     <string name="server_health_status_auth_failed">Автентикацијата не успеа</string>
     <string name="server_health_status_stopped">Не се мери</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Достапност %1$s · %2$d повторно поврзување денес</item>
-        <item quantity="other">Достапност %1$s · %2$d повторни поврзувања денес</item>
+        <item quantity="one">Време на работа %1$s · %2$d повторно поврзување денес</item>
+        <item quantity="other">Време на работа %1$s · %2$d повторни поврзувања денес</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Се мери…</string>
     <string name="server_health_details">Детали</string>
-    <string name="server_health_open_details">Отвори го здравјето на серверот</string>
+    <string name="server_health_open_details">Отворете ја состојбата на серверот</string>
     <string name="server_health_unknown_value">—</string>
     <string name="server_health_axis_ago">пред %1$s</string>
     <string name="server_health_hero_streams">%1$d од %2$d протоци на настани во живо</string>
     <string name="servers_status_active">Активен</string>
-    <string name="servers_add">Додај сервер</string>
+    <string name="servers_add">Додајте сервер</string>
     <string name="servers_edit_profile">Уреди %1$s</string>
     <string name="servers_remove_dialog_title_named">Да се отстрани „%1$s“?</string>
     <string name="servers_remove_dialog_message">Овој уред ја заборава зачуваната врска со серверот. Сесиите остануваат на тој сервер. Ако е активниот сервер, ќе изберете друг — или ќе отидете на екранот за поврзување ако не остане ниеден.</string>
@@ -212,7 +212,7 @@
     <string name="common_edit">Уреди</string>
     <string name="common_done">Готово</string>
     <string name="common_new">Ново</string>
-    <string name="common_open">Отвори</string>
+    <string name="common_open">Отворете</string>
     <string name="common_settings">Поставки</string>
     <string name="common_terminal">Терминал</string>
     <string name="common_selected">Избрано</string>
@@ -223,7 +223,7 @@
     <string name="home_more_options">Повеќе опции</string>
     <string name="home_filter_sheet_title">Филтрирај по проект</string>
     <string name="home_empty_title">Сè уште нема проекти</string>
-    <string name="home_empty_message">Допрете ја иконата Додај проект подолу за да изберете папка на вашиот сервер.</string>
+    <string name="home_empty_message">Допрете ја иконата „Додајте проект“ подолу за да изберете папка на вашиот сервер.</string>
     <string name="home_no_session_selected_title">Нема избрана сесија</string>
     <string name="home_no_session_selected_message">Изберете сесија од списокот</string>
     <string name="home_probe_failed_title">Не може да се поврзе</string>
@@ -277,9 +277,9 @@
     <string name="home_delete_title">Избриши сесија</string>
     <string name="home_delete_message">Да се избрише сесијата „%1$s“?</string>
     <string name="home_session_error_empty_title">Внесете наслов на сесијата</string>
-    <string name="home_session_error_nothing_to_fork">Сè уште нема што да се разгранува</string>
-    <string name="home_session_error_archive_failed">Сесијата не може да се архивира.</string>
-    <string name="home_session_error_delete_failed">Сесијата не може да се избрише.</string>
+    <string name="home_session_error_nothing_to_fork">Сè уште нема што да се разграни</string>
+    <string name="home_session_error_archive_failed">Сесијата не можеше да се архивира.</string>
+    <string name="home_session_error_delete_failed">Сесијата не можеше да се избрише.</string>
     <string name="home_session_error_request_failed">Барањето не успеа</string>
     <string name="home_session_error_unreadable_response">Одговорот од серверот не може да се прочита</string>
     <string name="home_session_error_generic">Нешто тргна наопаку</string>
@@ -292,7 +292,7 @@
     <string name="archived_sessions_delete_dialog_message">„%1$s“ се брише од серверот. Ова не може да се поништи.</string>
     <string name="archived_sessions_archived_at">Архивирана %1$s</string>
     <string name="archived_sessions_unarchived">„%1$s“ е вратена од архива</string>
-    <string name="archived_sessions_undo">Врати</string>
+    <string name="archived_sessions_undo">Поништи</string>
     <string name="archived_sessions_empty_title">Нема архивирани сесии</string>
     <string name="archived_sessions_empty_message">Сесиите што ќе ги архивирате во %1$s се појавуваат овде.</string>
     <string name="archived_sessions_show_all_projects">Прикажи ги сите проекти</string>
@@ -300,7 +300,7 @@
     <string name="archived_sessions_load_failed">Архивираните сесии не може да се вчитаат.</string>
     <string name="archived_sessions_unarchive_failed">Сесијата не може да се врати од архива.</string>
     <string name="session_chat_archived_banner">Архивирана %1$s</string>
-    <string name="add_project_title">Додај проект</string>
+    <string name="add_project_title">Додајте проект</string>
     <string name="add_project_browse_folders">Прелистај папки</string>
     <string name="add_project_browse_folders_subtitle">Изберете која било папка на овој сервер</string>
     <string name="add_project_on_this_server">На овој сервер</string>
@@ -315,8 +315,8 @@
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Изберете папка</string>
     <string name="add_project_already_on_home">Веќе на почетниот екран</string>
-    <string name="add_project_add_home_folder">Додај домашна папка</string>
-    <string name="add_project_add_this_folder">Додај ја оваа папка</string>
+    <string name="add_project_add_home_folder">Додајте домашна папка</string>
+    <string name="add_project_add_this_folder">Додајте ја оваа папка</string>
     <string name="add_project_path_not_found">Патеката не е пронајдена</string>
     <string name="add_project_no_folder_named">Нема папка со име „%1$s“</string>
     <string name="add_project_on_home">На почетниот екран</string>
@@ -333,7 +333,7 @@
         <item quantity="other">Се прикажуваат првите %1$d папки. Впишете повеќе од името за да го стесните списокот.</item>
     </plurals>
     <string name="add_project_in_folder">Во %1$s</string>
-    <string name="add_project_root_home">Домашна</string>
+    <string name="add_project_root_home">Домашна папка</string>
     <string name="add_project_error_add_failed">Папката не може да се додаде</string>
     <string name="worktree_new_row">Нов worktree…</string>
     <string name="worktree_run_in_subtitle">Создај checkout и започни таму</string>
@@ -472,10 +472,10 @@
     <string name="session_chat_fork_dialog_title">Разгранај сесија</string>
     <string name="session_chat_fork_dialog_confirm">Разгранај</string>
     <string name="session_chat_fork_dialog_error_empty_title">Внесете наслов на сесијата</string>
-    <string name="session_chat_fork_dialog_error_failed">Сесијата не може да се разгранa.</string>
+    <string name="session_chat_fork_dialog_error_failed">Сесијата не можеше да се разграни.</string>
     <string name="session_chat_fork_result_title">Сесијата е разгранета</string>
     <string name="session_chat_fork_result_message_ready">„%1$s“ е подготвена.</string>
-    <string name="session_chat_fork_result_open">Отвори</string>
+    <string name="session_chat_fork_result_open">Отворете</string>
     <string name="session_chat_fork_result_stay_here">Остани овде</string>
     <string name="session_chat_attachment_source_title">Додај прилог</string>
     <string name="session_chat_attachment_source_photos">Фотографии</string>
@@ -489,12 +489,12 @@
     <string name="session_chat_commands_new_description">Започни нова сесија</string>
     <string name="session_chat_commands_fork_label">Разгранај</string>
     <string name="session_chat_commands_fork_description">Разгранај ја оваа сесија</string>
-    <string name="session_chat_commands_undo_label">Врати</string>
-    <string name="session_chat_commands_undo_description">Врати ја последната порака</string>
+    <string name="session_chat_commands_undo_label">Поништи</string>
+    <string name="session_chat_commands_undo_description">Поништи ја последната порака</string>
     <string name="session_chat_commands_redo_label">Повтори</string>
     <string name="session_chat_commands_redo_description">Повтори ја вратената порака</string>
     <string name="session_chat_commands_compact_label">Компактен</string>
-    <string name="session_chat_commands_compact_description">Компактирај го контекстот на сесијата</string>
+    <string name="session_chat_commands_compact_description">Резимирај го контекстот на сесијата</string>
     <string name="session_chat_commands_terminal_label">Терминал</string>
     <string name="session_chat_commands_terminal_description">Отвори shell на проектот</string>
     <string name="session_chat_commands_files_label">Датотеки</string>
@@ -519,7 +519,7 @@
     <string name="session_chat_model_chip_loading">Се вчитува моделот…</string>
     <string name="session_chat_model_notice_load_failed">Моделите не може да се вчитаат. Допрете Модел за повторен обид.</string>
     <string name="session_chat_model_notice_none_usable">Нема употребливи модели. Допрете Модел за повторен обид.</string>
-    <string name="session_chat_model_notice_variant_unavailable">Запомнената варијанта не е достапна. Се користи Стандардно.</string>
+    <string name="session_chat_model_notice_variant_unavailable">Запомнетата варијанта не е достапна. Се користи Стандардна.</string>
     <string name="session_chat_model_notice_model_unavailable">Избраниот модел не е достапен. Се користи %1$s.</string>
     <string name="session_chat_side_question_unsupported">/btw бара opencode v2 сервер што одговара на споредни прашања. Овој сервер не може да одговори без да го дополни разговорот.</string>
     <string name="session_chat_side_question_unavailable">/btw бара понов opencode сервер.</string>
@@ -566,8 +566,8 @@
         <item quantity="other">%1$d во редица</item>
     </plurals>
     <plurals name="session_chat_activity_queued_prompts">
-        <item quantity="one">%1$d барање во редица</item>
-        <item quantity="other">%1$d барања во редица</item>
+        <item quantity="one">%1$d промпт во редица</item>
+        <item quantity="other">%1$d промпти во редица</item>
     </plurals>
     <string name="session_chat_activity_side_question_failed">Споредното прашање не успеа</string>
     <plurals name="session_chat_activity_side_questions_failed">
@@ -585,12 +585,12 @@
         <item quantity="other">%1$d споредни прашања во тек</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
-    <string name="session_chat_activity_action_open_request">Отвори барање</string>
-    <string name="session_chat_activity_action_open_background_work">Отвори работа во заднина</string>
+    <string name="session_chat_activity_action_open_request">Отворете го барањето</string>
+    <string name="session_chat_activity_action_open_background_work">Отворете ја работата во заднина</string>
     <string name="session_chat_activity_action_show_in_chat">Прикажи во разговор</string>
     <string name="session_chat_activity_action_retry">Обидете се повторно</string>
-    <string name="session_chat_activity_action_open">Отвори</string>
-    <string name="session_chat_activity_action_open_up_next">Отвори Следно во редица</string>
+    <string name="session_chat_activity_action_open">Отворете</string>
+    <string name="session_chat_activity_action_open_up_next">Отворете Следно во редица</string>
     <string name="session_chat_activity_action_show_thought">Прикажи го размислувањето</string>
     <plurals name="session_chat_activity_collapsed_show_count">
         <item quantity="one">Прикажи %1$d активност</item>
@@ -617,7 +617,7 @@
     <string name="new_session_title">Нова сесија</string>
     <string name="new_session_draft_subtitle">Нацрт · се создава при испраќање</string>
     <string name="new_session_discard_draft">Отфрли го нацртот</string>
-    <string name="new_session_run_in_caption">Изврши сесија во</string>
+    <string name="new_session_run_in_caption">Извршете ја сесијата во</string>
     <string name="new_session_project">Проект</string>
     <string name="new_session_worktree">Worktree</string>
     <string name="new_session_starts_from">Започнува од</string>
@@ -627,8 +627,8 @@
     <string name="new_session_created_on_send">Се создава при испраќање</string>
     <string name="new_session_search_projects">Пребарај проекти</string>
     <string name="new_session_no_project_matches">Нема соодветни проекти</string>
-    <string name="new_session_add_project">Додај проект…</string>
-    <string name="new_session_run_in_project">Изврши во %1$s</string>
+    <string name="new_session_add_project">Додајте проект…</string>
+    <string name="new_session_run_in_project">Извршете во %1$s</string>
     <string name="new_session_current_checkout">%1$s · тековен checkout</string>
     <string name="new_session_new_worktree_subtitle">Изолирана копија, се создава при испраќање</string>
     <string name="new_session_worktrees_section">Worktree-ови</string>
@@ -637,7 +637,7 @@
     <string name="timeline_state_error_title">Пораките не можат да се вчитаат</string>
     <string name="timeline_state_error_fallback">Временската линија не можеше да се вчита.</string>
     <string name="timeline_state_retry">Обидете се повторно</string>
-    <string name="timeline_state_empty">Сè уште нема пораки. Испратете порака за да започнете.</string>
+    <string name="timeline_state_empty">Сè уште нема пораки. Испратете промпт за да започнете.</string>
     <string name="timeline_state_refreshing">Се освежуваат пораките</string>
     <string name="timeline_message_assistant">Порака од асистентот</string>
     <string name="timeline_message_actions_hint_long_press">Притиснете и задржете за да се прикажат дејствата за пораката</string>
@@ -784,7 +784,7 @@
     <string name="tool_status_declined">Одбиено</string>
     <string name="tool_user_note">Вашата белешка: %1$s</string>
     <string name="tool_status_stopped">Запрено</string>
-    <string name="tool_placeholder_writing_command">Се пишува команда…</string>
+    <string name="tool_placeholder_writing_command">Се пишува наредба…</string>
     <string name="tool_placeholder_preparing_read">Се подготвува читање…</string>
     <string name="tool_placeholder_preparing_edit">Се подготвува уредување…</string>
     <string name="tool_placeholder_preparing_write">Се подготвува пишување…</string>
@@ -857,20 +857,20 @@
     <string name="timeline_notice_instructions_updated">Инструкциите се ажурирани</string>
     <string name="timeline_notice_restart">Продолжува по рестартирање</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">Контекстот е збиен</string>
+    <string name="timeline_compaction_title">Контекстот е резимиран</string>
     <string name="timeline_compaction_automatic">Автоматски</string>
     <string name="timeline_syncing">Се синхронизира…</string>
     <string name="timeline_failure_session_work_failed">Работата на сесијата не успеа</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Изберете модел</string>
-    <string name="timeline_failure_compact">Збиј</string>
-    <string name="session_chat_compact_status">Се збива…</string>
+    <string name="timeline_failure_compact">Резимирај</string>
+    <string name="session_chat_compact_status">Се резимира…</string>
     <string name="session_chat_turn_sending">Се испраќа…</string>
     <string name="session_chat_turn_sending_percent">Се испраќа %1$d%%</string>
-    <string name="session_chat_compact_success">Сесијата е збиена.</string>
-    <string name="session_chat_compact_success_usage">Контекстот е збиен · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">Контекстот на сесијата не можеше да се збие.</string>
-    <string name="session_chat_revert_undo_failed">Последната порака не можеше да се врати.</string>
+    <string name="session_chat_compact_success">Сесијата е резимирана.</string>
+    <string name="session_chat_compact_success_usage">Контекстот е резимиран · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">Контекстот на сесијата не можеше да се резимира.</string>
+    <string name="session_chat_revert_undo_failed">Последната порака не можеше да се поништи.</string>
     <string name="session_chat_revert_failed">Пораката не можеше да се врати.</string>
     <string name="session_chat_revert_redo_failed">Не можеше да се повтори.</string>
     <string name="session_chat_revert_cancel_failed">Враќањето не можеше да се откаже.</string>
@@ -894,8 +894,8 @@
     <string name="session_chat_sheet_message_actions_fork">Разгранај од овде</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Копирај го блокот код</string>
     <string name="session_chat_sheet_message_actions_copy_message">Копирај ја пораката</string>
-    <string name="session_chat_sheet_message_actions_select_text">Избери текст</string>
-    <string name="session_chat_sheet_select_text_title">Избери текст</string>
+    <string name="session_chat_sheet_message_actions_select_text">Изберете текст</string>
+    <string name="session_chat_sheet_select_text_title">Изберете текст</string>
     <string name="session_chat_sheet_select_text_copy_all">Копирај сè</string>
     <string name="session_chat_sheet_select_text_full_message_title">Целосна порака</string>
     <string name="session_chat_copy_too_long">Предолго за копирање. Наместо тоа, изберете дел од него.</string>
@@ -1000,8 +1000,8 @@
     <string name="session_chat_goal_clear_failed_reason">Целта не можеше да се исчисти: %1$s</string>
     <string name="session_chat_timeline_style_notice">Временска линија: %1$s. Променете го во секое време во Поставки.</string>
     <string name="session_chat_branch_copied">Името на гранката е копирано</string>
-    <string name="session_chat_follow_up_switched_steer">Префрлено на Насочи</string>
-    <string name="session_chat_follow_up_switched_queue">Префрлено на Во редица</string>
+    <string name="session_chat_follow_up_switched_steer">Префрлено на „Насочи“</string>
+    <string name="session_chat_follow_up_switched_queue">Префрлено на „Во редица“</string>
     <string name="session_chat_failure_retry_after_seconds">Обидете се повторно за %1$d с</string>
     <string name="session_chat_failure_retry_after_minutes">Обидете се повторно за %1$d мин</string>
     <string name="component_outgoing_message_pending_caption">На чекање · се испраќа на следниот чекор</string>
@@ -1028,7 +1028,7 @@
     <string name="session_chat_mcp_load_failed">MCP серверите не можеа да се вчитаат. Проверете ја врската и обидете се повторно.</string>
     <string name="session_chat_create_failed">Сесијата не може да се создаде</string>
     <string name="session_chat_send_timed_out">Не можеше да се испрати. Обидете се повторно.</string>
-    <string name="session_chat_shell_cannot_queue">Наредбите на shell не можат да се ставаат во редица. Префрлете на Насочи за да се извршат сега.</string>
+    <string name="session_chat_shell_cannot_queue">Наредбите на shell не можат да се ставаат во редица. Префрлете на „Насочи“ за да се извршат сега.</string>
     <string name="session_chat_reply_error_permission">Одговорот не можеше да се испрати. Обидете се повторно.</string>
     <string name="session_chat_reply_error_permission_reason">Одговорот не можеше да се испрати. %1$s.</string>
     <string name="session_chat_reply_error_question">Одговорот не можеше да се испрати. Обидете се повторно.</string>
@@ -1042,13 +1042,13 @@
     <string name="session_chat_sheet_timeline_style_picker_title">Ново: изберете временска линија</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Ова ажурирање додава нови начини да следите што прави агентот.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">Можете да го промените кога било во Поставки → Стил на временска линија.</string>
-    <string name="session_chat_sheet_timeline_style_picker_use">Користи %1$s</string>
+    <string name="session_chat_sheet_timeline_style_picker_use">Користете %1$s</string>
     <string name="session_chat_sheet_timeline_style_picker_recommended">Препорачано</string>
     <string name="session_chat_sheet_timeline_style_picker_current">Тековно</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_title">Стандарден</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">Картички и групи со алатки меѓу пораките на агентот</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Шина со чекори</string>
-    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Една линија по чекор на шина, во живо додека агентот работи</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Еден ред по чекор на шина, во живо додека агентот работи</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Картичка за активност</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Чекорите во тек на една картичка во живо што се собира во резиме</string>
     <string name="session_chat_sheet_picker_model">Модел</string>
@@ -1069,12 +1069,12 @@
         <item quantity="other">%1$d датотеки</item>
     </plurals>
     <plurals name="session_chat_sheet_tool_result_lines">
-        <item quantity="one">%1$d линија</item>
-        <item quantity="other">%1$d линии</item>
+        <item quantity="one">%1$d ред</item>
+        <item quantity="other">%1$d реда</item>
     </plurals>
     <string name="session_chat_sheet_tool_result_copy_link">Копирај %1$s</string>
     <string name="session_chat_sheet_tool_result_copies_link_hint">Ја копира врската</string>
-    <string name="session_chat_sheet_tool_result_line_accessibility">Линија %1$d, %2$s</string>
+    <string name="session_chat_sheet_tool_result_line_accessibility">Ред %1$d, %2$s</string>
     <string name="session_chat_sheet_shell_title">Shell</string>
     <string name="session_chat_sheet_shell_command_accessibility">Наредба, %1$s</string>
     <string name="session_chat_sheet_shell_no_output">Сè уште нема излез</string>
@@ -1119,11 +1119,11 @@
     <string name="session_context_retry">Обидете се повторно</string>
     <string name="session_context_stat_session">Сесија</string>
     <string name="session_context_stat_messages">Пораки</string>
-    <string name="session_context_stat_provider">Провајдер</string>
+    <string name="session_context_stat_provider">Давател</string>
     <string name="session_context_stat_model">Модел</string>
     <string name="session_context_stat_context_limit">Лимит на контекст</string>
     <string name="session_context_stat_total_tokens">Вкупно токени</string>
-    <string name="session_context_stat_usage">Искористеност</string>
+    <string name="session_context_stat_usage">Користење</string>
     <string name="session_context_stat_input_tokens">Влезни токени</string>
     <string name="session_context_stat_output_tokens">Излезни токени</string>
     <string name="session_context_stat_reasoning_tokens">Токени за расудување</string>
@@ -1146,7 +1146,7 @@
     <string name="settings_section_help_feedback">Помош и повратни информации</string>
     <string name="settings_section_appearance">Изглед</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Почетна</string>
+    <string name="settings_section_home">Почетен екран</string>
     <string name="settings_section_session_cache">Кеш на сесии</string>
     <string name="settings_section_privacy">Приватност</string>
     <string name="settings_section_about">За апликацијата</string>
@@ -1161,8 +1161,8 @@
     </plurals>
     <string name="settings_send_feedback_title">Испрати повратна информација</string>
     <string name="settings_send_feedback_subtitle">Пријавете грешка или споделете идеја</string>
-    <string name="settings_hide_user_directory_title">Сокриј кориснички именик</string>
-    <string name="settings_hide_user_directory_subtitle">Прикажи ~/Projects/… наместо /Users/you/Projects/…</string>
+    <string name="settings_hide_user_directory_title">Сокриј ја корисничката папка</string>
+    <string name="settings_hide_user_directory_subtitle">Прикажете ~/Projects/… наместо /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">Период за неодамнешни</string>
     <string name="settings_recent_window_message">Сесиите остануваат во Неодамнешни додека се Во тек или Подготвени, или кога се ажурирани во овој период.</string>
     <plurals name="settings_recent_window_hours">
@@ -1175,7 +1175,7 @@
     <string name="settings_timeline_style_standard_title">Стандарден</string>
     <string name="settings_timeline_style_standard_subtitle">Картички и групи со алатки меѓу пораките на агентот</string>
     <string name="settings_timeline_style_step_rail_title">Шина со чекори</string>
-    <string name="settings_timeline_style_step_rail_subtitle">Една линија по чекор на шина, во живо додека агентот работи</string>
+    <string name="settings_timeline_style_step_rail_subtitle">Еден ред по чекор на шина, во живо додека агентот работи</string>
     <string name="settings_timeline_style_activity_card_title">Картичка за активност</string>
     <string name="settings_timeline_style_activity_card_subtitle">Чекорите во тек на една картичка во живо што се собира во резиме</string>
     <string name="settings_follow_up_title">Испраќање на дополнителна порака</string>
@@ -1185,12 +1185,12 @@
     <string name="settings_follow_up_subtitle_queue">Во редица · само за V2 сервери. V1 не го поддржува ова.</string>
     <string name="settings_follow_up_unsupported">Не е поддржано на V1. Овој сервер секогаш испраќа веднаш.</string>
     <string name="settings_worktrees_title">Worktree-ови</string>
-    <string name="settings_worktrees_subtitle">Прикажи ги worktree-овите и гранките на секој проект на Почетна и дозволи Нова сесија да избере worktree кога ќе го задржите.</string>
+    <string name="settings_worktrees_subtitle">Прикажете ги worktree-овите и гранките на секој проект на почетниот екран и дозволете Нова сесија да избере worktree кога ќе го задржите.</string>
     <string name="settings_session_rows_title">Редови на сесии</string>
-    <string name="settings_session_rows_compact_title">Збиен</string>
-    <string name="settings_session_rows_compact_subtitle">Две линии: наслов и време, потоа проект / worktree</string>
+    <string name="settings_session_rows_compact_title">Компактен</string>
+    <string name="settings_session_rows_compact_subtitle">Два реда: наслов и време, потоа проект / worktree</string>
     <string name="settings_session_rows_classic_title">Класичен</string>
-    <string name="settings_session_rows_classic_subtitle">Проектот и worktree-от во посебни линии</string>
+    <string name="settings_session_rows_classic_subtitle">Проектот и worktree-от во посебни редови</string>
     <string name="settings_session_cache_size">Големина</string>
     <string name="settings_session_cache_size_label">Големина на кешот на сесии</string>
     <string name="settings_session_cache_empty">Празен</string>
@@ -1201,12 +1201,12 @@
     <string name="settings_clear_session_cache_dialog_message">Ги отстранува кешираните сесии и пораки. Вашата врска и податоците за најава остануваат.</string>
     <string name="settings_clear">Исчисти</string>
     <string name="settings_app_lock_title">Заклучување на апликацијата</string>
-    <string name="settings_app_lock_subtitle_available">Побарај отпечаток, лице или заклучување на екранот кога апликацијата се враќа од позадина</string>
+    <string name="settings_app_lock_subtitle_available">Побарајте отпечаток, лице или заклучување на екранот кога апликацијата се враќа од позадина</string>
     <string name="settings_app_lock_subtitle_unavailable">Поставете заклучување на екранот на овој уред за да користите Заклучување на апликацијата</string>
     <string name="settings_privacy_policy_title">Политика за приватност</string>
     <string name="settings_privacy_policy_subtitle">Како апликациите ракуваат со податоците</string>
     <string name="settings_analytics_title">Аналитика и извештаи за падови</string>
-    <string name="settings_analytics_subtitle">Дозволи изборни настани за користење на производот и извештаи за падови. Исклучено не праќа ништо до Firebase.</string>
+    <string name="settings_analytics_subtitle">Дозволете изборни настани за користење на производот и извештаи за падови. Исклучено не праќа ништо до Firebase.</string>
     <string name="settings_analytics_label">Аналитика на производот</string>
     <string name="settings_diagnostic_logs_subtitle">Сподели неодамнешен дел од дневникот за извршување со прикриени чувствителни податоци</string>
     <string name="settings_clear_all_data_title">Исчисти ги сите податоци</string>
@@ -1225,8 +1225,8 @@
     <string name="diagnostics_loading">Се вчитуваат дневниците за дијагностика</string>
     <string name="diagnostics_entries_title">Записи</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d линија со прикриени податоци во зачуваниот период</item>
-        <item quantity="other">%1$d линии со прикриени податоци во зачуваниот период</item>
+        <item quantity="one">%1$d ред со прикриени податоци во зачуваниот период</item>
+        <item quantity="other">%1$d реда со прикриени податоци во зачуваниот период</item>
     </plurals>
     <string name="diagnostics_entries_empty">Сè уште нема записи во зачуваниот период</string>
     <string name="diagnostics_kept_title">Зачувано</string>
@@ -1286,7 +1286,7 @@
     <string name="appearance_mode_note_system">Ја следи светлата или темната поставка на телефонот.</string>
     <string name="appearance_mode_note_light">Секогаш светол, без оглед на поставката на телефонот.</string>
     <string name="appearance_mode_note_dark">Секогаш темен, без оглед на поставката на телефонот.</string>
-    <string name="appearance_text_home_title">Текст на листата на почетна</string>
+    <string name="appearance_text_home_title">Текст на листата на почетниот екран</string>
     <string name="appearance_text_session_chat_title">Текст на разговорот во сесија</string>
     <string name="appearance_text_code_title">Текст на код</string>
     <string name="appearance_text_size_label">Големина</string>
@@ -1329,7 +1329,7 @@
     <string name="feedback_error_failed">Извештајот не можеше да се испрати.</string>
     <string name="feedback_action_try_again">Обидете се повторно</string>
     <string name="feedback_action_share_instead">Сподели наместо тоа</string>
-    <string name="feedback_undo">Врати</string>
+    <string name="feedback_undo">Поништи</string>
     <string name="feedback_done">Готово</string>
     <string name="feedback_add_attachment">Додај прилог</string>
     <string name="feedback_dictate">Диктирај</string>
@@ -1365,7 +1365,7 @@
         <item quantity="other">Последни %1$d минути · gzip при испраќање. Чувствителните податоци се прикриени на овој телефон.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Се вчитува…</string>
-    <string name="feedback_log_preview_empty_title">Нема линии во дневникот</string>
+    <string name="feedback_log_preview_empty_title">Нема редови во дневникот</string>
     <plurals name="feedback_log_preview_empty_message">
         <item quantity="one">Ништо не е запишано во последната %1$d минута.</item>
         <item quantity="other">Ништо не е запишано во последните %1$d минути.</item>
@@ -1396,7 +1396,7 @@
     <string name="session_search_archived_tag">Архивирана</string>
     <string name="session_search_scope_selected">%1$s, избрано</string>
     <string name="keyboard_shortcuts_group_session">Сесија</string>
-    <string name="keyboard_shortcuts_group_prompt">Прашај</string>
+    <string name="keyboard_shortcuts_group_prompt">Промпт</string>
     <string name="keyboard_shortcuts_group_go">Оди</string>
     <string name="keyboard_shortcuts_new_session">Нова сесија</string>
     <string name="keyboard_shortcuts_command_palette">Палета со наредби</string>
@@ -1406,8 +1406,8 @@
     <string name="keyboard_shortcuts_show_project">Прикажи %1$s</string>
     <string name="keyboard_shortcuts_allow_once">Дозволи еднаш</string>
     <string name="keyboard_shortcuts_always_allow">Секогаш дозволи</string>
-    <string name="keyboard_shortcuts_deny">Негирајте</string>
-    <string name="keyboard_shortcuts_deny_with_note">Негирајте со белешка</string>
+    <string name="keyboard_shortcuts_deny">Одбиј</string>
+    <string name="keyboard_shortcuts_deny_with_note">Одбиј со белешка</string>
     <string name="keyboard_shortcuts_send_note">Испрати белешка</string>
     <string name="keyboard_shortcuts_next_question">Следно прашање</string>
     <string name="keyboard_shortcuts_submit_answers">Поднеси одговори</string>
@@ -1422,8 +1422,8 @@
     <string name="changes_source_menu_selected">%1$s, избрано</string>
     <string name="changes_source_working_tree_name">Git промени</string>
     <string name="changes_source_working_tree_empty_title">Нема Git промени</string>
-    <string name="changes_source_working_tree_empty_message">Работното стебло нема промени без commit.</string>
-    <string name="changes_source_last_turn_name">Промени од последниот чекор</string>
+    <string name="changes_source_working_tree_empty_message">Работното дрво нема промени без commit.</string>
+    <string name="changes_source_last_turn_name">Промени од последниот потег</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">Git промените имаат %1$d изменета датотека.</item>
         <item quantity="other">Git промените имаат %1$d изменети датотеки.</item>
@@ -1439,11 +1439,11 @@
     <string name="changes_loading_title">Се вчитуваат промените</string>
     <string name="changes_loading_message">Се презема diff…</string>
     <string name="changes_no_turn_title">Нема завршен чекор</string>
-    <string name="changes_no_turn_message">Испратете прашање, почекајте да заврши и обидете се повторно.</string>
+    <string name="changes_no_turn_message">Испратете промпт, почекајте да заврши и обидете се повторно.</string>
     <string name="changes_error_title">Промените не можат да се вчитаат</string>
     <string name="changes_error_fallback">Промените не се вчитаа.</string>
     <string name="changes_error_request_failed">Барањето не успеа</string>
-    <string name="changes_error_turn_moved_folders">Овој чекор премести папки, па неговите промени не можат да се прикажат заедно.</string>
+    <string name="changes_error_turn_moved_folders">Овој потег премести папки, па неговите промени не можат да се прикажат заедно.</string>
     <string name="changes_refresh_failed">Освежувањето не успеа: %1$s</string>
     <string name="changes_filter_hint">Филтрирај</string>
     <string name="changes_filter_accessibility_label">Филтрирај изменети датотеки</string>
@@ -1498,8 +1498,8 @@
     <string name="component_unified_diff_row_kind_context">контекст</string>
     <string name="component_unified_diff_row_kind_addition">додавање</string>
     <string name="component_unified_diff_row_kind_deletion">бришење</string>
-    <string name="component_unified_diff_old_line">стара линија %1$d</string>
-    <string name="component_unified_diff_new_line">нова линија %1$d</string>
+    <string name="component_unified_diff_old_line">стар ред %1$d</string>
+    <string name="component_unified_diff_new_line">нов ред %1$d</string>
     <string name="component_floating_pill_state_live">Во тек</string>
     <string name="component_floating_pill_state_ready">Подготвено</string>
     <string name="component_floating_pill_state_needs_attention">Бара внимание</string>
@@ -1510,7 +1510,7 @@
     <string name="common_expanded">Проширено</string>
     <string name="common_collapsed">Собрано</string>
     <string name="component_tree_row_loading">Се вчитува</string>
-    <string name="component_timeline_notice_shows_one_line_hint">Прикажува една линија</string>
+    <string name="component_timeline_notice_shows_one_line_hint">Прикажува еден ред</string>
     <string name="component_timeline_notice_shows_full_value_hint">Ја прикажува целата вредност</string>
     <string name="component_attachment_accessibility_label">%1$s, %2$s</string>
     <string name="component_subagent_state_waiting_for_input">чека внес</string>
@@ -1554,11 +1554,11 @@
     <string name="component_composer_leave_side_question_mode">Излези од режим на споредно прашање</string>
     <string name="session_list_worktree_empty_other_projects">Исчистете го филтерот за да ги видите сесиите на други проекти.</string>
     <string name="component_attachment_uploading">Се качува…</string>
-    <string name="component_composer_deny">Негирајте</string>
-    <string name="component_composer_deny_options">Повеќе опции за негирање</string>
-    <string name="component_composer_deny_with_note_menu">Негирајте со забелешка…</string>
+    <string name="component_composer_deny">Одбиј</string>
+    <string name="component_composer_deny_options">Повеќе опции за одбивање</string>
+    <string name="component_composer_deny_with_note_menu">Одбиј со белешка…</string>
     <string name="component_composer_deny_with_note_menu_subtitle">Кажете му на агентот што да направи наместо тоа</string>
-    <string name="component_composer_deny_with_note_title">Негирајте со забелешка</string>
+    <string name="component_composer_deny_with_note_title">Одбиј со белешка</string>
     <string name="component_composer_deny_note_placeholder">Кажете му на OpenCode што да направи поинаку</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="one">Негира и %1$d друго барање на чекање.</item>
@@ -1640,7 +1640,7 @@
     <string name="component_composer_previous_question">Претходно прашање</string>
     <string name="component_activity_card_agent">Агент</string>
     <string name="session_list_section_today">Денес</string>
-    <string name="component_composer_child_lockout">На подсесиите не може да им се праќа прашање.</string>
+    <string name="component_composer_child_lockout">На подсесиите не може да им се праќа промпт.</string>
     <string name="component_attachment_uploading_percent">Се качува %1$d%%</string>
     <string name="component_composer_custom_answer_hint">Внесете свој одговор</string>
     <string name="component_composer_cancel_revert">Откажи враќање</string>
@@ -1691,7 +1691,7 @@
     <string name="component_composer_send_queue">Испрати во редица</string>
     <string name="session_list_dock_new_session_hint">Користете „Избери проект или worktree“ за да започнете на друго место.</string>
     <string name="session_list_section_yesterday">Вчера</string>
-    <string name="component_code_file_line_label">Линија %1$d, %2$s</string>
+    <string name="component_code_file_line_label">Ред %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">Идеја за OpenCode Mobile</string>
     <string name="component_hunk_navigation_previous">Претходен блок</string>
     <string name="session_list_section_week_of">Недела од %1$s – %2$s</string>
@@ -1786,7 +1786,7 @@
     <string name="worktrees_footer">Отстранувањето на worktree ја брише неговата папка на серверот. Сесиите остануваат, но повеќе не можат да работат во него.</string>
     <string name="worktrees_more">Повеќе дејства за %1$s</string>
     <string name="worktrees_removing">Се отстранува…</string>
-    <string name="worktrees_actions_show_on_home">Прикажи ги сесиите на почетната</string>
+    <string name="worktrees_actions_show_on_home">Прикажи ги сесиите на почетниот екран</string>
     <string name="worktrees_actions_new_session">Нова сесија овде</string>
     <string name="worktrees_actions_remove">Отстрани worktree…</string>
     <string name="worktrees_remove_title">Да се отстрани worktree „%1$s“?</string>
@@ -1797,7 +1797,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">Промените без commit ќе се изгубат.</string>
     <string name="worktrees_remove_changes_unchecked">Не можеше да се провери за промени без commit. Ако има, ќе се изгубат.</string>
-    <string name="worktrees_remove_sessions_stay">Сесиите што го користат овој worktree остануваат на почетната, но повеќе не можат да работат овде.</string>
+    <string name="worktrees_remove_sessions_stay">Сесиите што го користат овој worktree остануваат на почетниот екран, но повеќе не можат да работат овде.</string>
     <string name="worktrees_remove_confirm_anyway">Отстрани и така</string>
     <string name="worktrees_blocked_title">„%1$s“ сè уште не може да се отстрани</string>
     <string name="worktrees_blocked_message">Во овој worktree работи сесија. Запрете ја, па отстранете го worktree-от.</string>

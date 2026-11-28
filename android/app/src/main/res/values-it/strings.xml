@@ -506,7 +506,7 @@
     <string name="session_chat_commands_undo_description">Annulla l\'ultimo messaggio</string>
     <string name="session_chat_commands_redo_label">Ripeti</string>
     <string name="session_chat_commands_redo_description">Ripeti il messaggio annullato</string>
-    <string name="session_chat_commands_compact_label">Compatto</string>
+    <string name="session_chat_commands_compact_label">Compatta</string>
     <string name="session_chat_commands_compact_description">Compatta il contesto della sessione</string>
     <string name="session_chat_commands_terminal_label">Terminale</string>
     <string name="session_chat_commands_terminal_description">Apri la shell del progetto</string>
@@ -672,9 +672,9 @@
     <string name="timeline_retry_retrying_in">nuovo tentativo tra %1$d s</string>
     <string name="timeline_retry_attempt_retrying_in">tentativo %1$d, nuovo tentativo tra %2$d s</string>
     <plurals name="timeline_background_work_subagent_count">
-        <item quantity="one">%1$d subagent</item>
-        <item quantity="many">%1$d di subagent</item>
-        <item quantity="other">%1$d subagent</item>
+        <item quantity="one">%1$d subagente</item>
+        <item quantity="many">%1$d di subagenti</item>
+        <item quantity="other">%1$d subagenti</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
         <item quantity="one">%1$d shell</item>
@@ -686,9 +686,9 @@
     <string name="timeline_background_work_running_spoken">%1$s in esecuzione</string>
     <string name="timeline_background_work_agent_needs_input">%1$s richiede un input</string>
     <plurals name="timeline_background_work_subagents_need_input">
-        <item quantity="one">%1$d subagent richiede un input</item>
-        <item quantity="many">%1$d di subagent richiedono un input</item>
-        <item quantity="other">%1$d subagent richiedono un input</item>
+        <item quantity="one">%1$d subagente richiede un input</item>
+        <item quantity="many">%1$d di subagenti richiedono un input</item>
+        <item quantity="other">%1$d subagenti richiedono un input</item>
     </plurals>
     <string name="timeline_background_work_needs_input_running">%1$s · %2$d in esecuzione</string>
     <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s in esecuzione</string>
@@ -718,7 +718,7 @@
     <string name="tool_title_plan">Piano</string>
     <string name="tool_title_edit">Modifica</string>
     <string name="tool_title_write">Scrittura</string>
-    <string name="tool_title_skill">Competenza</string>
+    <string name="tool_title_skill">Skill</string>
     <string name="tool_title_patch">Patch</string>
     <string name="tool_title_get_issue">Leggi issue</string>
     <string name="tool_title_save_issue">Salva issue</string>
@@ -786,9 +786,9 @@
         <item quantity="other">%1$d scritture</item>
     </plurals>
     <plurals name="tool_count_skill">
-        <item quantity="one">%1$d competenza</item>
-        <item quantity="many">%1$d di competenze</item>
-        <item quantity="other">%1$d competenze</item>
+        <item quantity="one">%1$d skill</item>
+        <item quantity="many">%1$d di skill</item>
+        <item quantity="other">%1$d skill</item>
     </plurals>
     <plurals name="tool_count_patch">
         <item quantity="one">%1$d patch</item>
@@ -868,9 +868,9 @@
     <string name="timeline_step_running_named">Esecuzione di %1$s</string>
     <string name="timeline_step_ran_named">Eseguito %1$s</string>
     <string name="timeline_step_ran_command">Comando eseguito</string>
-    <string name="timeline_step_loading_skill">Caricamento competenza…</string>
-    <string name="timeline_step_loading_skill_named">Caricamento competenza %1$s</string>
-    <string name="timeline_step_skill_named">Competenza %1$s</string>
+    <string name="timeline_step_loading_skill">Caricamento skill…</string>
+    <string name="timeline_step_loading_skill_named">Caricamento skill %1$s</string>
+    <string name="timeline_step_skill_named">Skill %1$s</string>
     <string name="timeline_step_thought_duration">Ragionamento · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">Esplorato — %1$s</string>
@@ -932,7 +932,7 @@
     <string name="session_chat_revert_redo_failed">Impossibile ripetere.</string>
     <string name="session_chat_revert_cancel_failed">Impossibile annullare il ripristino.</string>
     <string name="session_chat_revert_commit_failed">Impossibile confermare il ripristino.</string>
-    <string name="session_chat_fork_rename_failed">Fork creato, ma non è stato possibile rinominarlo.</string>
+    <string name="session_chat_fork_rename_failed">Sessione duplicata, ma non è stato possibile rinominarla.</string>
     <string name="session_chat_pending_prompt_update_failed">Impossibile aggiornare il prompt in sospeso</string>
     <string name="session_chat_shell_stop_failed">Impossibile interrompere la shell. Riprova.</string>
     <string name="session_chat_shell_status_running">In esecuzione</string>
@@ -982,7 +982,7 @@
     <string name="session_chat_sheet_pending_prompts_clear_all">Cancella tutto</string>
     <string name="session_chat_sheet_pending_prompts_sending">Invio…</string>
     <string name="session_chat_sheet_pending_prompts_move_to_queue">Sposta in coda</string>
-    <string name="session_chat_sheet_pending_prompts_steer_now">Guida ora</string>
+    <string name="session_chat_sheet_pending_prompts_steer_now">Indirizza ora</string>
     <string name="session_chat_sheet_pending_prompts_delete">Elimina</string>
     <string name="session_chat_sheet_side_question_done">Fine</string>
     <string name="session_chat_sheet_side_question_not_added">Non aggiunta alla conversazione</string>
@@ -1015,7 +1015,7 @@
     </plurals>
     <string name="session_chat_goal_waiting">In attesa</string>
     <string name="session_chat_goal_waiting_shell">In attesa che finisca una shell in background: %1$s. Va in pausa se nulla è in esecuzione per %2$d minuti.</string>
-    <string name="session_chat_goal_waiting_subagent">In attesa che finisca un subagent. Va in pausa se nulla è in esecuzione per %1$d minuti.</string>
+    <string name="session_chat_goal_waiting_subagent">In attesa che finisca un subagente. Va in pausa se nulla è in esecuzione per %1$d minuti.</string>
     <string name="session_chat_goal_waiting_on_you">In attesa di te</string>
     <string name="session_chat_goal_waiting_permission">C\'è una richiesta di autorizzazione aperta. L\'obiettivo prosegue quando rispondi.</string>
     <string name="session_chat_goal_waiting_question">C\'è una domanda aperta. L\'obiettivo prosegue quando rispondi.</string>
@@ -1060,8 +1060,8 @@
     <string name="session_chat_goal_clear_failed_reason">Impossibile rimuovere l\'obiettivo: %1$s</string>
     <string name="session_chat_timeline_style_notice">Cronologia: %1$s. Puoi cambiarla in qualsiasi momento in Impostazioni.</string>
     <string name="session_chat_branch_copied">Nome del branch copiato</string>
-    <string name="session_chat_follow_up_switched_steer">Passato a Guida</string>
-    <string name="session_chat_follow_up_switched_queue">Passato a In coda</string>
+    <string name="session_chat_follow_up_switched_steer">Passato a Indirizza</string>
+    <string name="session_chat_follow_up_switched_queue">Passato a Coda</string>
     <string name="session_chat_failure_retry_after_seconds">Riprova tra %1$d s</string>
     <string name="session_chat_failure_retry_after_minutes">Riprova tra %1$d min</string>
     <string name="component_outgoing_message_pending_caption">In sospeso · viene inviato al passaggio successivo</string>
@@ -1090,7 +1090,7 @@
     <string name="session_chat_mcp_load_failed">Impossibile caricare i server MCP. Controlla la connessione e riprova.</string>
     <string name="session_chat_create_failed">Impossibile creare la sessione</string>
     <string name="session_chat_send_timed_out">Impossibile inviare. Riprova.</string>
-    <string name="session_chat_shell_cannot_queue">I comandi shell non possono essere messi in coda. Passa a Guida per eseguirli subito.</string>
+    <string name="session_chat_shell_cannot_queue">I comandi shell non possono essere messi in coda. Passa a Indirizza per eseguirli subito.</string>
     <string name="session_chat_reply_error_permission">Impossibile inviare la risposta. Riprova.</string>
     <string name="session_chat_reply_error_permission_reason">Impossibile inviare la risposta. %1$s.</string>
     <string name="session_chat_reply_error_question">Impossibile inviare la risposta. Riprova.</string>
@@ -1147,7 +1147,7 @@
     <string name="session_chat_sheet_shell_stop">Interrompi shell</string>
     <string name="session_chat_sheet_shell_stopping">Interruzione…</string>
     <string name="session_chat_sheet_background_work_title">Lavoro in background</string>
-    <string name="session_chat_sheet_background_work_subagents">Subagent</string>
+    <string name="session_chat_sheet_background_work_subagents">Subagenti</string>
     <string name="session_chat_sheet_background_work_shells">Shell</string>
     <string name="session_chat_sheet_background_work_tab_running">In esecuzione</string>
     <string name="session_chat_sheet_background_work_tab_done">Completati</string>
@@ -1251,9 +1251,9 @@
     <string name="settings_timeline_style_activity_card_title">Scheda attività</string>
     <string name="settings_timeline_style_activity_card_subtitle">I passaggi in corso su un\'unica scheda dal vivo che si riduce in un riepilogo</string>
     <string name="settings_follow_up_title">Invio dei follow-up</string>
-    <string name="settings_follow_up_steer">Guida</string>
+    <string name="settings_follow_up_steer">Indirizza</string>
     <string name="settings_follow_up_queue">Coda</string>
-    <string name="settings_follow_up_subtitle_steer">Guida · solo server V2. V1 non lo supporta.</string>
+    <string name="settings_follow_up_subtitle_steer">Indirizza · solo server V2. V1 non lo supporta.</string>
     <string name="settings_follow_up_subtitle_queue">Coda · solo server V2. V1 non lo supporta.</string>
     <string name="settings_follow_up_unsupported">Non supportato su V1. Questo server invia sempre subito.</string>
     <string name="settings_worktrees_title">Worktree</string>
@@ -1575,8 +1575,8 @@
     <string name="component_todo_item_status_in_progress">in corso</string>
     <string name="component_todo_item_status_completed">completato</string>
     <string name="component_todo_item_status_cancelled">annullato</string>
-    <string name="component_todos_pill_accessibility_label">Todo della sessione, %1$d di %2$d completati</string>
-    <string name="component_todos_pill_accessibility_label_active">Todo della sessione, %1$d di %2$d completati, %3$s</string>
+    <string name="component_todos_pill_accessibility_label">Attività della sessione, %1$d di %2$d completate</string>
+    <string name="component_todos_pill_accessibility_label_active">Attività della sessione, %1$d di %2$d completate, %3$s</string>
     <string name="component_reasoning_row_thought_duration">Ragionamento · %1$s</string>
     <string name="component_reasoning_row_duration_seconds">%1$ss</string>
     <string name="component_reasoning_row_duration_ms">%1$dms</string>
@@ -1640,8 +1640,8 @@
     <string name="component_activity_card_opens_activity">%1$s, apre l\'attività</string>
     <string name="component_image_loading_label">%1$s, in caricamento</string>
     <string name="session_list_dock_new_session">Nuova sessione</string>
-    <string name="component_composer_always_allows">Consenti sempre: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">Esci dalla modalità domanda a parte</string>
+    <string name="component_composer_always_allows">Consente sempre: %1$s</string>
+    <string name="component_composer_leave_side_question_mode">Esci dalla modalità domanda a margine</string>
     <string name="session_list_worktree_empty_other_projects">Cancella il filtro per vedere le sessioni di altri progetti.</string>
     <string name="component_attachment_uploading">Caricamento…</string>
     <string name="component_composer_deny">Nega</string>
@@ -1675,7 +1675,7 @@
     <string name="component_composer_question">Domanda</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">Cancella il filtro per vedere le sessioni di altri worktree.</string>
-    <string name="component_composer_side_question_mode">Modalità domanda a parte</string>
+    <string name="component_composer_side_question_mode">Modalità domanda a margine</string>
     <string name="component_page_indicator_label">Pagina %1$d di %2$d</string>
     <string name="component_composer_next">Avanti</string>
     <string name="component_message_image_label">Immagine %1$s</string>
@@ -1685,7 +1685,7 @@
     <string name="session_list_status_failed">Non riuscito</string>
     <string name="component_composer_custom_answer_title">Scrivi la tua risposta</string>
     <string name="component_composer_always">Sempre</string>
-    <string name="component_composer_send_side_question">Fai una domanda a parte</string>
+    <string name="component_composer_send_side_question">Fai una domanda a margine</string>
     <string name="component_composer_select_exactly">Selezionane %1$d</string>
     <string name="dictation_action_open_settings">Apri Impostazioni</string>
     <string name="component_composer_open_commands">Apri comandi</string>
@@ -1774,7 +1774,7 @@
         <item quantity="other">%1$dm fa</item>
     </plurals>
     <string name="component_composer_request_position">%1$d di %2$d</string>
-    <string name="component_composer_side_question_placeholder">Domanda a parte, non aggiunta alla chat</string>
+    <string name="component_composer_side_question_placeholder">Domanda a margine, non aggiunta alla chat</string>
     <string name="session_list_worktree_empty_every_project">Cancella il filtro per vedere tutti i progetti.</string>
     <string name="component_image_viewer_could_not_load_named">Impossibile caricare %1$s</string>
     <string name="component_composer_select_up_to">Selezionane fino a %1$d</string>
@@ -1828,7 +1828,7 @@
     <string name="relative_time_now">ora</string>
     <string name="component_composer_previous_permission">Richiesta di autorizzazione precedente</string>
     <string name="component_composer_dictate">Detta</string>
-    <string name="component_composer_side_question_mode_description">Modalità domanda a parte. Esci dalla modalità domanda a parte</string>
+    <string name="component_composer_side_question_mode_description">Modalità domanda a margine. Esci dalla modalità domanda a margine</string>
     <string name="component_composer_abort">Interrompi il lavoro in corso</string>
     <string name="component_server_address_scheme_button">Schema %1$s</string>
     <string name="component_composer_open_subagent_session">Apri sessione del subagente</string>
@@ -1841,7 +1841,7 @@
     <string name="component_activity_sheet_working_count">In lavorazione %1$d</string>
     <string name="session_list_status_retrying">Nuovo tentativo</string>
     <string name="component_attachment_remove">Rimuovi %1$s</string>
-    <string name="component_composer_send_steer">Invia come Guida</string>
+    <string name="component_composer_send_steer">Invia per indirizzare</string>
     <string name="component_composer_next_permission">Richiesta di autorizzazione successiva</string>
     <string name="session_list_dock_project_filter">Filtro progetti</string>
     <string name="component_split_pane_resize_hint">Tocca due volte per nascondere la barra laterale</string>

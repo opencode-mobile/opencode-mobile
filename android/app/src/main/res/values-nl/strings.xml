@@ -94,7 +94,7 @@
     <string name="onboarding_features_sessions_detail">Bekijken, openen, maken, hernoemen, forken, archiveren, verwijderen</string>
     <string name="onboarding_features_chat_title">Chat en afbreken</string>
     <string name="onboarding_features_chat_detail">Verstuur prompts en stop lopend werk</string>
-    <string name="onboarding_features_permissions_title">Machtigingen</string>
+    <string name="onboarding_features_permissions_title">Toestemmingen</string>
     <string name="onboarding_features_permissions_detail">Verzoeken goedkeuren of weigeren (zonder blijvend onthouden)</string>
     <string name="onboarding_features_changes_title">Wijzigingen</string>
     <string name="onboarding_features_changes_detail">Diffs van sessies bekijken</string>
@@ -132,7 +132,7 @@
     <string name="server_health_range_week">7 d</string>
     <string name="server_health_uptime">Uptime</string>
     <string name="server_health_uptime_detail">van %1$s gemeten</string>
-    <string name="server_health_reconnects">Heraansluitingen</string>
+    <string name="server_health_reconnects">Herverbindingen</string>
     <string name="server_health_reconnects_detail">mediaan %1$s tot herstel</string>
     <string name="server_health_no_drops">geen onderbrekingen</string>
     <string name="server_health_error_rate">Foutpercentage</string>
@@ -152,8 +152,8 @@
     <string name="server_health_legend_unsteady">Onstabiel</string>
     <string name="server_health_legend_down">Onbereikbaar</string>
     <plurals name="server_health_reconnects_summary">
-        <item quantity="one">%1$d heraansluiting</item>
-        <item quantity="other">%1$d heraansluitingen</item>
+        <item quantity="one">%1$d herverbinding</item>
+        <item quantity="other">%1$d herverbindingen</item>
     </plurals>
     <string name="server_health_errors">Fouten</string>
     <string name="server_health_errors_empty">Geen fouten in dit bereik.</string>
@@ -192,8 +192,8 @@
     <string name="server_health_status_auth_failed">Aanmelden mislukt</string>
     <string name="server_health_status_stopped">Niet aan het meten</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Uptime %1$s · %2$d heraansluiting vandaag</item>
-        <item quantity="other">Uptime %1$s · %2$d heraansluitingen vandaag</item>
+        <item quantity="one">Uptime %1$s · %2$d herverbinding vandaag</item>
+        <item quantity="other">Uptime %1$s · %2$d herverbindingen vandaag</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Meten…</string>
     <string name="server_health_details">Details</string>
@@ -553,8 +553,8 @@
     </plurals>
     <string name="attachment_drop_some_skipped">Sommige worden overgeslagen</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
-    <string name="session_chat_activity_review_permission">Machtiging bekijken</string>
-    <string name="session_chat_activity_review_permission_request">Machtigingsverzoek bekijken</string>
+    <string name="session_chat_activity_review_permission">Toestemming bekijken</string>
+    <string name="session_chat_activity_review_permission_request">Toestemmingsverzoek bekijken</string>
     <string name="session_chat_activity_answer_question">Vraag beantwoorden</string>
     <string name="session_chat_activity_request_failed">Verzoek mislukt</string>
     <string name="session_chat_activity_btw_failed">/btw mislukt · Opnieuw proberen</string>
@@ -957,7 +957,7 @@
     <string name="session_chat_goal_waiting_shell">Wacht op een achtergrondshell: %1$s. Pauzeert als er %2$d minuten niets draait.</string>
     <string name="session_chat_goal_waiting_subagent">Wacht tot een subagent klaar is. Pauzeert als er %1$d minuten niets draait.</string>
     <string name="session_chat_goal_waiting_on_you">Wacht op jou</string>
-    <string name="session_chat_goal_waiting_permission">Er staat een machtigingsverzoek open. Het doel gaat verder zodra je antwoordt.</string>
+    <string name="session_chat_goal_waiting_permission">Er staat een toestemmingsverzoek open. Het doel gaat verder zodra je antwoordt.</string>
     <string name="session_chat_goal_waiting_question">Er staat een vraag open. Het doel gaat verder zodra je antwoordt.</string>
     <string name="session_chat_goal_evidence">Bewijs</string>
     <string name="session_chat_goal_reconnecting">Opnieuw verbinden. Het laatst bekende doel wordt getoond.</string>
@@ -1146,7 +1146,7 @@
     <string name="settings_section_help_feedback">Help en feedback</string>
     <string name="settings_section_appearance">Uiterlijk</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Start</string>
+    <string name="settings_section_home">Home</string>
     <string name="settings_section_session_cache">Sessiecache</string>
     <string name="settings_section_privacy">Privacy</string>
     <string name="settings_section_about">Info</string>
@@ -1185,7 +1185,7 @@
     <string name="settings_follow_up_subtitle_queue">Wachtrij · alleen V2-servers. V1 ondersteunt dit niet.</string>
     <string name="settings_follow_up_unsupported">Niet ondersteund op V1. Deze server verzendt altijd direct.</string>
     <string name="settings_worktrees_title">Worktrees</string>
-    <string name="settings_worktrees_subtitle">Toon de worktrees en branches van elk project op Start, en laat Nieuwe sessie een worktree kiezen als je de knop ingedrukt houdt.</string>
+    <string name="settings_worktrees_subtitle">Toon de worktrees en branches van elk project op Home, en laat Nieuwe sessie een worktree kiezen als je de knop ingedrukt houdt.</string>
     <string name="settings_session_rows_title">Sessierijen</string>
     <string name="settings_session_rows_compact_title">Compact</string>
     <string name="settings_session_rows_compact_subtitle">Twee regels: titel en tijd, daarna project / worktree</string>
@@ -1225,8 +1225,8 @@
     <string name="diagnostics_loading">Diagnostische logs laden</string>
     <string name="diagnostics_entries_title">Items</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d geanonimiseerde regel in het bewaarde venster</item>
-        <item quantity="other">%1$d geanonimiseerde regels in het bewaarde venster</item>
+        <item quantity="one">%1$d regel zonder gevoelige gegevens in het bewaarde venster</item>
+        <item quantity="other">%1$d regels zonder gevoelige gegevens in het bewaarde venster</item>
     </plurals>
     <string name="diagnostics_entries_empty">Nog geen items in het bewaarde venster</string>
     <string name="diagnostics_kept_title">Bewaard</string>
@@ -1286,7 +1286,7 @@
     <string name="appearance_mode_note_system">Volgt de lichte of donkere instelling van de telefoon.</string>
     <string name="appearance_mode_note_light">Altijd licht, wat de telefoon ook is ingesteld.</string>
     <string name="appearance_mode_note_dark">Altijd donker, wat de telefoon ook is ingesteld.</string>
-    <string name="appearance_text_home_title">Tekst in startlijst</string>
+    <string name="appearance_text_home_title">Tekst in homelijst</string>
     <string name="appearance_text_session_chat_title">Tekst in sessiechat</string>
     <string name="appearance_text_code_title">Codetekst</string>
     <string name="appearance_text_size_label">Grootte</string>
@@ -1604,7 +1604,7 @@
         <item quantity="other">%1$dd geleden</item>
     </plurals>
     <string name="component_server_address_scheme_button_description">Protocol %1$s. Opent protocolkeuze</string>
-    <string name="share_diagnostics_subject">OpenCode diagnostische logs</string>
+    <string name="share_diagnostics_subject">Diagnostische logs van OpenCode</string>
     <string name="component_reorderable_list_move_up">Omhoog</string>
     <string name="session_list_scope_load_failed_title">%1$s laden mislukt</string>
     <string name="dictation_status_listening">Luisteren</string>
@@ -1783,10 +1783,10 @@
         <item quantity="other">%1$d gewijzigd</item>
     </plurals>
     <string name="worktrees_none_in_project">Geen worktrees. Kies bij Nieuwe sessie → Kies project of worktree om er een te maken.</string>
-    <string name="worktrees_footer">Als je een worktree verwijdert, wordt de map op de server gewist. De sessies blijven bestaan, maar kunnen er niet meer in draaien.</string>
+    <string name="worktrees_footer">Als je een worktree verwijdert, wordt de bijbehorende map op de server verwijderd. De sessies blijven bestaan, maar kunnen er niet meer in draaien.</string>
     <string name="worktrees_more">Meer acties voor %1$s</string>
     <string name="worktrees_removing">Wordt verwijderd…</string>
-    <string name="worktrees_actions_show_on_home">Sessies op Start tonen</string>
+    <string name="worktrees_actions_show_on_home">Sessies op Home tonen</string>
     <string name="worktrees_actions_new_session">Nieuwe sessie hier</string>
     <string name="worktrees_actions_remove">Worktree verwijderen…</string>
     <string name="worktrees_remove_title">Worktree “%1$s” verwijderen?</string>
@@ -1797,7 +1797,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">Niet-gecommitte wijzigingen gaan verloren.</string>
     <string name="worktrees_remove_changes_unchecked">Kon niet controleren op niet-gecommitte wijzigingen. Die gaan verloren.</string>
-    <string name="worktrees_remove_sessions_stay">Sessies die deze worktree gebruiken blijven op Start staan, maar kunnen hier niet meer draaien.</string>
+    <string name="worktrees_remove_sessions_stay">Sessies die deze worktree gebruiken blijven op Home staan, maar kunnen hier niet meer draaien.</string>
     <string name="worktrees_remove_confirm_anyway">Toch verwijderen</string>
     <string name="worktrees_blocked_title">“%1$s” kan nog niet worden verwijderd</string>
     <string name="worktrees_blocked_message">In deze worktree draait een sessie. Stop die en verwijder daarna de worktree.</string>

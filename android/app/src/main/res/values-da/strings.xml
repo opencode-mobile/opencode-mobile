@@ -41,7 +41,7 @@
     <string name="connection_setup_pairing_code_help">Fra parringslinket. Virker kun én gang og udløber efter 5 minutter.</string>
     <string name="connection_setup_segment_password">Adgangskode</string>
     <string name="connection_setup_segment_pairing_code">Parringskode</string>
-    <string name="connection_setup_addresses_hint_tunnel_only">Fjerntunnel gemt. Der er intet andet at vælge. Den bliver gemt, indtil du slår fjernadgang fra.</string>
+    <string name="connection_setup_addresses_hint_tunnel_only">Fjerntunnel gemt. Der er intet andet at vælge. Den bevares, indtil du slår fjernadgang fra.</string>
     <string name="connection_setup_addresses_hint_tailscale_fallback">Tailscale bruges, når den svarer. Lokalt netværk er reserveløsningen.</string>
     <string name="connection_setup_addresses_hint_default">Gemte adresser prøves, indtil en svarer. Tailscale foretrækkes, når den svarer.</string>
     <string name="connection_setup_address_tailscale">Tailscale</string>
@@ -73,7 +73,7 @@
     <string name="server_error_session_busy">Sessionen er optaget</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Godkendelse mislykkedes</string>
-    <string name="connection_error_unhealthy">Serveren meldte, at den ikke er sund</string>
+    <string name="connection_error_unhealthy">Serveren meldte, at den ikke er i orden</string>
     <string name="connection_scanner_title">Scan parrings-QR</string>
     <string name="connection_scanner_card_title">OpenCode parrings-QR</string>
     <string name="connection_scanner_card_body">Fra opencode pair --remote. Almindelig pair viser kun en QR-kode, når serveren kan nås uden for localhost.</string>
@@ -101,7 +101,7 @@
     <string name="onboarding_features_live_title">Live, mens appen er åben</string>
     <string name="onboarding_features_live_detail">Hændelsesstream i forgrunden; opdater efter genforbindelse</string>
     <string name="onboarding_setup_title">Opsæt opencode serve</string>
-    <string name="onboarding_setup_intro">Appen taler med en opencode-server, du selv kører. Her er den korte vej – se de officielle docs for alle detaljer.</string>
+    <string name="onboarding_setup_intro">Appen taler med en opencode-server, du selv kører. Her er den korte vej – se den officielle dokumentation for alle detaljer.</string>
     <string name="onboarding_setup_step_number">Trin %1$d</string>
     <string name="onboarding_setup_step1_title">Start serveren på din maskine</string>
     <string name="onboarding_setup_step1_body">Kør opencode-serveren (headless) i dit projekt. Lad den køre, mens du bruger telefonen.</string>
@@ -111,7 +111,7 @@
     <string name="onboarding_setup_step3_body">Anbefalet: Tailscale – installér Tailscale på maskinen og telefonen, og brug derefter maskinens Tailscale-IP eller MagicDNS-navn som server-URL.\n\nDet går også med samme LAN, VPN, HTTPS eller en anden tunnel, du selv administrerer. Appen opretter ikke et relay for dig.</string>
     <string name="onboarding_setup_step4_title">Forbind i appen</string>
     <string name="onboarding_setup_step4_body">Indtast basis-URL og adgangskode. Appen tjekker GET /global/health og gemmer derefter en serverforbindelse på denne enhed.</string>
-    <string name="onboarding_setup_open_docs">Åbn serverdocs</string>
+    <string name="onboarding_setup_open_docs">Åbn serverdokumentation</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile er låst</string>
     <string name="privacy_cover_unlock">Lås op</string>
@@ -242,7 +242,7 @@
         <item quantity="one">%1$d projekt</item>
         <item quantity="other">%1$d projekter</item>
     </plurals>
-    <string name="home_main_checkout">main checkout</string>
+    <string name="home_main_checkout">hovedcheckout</string>
     <plurals name="home_worktree_count">
         <item quantity="one">%1$d worktree</item>
         <item quantity="other">%1$d worktrees</item>
@@ -276,7 +276,7 @@
     <string name="home_fork_result_stay">Bliv her</string>
     <string name="home_delete_title">Slet session</string>
     <string name="home_delete_message">Slet sessionen “%1$s”?</string>
-    <string name="home_session_error_empty_title">Angiv en sessionstitel</string>
+    <string name="home_session_error_empty_title">Indtast en sessionstitel</string>
     <string name="home_session_error_nothing_to_fork">Intet at forke endnu</string>
     <string name="home_session_error_archive_failed">Sessionen kunne ikke arkiveres.</string>
     <string name="home_session_error_delete_failed">Sessionen kunne ikke slettes.</string>
@@ -356,7 +356,7 @@
     <string name="worktree_current_branch">%1$s (nuværende)</string>
     <string name="worktree_base_loading">Indlæser branches…</string>
     <string name="worktree_base_failed">Kunne ikke indlæse branches</string>
-    <string name="worktree_name_empty">Angiv et navn</string>
+    <string name="worktree_name_empty">Indtast et navn</string>
     <string name="worktree_name_chars">Brug bogstaver, tal, punktummer, bindestreger eller understregninger</string>
     <plurals name="worktree_name_long">
         <item quantity="one">Brug højst %1$d tegn</item>
@@ -471,13 +471,13 @@
     <string name="session_chat_title_hint">Titel</string>
     <string name="session_chat_fork_dialog_title">Fork session</string>
     <string name="session_chat_fork_dialog_confirm">Fork</string>
-    <string name="session_chat_fork_dialog_error_empty_title">Angiv en sessionstitel</string>
+    <string name="session_chat_fork_dialog_error_empty_title">Indtast en sessionstitel</string>
     <string name="session_chat_fork_dialog_error_failed">Sessionen kunne ikke forkes.</string>
     <string name="session_chat_fork_result_title">Session forket</string>
     <string name="session_chat_fork_result_message_ready">“%1$s” er klar.</string>
     <string name="session_chat_fork_result_open">Åbn</string>
     <string name="session_chat_fork_result_stay_here">Bliv her</string>
-    <string name="session_chat_attachment_source_title">Tilføj bilag</string>
+    <string name="session_chat_attachment_source_title">Tilføj vedhæftning</string>
     <string name="session_chat_attachment_source_photos">Fotos</string>
     <string name="session_chat_attachment_source_media">Medier</string>
     <string name="session_chat_attachment_source_files">Filer</string>
@@ -493,7 +493,7 @@
     <string name="session_chat_commands_undo_description">Fortryd seneste besked</string>
     <string name="session_chat_commands_redo_label">Omgør</string>
     <string name="session_chat_commands_redo_description">Omgør fortrudt besked</string>
-    <string name="session_chat_commands_compact_label">Kompakt</string>
+    <string name="session_chat_commands_compact_label">Komprimer</string>
     <string name="session_chat_commands_compact_description">Komprimer sessionens kontekst</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">Åbn projektets shell</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_suggestion_file">Fil</string>
     <string name="session_chat_suggestion_no_matches">Ingen resultater</string>
     <string name="session_chat_suggestion_no_commands">Ingen kommandoer</string>
-    <string name="session_chat_suggestion_badge_skill">færdighed</string>
+    <string name="session_chat_suggestion_badge_skill">skill</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
     <string name="session_chat_move_worktree_current">Nuværende worktree</string>
     <string name="session_chat_move_worktree_menu_title">Flyt til worktree…</string>
@@ -687,7 +687,7 @@
     <string name="tool_title_plan">Plan</string>
     <string name="tool_title_edit">Rediger</string>
     <string name="tool_title_write">Skriv</string>
-    <string name="tool_title_skill">Færdighed</string>
+    <string name="tool_title_skill">Skill</string>
     <string name="tool_title_patch">Patch</string>
     <string name="tool_title_get_issue">Hent issue</string>
     <string name="tool_title_save_issue">Gem issue</string>
@@ -743,8 +743,8 @@
         <item quantity="other">%1$d skrivninger</item>
     </plurals>
     <plurals name="tool_count_skill">
-        <item quantity="one">%1$d færdighed</item>
-        <item quantity="other">%1$d færdigheder</item>
+        <item quantity="one">%1$d skill</item>
+        <item quantity="other">%1$d skills</item>
     </plurals>
     <plurals name="tool_count_patch">
         <item quantity="one">%1$d patch</item>
@@ -815,9 +815,9 @@
     <string name="timeline_step_running_named">Kører %1$s</string>
     <string name="timeline_step_ran_named">Kørte %1$s</string>
     <string name="timeline_step_ran_command">Kørte kommando</string>
-    <string name="timeline_step_loading_skill">Indlæser færdighed…</string>
-    <string name="timeline_step_loading_skill_named">Indlæser færdighed %1$s</string>
-    <string name="timeline_step_skill_named">Færdighed %1$s</string>
+    <string name="timeline_step_loading_skill">Indlæser skill…</string>
+    <string name="timeline_step_loading_skill_named">Indlæser skill %1$s</string>
+    <string name="timeline_step_skill_named">Skill %1$s</string>
     <string name="timeline_step_thought_duration">Tænkte · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">Udforskede — %1$s</string>
@@ -863,7 +863,7 @@
     <string name="timeline_failure_session_work_failed">Sessionens arbejde mislykkedes</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Vælg en model</string>
-    <string name="timeline_failure_compact">Kompakt</string>
+    <string name="timeline_failure_compact">Komprimer</string>
     <string name="session_chat_compact_status">Komprimerer…</string>
     <string name="session_chat_turn_sending">Sender…</string>
     <string name="session_chat_turn_sending_percent">Sender %1$d %%</string>
@@ -877,7 +877,7 @@
     <string name="session_chat_revert_commit_failed">Tilbageførslen kunne ikke gennemføres.</string>
     <string name="session_chat_fork_rename_failed">Forken blev oprettet, men kunne ikke omdøbes.</string>
     <string name="session_chat_pending_prompt_update_failed">Den ventende prompt kunne ikke opdateres</string>
-    <string name="session_chat_shell_stop_failed">Shell kunne ikke stoppes. Prøv igen.</string>
+    <string name="session_chat_shell_stop_failed">Shellen kunne ikke stoppes. Prøv igen.</string>
     <string name="session_chat_shell_status_running">Kører</string>
     <string name="session_chat_shell_status_exited">Afsluttet</string>
     <string name="session_chat_shell_status_timed_out">Timeout</string>
@@ -927,7 +927,7 @@
     <string name="session_chat_sheet_pending_prompts_delete">Slet</string>
     <string name="session_chat_sheet_side_question_done">Færdig</string>
     <string name="session_chat_sheet_side_question_not_added">Ikke føjet til samtalen</string>
-    <string name="session_chat_sheet_todos_title">Sessionens todos</string>
+    <string name="session_chat_sheet_todos_title">Sessionens opgaver</string>
     <string name="session_chat_sheet_todos_progress">%1$d af %2$d fuldført</string>
     <string name="session_chat_goal_pill">Mål</string>
     <string name="session_chat_goal_pill_paused">Mål sat på pause</string>
@@ -1146,7 +1146,7 @@
     <string name="settings_section_help_feedback">Hjælp og feedback</string>
     <string name="settings_section_appearance">Udseende</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Hjem</string>
+    <string name="settings_section_home">Startside</string>
     <string name="settings_section_session_cache">Sessionscache</string>
     <string name="settings_section_privacy">Privatliv</string>
     <string name="settings_section_about">Om</string>
@@ -1180,12 +1180,12 @@
     <string name="settings_timeline_style_activity_card_subtitle">Kørende trin på ét live-kort, der foldes sammen til en oversigt</string>
     <string name="settings_follow_up_title">Afsendelse af opfølgning</string>
     <string name="settings_follow_up_steer">Styr</string>
-    <string name="settings_follow_up_queue">Sæt i kø</string>
+    <string name="settings_follow_up_queue">Kø</string>
     <string name="settings_follow_up_subtitle_steer">Styr · kun V2-servere. V1 understøtter ikke dette.</string>
-    <string name="settings_follow_up_subtitle_queue">Sæt i kø · kun V2-servere. V1 understøtter ikke dette.</string>
+    <string name="settings_follow_up_subtitle_queue">Kø · kun V2-servere. V1 understøtter ikke dette.</string>
     <string name="settings_follow_up_unsupported">Understøttes ikke på V1. Denne server sender altid med det samme.</string>
     <string name="settings_worktrees_title">Worktrees</string>
-    <string name="settings_worktrees_subtitle">Vis hvert projekts worktrees og branches på Hjem, og lad Ny session vælge en worktree, når du holder den nede.</string>
+    <string name="settings_worktrees_subtitle">Vis hvert projekts worktrees og branches på startsiden, og lad Ny session vælge en worktree, når du holder den nede.</string>
     <string name="settings_session_rows_title">Sessionsrækker</string>
     <string name="settings_session_rows_compact_title">Kompakt</string>
     <string name="settings_session_rows_compact_subtitle">To linjer: titel og tid, derefter projekt / worktree</string>
@@ -1221,8 +1221,8 @@
     <string name="settings_rate_app_subtitle">En anmeldelse hjælper andre med at finde appen</string>
     <string name="settings_star_on_github_title">Giv en stjerne på GitHub</string>
     <string name="settings_follow_on_x_title">Følg på X</string>
-    <string name="diagnostics_title">Diagnostiklogge</string>
-    <string name="diagnostics_loading">Indlæser diagnostiklogge</string>
+    <string name="diagnostics_title">Diagnostiklogs</string>
+    <string name="diagnostics_loading">Indlæser diagnostiklogs</string>
     <string name="diagnostics_entries_title">Poster</string>
     <plurals name="diagnostics_entries_count">
         <item quantity="one">%1$d anonymiseret linje i det gemte vindue</item>
@@ -1249,10 +1249,10 @@
     <string name="diagnostics_clear">Ryd</string>
     <string name="diagnostics_share">Del</string>
     <string name="diagnostics_export_window_title">Eksportvindue</string>
-    <string name="diagnostics_export_sheet_title">Eksportér diagnostiklogge</string>
+    <string name="diagnostics_export_sheet_title">Eksportér diagnostiklogs</string>
     <string name="diagnostics_share_via_apps">Del via apps</string>
     <string name="diagnostics_save_to_files">Gem i Filer</string>
-    <string name="diagnostics_clear_dialog_title">Ryd diagnostiklogge?</string>
+    <string name="diagnostics_clear_dialog_title">Ryd diagnostiklogs?</string>
     <string name="diagnostics_clear_dialog_message">Dette fjerner den gemte diagnostiklog.</string>
     <string name="diagnostics_error_share">Kunne ikke forberede diagnostikloggen til deling.</string>
     <string name="diagnostics_error_save">Kunne ikke gemme diagnostikloggen.</string>
@@ -1267,7 +1267,7 @@
     <string name="appearance_theme_blurb_hotline">Neutralt look, kraftig pink</string>
     <string name="appearance_theme_blurb_phosphor">Neutralt look, CRT-grøn</string>
     <string name="appearance_syntax_name_match">Samme som tema</string>
-    <string name="appearance_syntax_blurb_match">Brug temaets egne farver</string>
+    <string name="appearance_syntax_blurb_match">Brug UI-temaets egne tokens</string>
     <string name="appearance_syntax_blurb_nocturne">One Dark-familien</string>
     <string name="appearance_syntax_blurb_citrus">Solarized-familien</string>
     <string name="appearance_syntax_blurb_paper">GitHub-familien</string>
@@ -1286,7 +1286,7 @@
     <string name="appearance_mode_note_system">Følger telefonens lyse eller mørke indstilling.</string>
     <string name="appearance_mode_note_light">Altid lys, uanset telefonens indstilling.</string>
     <string name="appearance_mode_note_dark">Altid mørk, uanset telefonens indstilling.</string>
-    <string name="appearance_text_home_title">Tekst i Hjem-listen</string>
+    <string name="appearance_text_home_title">Tekst på startsiden</string>
     <string name="appearance_text_session_chat_title">Tekst i sessionschat</string>
     <string name="appearance_text_code_title">Kodetekst</string>
     <string name="appearance_text_size_label">Størrelse</string>
@@ -1331,7 +1331,7 @@
     <string name="feedback_action_share_instead">Del i stedet</string>
     <string name="feedback_undo">Fortryd</string>
     <string name="feedback_done">Færdig</string>
-    <string name="feedback_add_attachment">Tilføj bilag</string>
+    <string name="feedback_add_attachment">Tilføj vedhæftning</string>
     <string name="feedback_dictate">Diktér</string>
     <string name="feedback_send">Send rapport</string>
     <string name="feedback_sending">Sender rapport</string>
@@ -1411,7 +1411,7 @@
     <string name="keyboard_shortcuts_send_note">Send note</string>
     <string name="keyboard_shortcuts_next_question">Næste spørgsmål</string>
     <string name="keyboard_shortcuts_submit_answers">Send svar</string>
-    <string name="keyboard_shortcuts_dismiss_question">Luk spørgsmål</string>
+    <string name="keyboard_shortcuts_dismiss_question">Afvis spørgsmål</string>
     <string name="keyboard_shortcuts_toggle_sidebar">Skift sidepanel</string>
     <string name="keyboard_shortcuts_next_session">Næste session</string>
     <string name="keyboard_shortcuts_previous_session">Forrige session</string>
@@ -1485,8 +1485,8 @@
     <string name="component_todo_item_status_in_progress">i gang</string>
     <string name="component_todo_item_status_completed">fuldført</string>
     <string name="component_todo_item_status_cancelled">annulleret</string>
-    <string name="component_todos_pill_accessibility_label">Sessionens todos, %1$d af %2$d fuldført</string>
-    <string name="component_todos_pill_accessibility_label_active">Sessionens todos, %1$d af %2$d fuldført, %3$s</string>
+    <string name="component_todos_pill_accessibility_label">Sessionens opgaver, %1$d af %2$d fuldført</string>
+    <string name="component_todos_pill_accessibility_label_active">Sessionens opgaver, %1$d af %2$d fuldført, %3$s</string>
     <string name="component_reasoning_row_thought_duration">Tænkte · %1$s</string>
     <string name="component_reasoning_row_duration_seconds">%1$s s</string>
     <string name="component_reasoning_row_duration_ms">%1$d ms</string>
@@ -1520,10 +1520,10 @@
     <string name="component_filter_tabs_unseen">ny</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">I går</string>
-    <string name="component_composer_reverting_title">Fortryder denne besked</string>
+    <string name="component_composer_reverting_title">Tilbagefører denne besked</string>
     <string name="session_new_title">Ny session</string>
     <string name="session_list_dock_add_project">Tilføj projekt</string>
-    <string name="theme_error_preset_not_found">Temaforudindstillingen blev ikke fundet</string>
+    <string name="theme_error_preset_not_found">Temaet blev ikke fundet</string>
     <string name="component_composer_submit">Send</string>
     <string name="component_composer_select_all_that_apply">Vælg alle, der passer</string>
     <string name="component_unified_diff_summary_modified">Ændret fil %1$s, %2$s, %3$s</string>
@@ -1576,7 +1576,7 @@
     <string name="session_list_section_recent">Seneste</string>
     <string name="session_list_section_recent_hint">Kræver et blik</string>
     <string name="component_activity_status_completed">fuldført</string>
-    <string name="share_diagnostics_chooser_title">Del diagnostiklogge</string>
+    <string name="share_diagnostics_chooser_title">Del diagnostiklogs</string>
     <string name="dictation_model_queued_title">%1$s downloader %2$s senere</string>
     <string name="session_list_dock_choose_project_or_worktree">Vælg projekt eller worktree</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
@@ -1604,7 +1604,7 @@
         <item quantity="other">%1$d d. siden</item>
     </plurals>
     <string name="component_server_address_scheme_button_description">Protokol %1$s. Åbner protokolvælger</string>
-    <string name="share_diagnostics_subject">OpenCode-diagnostiklogge</string>
+    <string name="share_diagnostics_subject">OpenCode-diagnostiklogs</string>
     <string name="component_reorderable_list_move_up">Flyt op</string>
     <string name="session_list_scope_load_failed_title">%1$s kunne ikke indlæses</string>
     <string name="dictation_status_listening">Lytter</string>
@@ -1626,7 +1626,7 @@
         <item quantity="one">%1$d trin</item>
         <item quantity="other">%1$d trin</item>
     </plurals>
-    <string name="theme_error_apply_failed">Temaforudindstillingen kunne ikke anvendes</string>
+    <string name="theme_error_apply_failed">Temaet kunne ikke anvendes</string>
     <string name="component_unified_diff_summary_deleted">Slettet fil %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">Kører</string>
     <string name="component_step_rail_expands">%1$s, kan foldes ud</string>
@@ -1643,7 +1643,7 @@
     <string name="component_composer_child_lockout">Der kan ikke sendes prompts til undersessioner.</string>
     <string name="component_attachment_uploading_percent">Uploader %1$d%%</string>
     <string name="component_composer_custom_answer_hint">Skriv dit eget svar</string>
-    <string name="component_composer_cancel_revert">Annuller tilbagerulning</string>
+    <string name="component_composer_cancel_revert">Annuller tilbageførsel</string>
     <string name="session_list_scope_load_slow_caption">Indlæser stadig — store projekter kan tage et øjeblik</string>
     <string name="component_outgoing_message_label_with_actions">Udgående besked. Viser handlinger for beskeden</string>
     <string name="session_list_scope_load_failed_subtitle">Sessioner kunne ikke indlæses</string>
@@ -1697,7 +1697,7 @@
     <string name="session_list_section_week_of">Ugen %1$s – %2$s</string>
     <string name="dictation_model_download_failed_title">%1$s kunne ikke downloade %2$s</string>
     <string name="component_activity_status_pending">afventer</string>
-    <string name="component_composer_revert_tag">Fortryd</string>
+    <string name="component_composer_revert_tag">Tilbagefør</string>
     <string name="component_composer_model">Model %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
         <item quantity="one">%1$d tidligere trin</item>
@@ -1719,7 +1719,7 @@
     <string name="component_composer_not_selected">Ikke valgt</string>
     <string name="component_composer_shell_mode_description">Shell-tilstand. Forlad shell-tilstand</string>
     <string name="component_branch_pill_based_on">Baseret på %1$s</string>
-    <string name="component_composer_add_attachment">Tilføj bilag</string>
+    <string name="component_composer_add_attachment">Tilføj vedhæftning</string>
     <string name="dictation_microphone_off">Mikrofonadgang er slået fra</string>
     <string name="component_composer_shell">Shell</string>
     <string name="live_updates_status_auth_failed">Godkendelse mislykkedes</string>
@@ -1748,7 +1748,7 @@
     <string name="session_list_dock_project_filter">Projektfilter</string>
     <string name="component_split_pane_resize_hint">Dobbelttryk for at skjule sidepanelet</string>
     <string name="component_branch_pill_shows_details_hint">Viser branchdetaljer</string>
-    <string name="component_composer_permission_requested">Anmodning om tilladelse</string>
+    <string name="component_composer_permission_requested">Tilladelsesanmodning</string>
     <string name="component_thinking">Tænkning</string>
     <string name="dictation_model_downloading_title">%1$s downloader %2$s</string>
     <string name="component_hunk_navigation_expand_context">Udvid kontekst</string>
@@ -1783,10 +1783,10 @@
         <item quantity="other">%1$d ændrede</item>
     </plurals>
     <string name="worktrees_none_in_project">Ingen worktrees. Ny session → Vælg projekt eller worktree opretter en.</string>
-    <string name="worktrees_footer">Når du fjerner en worktree, slettes dens mappe på serveren. Dens sessioner bevares, men kan ikke køre i den igen.</string>
+    <string name="worktrees_footer">Når du fjerner en worktree, slettes mappen på serveren. Sessionerne bevares, men kan ikke køre i den igen.</string>
     <string name="worktrees_more">Flere handlinger for %1$s</string>
     <string name="worktrees_removing">Fjerner…</string>
-    <string name="worktrees_actions_show_on_home">Vis sessioner på Hjem</string>
+    <string name="worktrees_actions_show_on_home">Vis sessioner på startsiden</string>
     <string name="worktrees_actions_new_session">Ny session her</string>
     <string name="worktrees_actions_remove">Fjern worktree…</string>
     <string name="worktrees_remove_title">Vil du fjerne worktreen “%1$s”?</string>
@@ -1797,7 +1797,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">Ikke-committede ændringer går tabt.</string>
     <string name="worktrees_remove_changes_unchecked">Kunne ikke tjekke for ikke-committede ændringer. Eventuelle ændringer går tabt.</string>
-    <string name="worktrees_remove_sessions_stay">Sessioner, der bruger denne worktree, bliver på Hjem, men kan ikke køre her igen.</string>
+    <string name="worktrees_remove_sessions_stay">Sessioner, der bruger denne worktree, bliver på startsiden, men kan ikke køre her igen.</string>
     <string name="worktrees_remove_confirm_anyway">Fjern alligevel</string>
     <string name="worktrees_blocked_title">“%1$s” kan ikke fjernes endnu</string>
     <string name="worktrees_blocked_message">En session kører i denne worktree. Stop den, og fjern derefter worktreen.</string>

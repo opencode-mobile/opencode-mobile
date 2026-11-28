@@ -95,9 +95,9 @@
     <string name="onboarding_features_chat_title">Czat i przerywanie</string>
     <string name="onboarding_features_chat_detail">Wysyłaj prompty i zatrzymuj trwającą pracę</string>
     <string name="onboarding_features_permissions_title">Uprawnienia</string>
-    <string name="onboarding_features_permissions_detail">Zatwierdzaj lub odrzucaj prośby (bez trwałego zapamiętywania)</string>
+    <string name="onboarding_features_permissions_detail">Zezwalaj na prośby lub odmawiaj ich (bez trwałego zapamiętywania)</string>
     <string name="onboarding_features_changes_title">Zmiany</string>
-    <string name="onboarding_features_changes_detail">Przeglądaj diffy sesji</string>
+    <string name="onboarding_features_changes_detail">Przeglądaj różnice w sesji</string>
     <string name="onboarding_features_live_title">Na żywo, gdy aplikacja jest otwarta</string>
     <string name="onboarding_features_live_detail">Strumień zdarzeń na pierwszym planie; odświeżanie po ponownym połączeniu</string>
     <string name="onboarding_setup_title">Skonfiguruj opencode serve</string>
@@ -161,7 +161,7 @@
     </plurals>
     <string name="server_health_errors">Błędy</string>
     <string name="server_health_errors_empty">Brak błędów w tym zakresie.</string>
-    <string name="server_health_error_log">Dziennik błędów</string>
+    <string name="server_health_error_log">Log błędów</string>
     <string name="server_health_error_log_check">Sprawdzenie stanu</string>
     <string name="server_health_error_log_stream">Połączenie na żywo</string>
     <string name="server_health_error_log_repeated">%1$d z rzędu przez %2$s</string>
@@ -507,7 +507,7 @@
     <string name="session_chat_attachment_source_photos">Zdjęcia</string>
     <string name="session_chat_attachment_source_media">Multimedia</string>
     <string name="session_chat_attachment_source_files">Pliki</string>
-    <string name="session_chat_attachment_source_log_file">Plik dziennika</string>
+    <string name="session_chat_attachment_source_log_file">Plik logu</string>
     <string name="session_chat_commands_title">Polecenia</string>
     <string name="session_chat_commands_mcp_title">Serwery MCP</string>
     <string name="session_chat_commands_back">Wróć do poleceń</string>
@@ -519,8 +519,8 @@
     <string name="session_chat_commands_undo_description">Cofnij ostatnią wiadomość</string>
     <string name="session_chat_commands_redo_label">Ponów</string>
     <string name="session_chat_commands_redo_description">Ponów cofniętą wiadomość</string>
-    <string name="session_chat_commands_compact_label">Kompaktuj</string>
-    <string name="session_chat_commands_compact_description">Kompaktuj kontekst sesji</string>
+    <string name="session_chat_commands_compact_label">Skompresuj</string>
+    <string name="session_chat_commands_compact_description">Skompresuj kontekst sesji</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">Otwórz terminal projektu</string>
     <string name="session_chat_commands_files_label">Pliki</string>
@@ -971,25 +971,25 @@
     <string name="timeline_notice_instructions_updated">Zaktualizowano instrukcje</string>
     <string name="timeline_notice_restart">Kontynuacja po restarcie</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">Kontekst skompaktowany</string>
+    <string name="timeline_compaction_title">Kontekst skompresowany</string>
     <string name="timeline_compaction_automatic">Automatycznie</string>
     <string name="timeline_syncing">Synchronizacja…</string>
     <string name="timeline_failure_session_work_failed">Zadanie sesji nie powiodło się</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Wybierz model</string>
-    <string name="timeline_failure_compact">Kompaktuj</string>
-    <string name="session_chat_compact_status">Kompaktowanie…</string>
+    <string name="timeline_failure_compact">Skompresuj</string>
+    <string name="session_chat_compact_status">Kompresowanie…</string>
     <string name="session_chat_turn_sending">Wysyłanie…</string>
     <string name="session_chat_turn_sending_percent">Wysyłanie %1$d%%</string>
-    <string name="session_chat_compact_success">Sesja skompaktowana.</string>
-    <string name="session_chat_compact_success_usage">Kontekst skompaktowany · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">Nie udało się skompaktować kontekstu sesji.</string>
+    <string name="session_chat_compact_success">Sesja skompresowana.</string>
+    <string name="session_chat_compact_success_usage">Kontekst skompresowany · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">Nie udało się skompresować kontekstu sesji.</string>
     <string name="session_chat_revert_undo_failed">Nie udało się cofnąć ostatniej wiadomości.</string>
-    <string name="session_chat_revert_failed">Nie udało się przywrócić wiadomości.</string>
+    <string name="session_chat_revert_failed">Nie udało się cofnąć wiadomości.</string>
     <string name="session_chat_revert_redo_failed">Nie udało się ponowić.</string>
-    <string name="session_chat_revert_cancel_failed">Nie udało się anulować przywracania.</string>
-    <string name="session_chat_revert_commit_failed">Nie udało się zatwierdzić przywracania.</string>
-    <string name="session_chat_fork_rename_failed">Utworzono fork, ale nie udało się zmienić jego nazwy.</string>
+    <string name="session_chat_revert_cancel_failed">Nie udało się anulować cofnięcia.</string>
+    <string name="session_chat_revert_commit_failed">Nie udało się zatwierdzić cofnięcia.</string>
+    <string name="session_chat_fork_rename_failed">Utworzono rozgałęzienie, ale nie udało się zmienić jego nazwy.</string>
     <string name="session_chat_pending_prompt_update_failed">Nie udało się zaktualizować oczekującego promptu</string>
     <string name="session_chat_shell_stop_failed">Nie udało się zatrzymać terminala. Spróbuj ponownie.</string>
     <string name="session_chat_shell_status_running">Działa</string>
@@ -1004,8 +1004,8 @@
     <string name="session_chat_sheet_copy">Kopiuj</string>
     <string name="session_chat_sheet_copy_output">Kopiuj wynik</string>
     <string name="session_chat_sheet_message_actions_title">Wiadomość</string>
-    <string name="session_chat_sheet_message_actions_revert">Przywróć wiadomość</string>
-    <string name="session_chat_sheet_message_actions_fork">Utwórz fork stąd</string>
+    <string name="session_chat_sheet_message_actions_revert">Cofnij wiadomość</string>
+    <string name="session_chat_sheet_message_actions_fork">Rozgałęź stąd</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Kopiuj blok kodu</string>
     <string name="session_chat_sheet_message_actions_copy_message">Kopiuj wiadomość</string>
     <string name="session_chat_sheet_message_actions_select_text">Zaznacz tekst</string>
@@ -1172,7 +1172,7 @@
     <string name="session_chat_sheet_timeline_style_picker_standard_title">Standardowy</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">Karty narzędzi i grupy między wiadomościami agenta</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Szyna kroków</string>
-    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Jedna linia na krok, na żywo podczas pracy agenta</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Jeden wiersz na krok, na żywo podczas pracy agenta</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Karta aktywności</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Trwające kroki na jednej karcie na żywo, składanej do podsumowania</string>
     <string name="session_chat_sheet_picker_model">Model</string>
@@ -1197,14 +1197,14 @@
         <item quantity="other">%1$d pliku</item>
     </plurals>
     <plurals name="session_chat_sheet_tool_result_lines">
-        <item quantity="one">%1$d linia</item>
-        <item quantity="few">%1$d linie</item>
-        <item quantity="many">%1$d linii</item>
-        <item quantity="other">%1$d linii</item>
+        <item quantity="one">%1$d wiersz</item>
+        <item quantity="few">%1$d wiersze</item>
+        <item quantity="many">%1$d wierszy</item>
+        <item quantity="other">%1$d wiersza</item>
     </plurals>
     <string name="session_chat_sheet_tool_result_copy_link">Kopiuj %1$s</string>
     <string name="session_chat_sheet_tool_result_copies_link_hint">Kopiuje link</string>
-    <string name="session_chat_sheet_tool_result_line_accessibility">Linia %1$d, %2$s</string>
+    <string name="session_chat_sheet_tool_result_line_accessibility">Wiersz %1$d, %2$s</string>
     <string name="session_chat_sheet_shell_title">Terminal</string>
     <string name="session_chat_sheet_shell_command_accessibility">Polecenie, %1$s</string>
     <string name="session_chat_sheet_shell_no_output">Brak jeszcze danych wyjściowych</string>
@@ -1212,7 +1212,7 @@
     <string name="session_chat_sheet_shell_stop">Zatrzymaj terminal</string>
     <string name="session_chat_sheet_shell_stopping">Zatrzymywanie…</string>
     <string name="session_chat_sheet_background_work_title">Praca w tle</string>
-    <string name="session_chat_sheet_background_work_subagents">Subagenci</string>
+    <string name="session_chat_sheet_background_work_subagents">Subagenty</string>
     <string name="session_chat_sheet_background_work_shells">Terminale</string>
     <string name="session_chat_sheet_background_work_tab_running">W toku</string>
     <string name="session_chat_sheet_background_work_tab_done">Gotowe</string>
@@ -1264,7 +1264,7 @@
     <string name="session_context_stat_usage">Użycie</string>
     <string name="session_context_stat_input_tokens">Tokeny wejściowe</string>
     <string name="session_context_stat_output_tokens">Tokeny wyjściowe</string>
-    <string name="session_context_stat_reasoning_tokens">Tokeny wnioskowania</string>
+    <string name="session_context_stat_reasoning_tokens">Tokeny rozumowania</string>
     <string name="session_context_stat_cache_tokens">Tokeny pamięci podręcznej (odczyt/zapis)</string>
     <string name="session_context_stat_user_messages">Wiadomości użytkownika</string>
     <string name="session_context_stat_assistant_messages">Wiadomości asystenta</string>
@@ -1303,7 +1303,7 @@
     </plurals>
     <string name="settings_send_feedback_title">Wyślij opinię</string>
     <string name="settings_send_feedback_subtitle">Zgłoś błąd lub podziel się pomysłem</string>
-    <string name="settings_hide_user_directory_title">Ukryj katalog użytkownika</string>
+    <string name="settings_hide_user_directory_title">Ukryj folder użytkownika</string>
     <string name="settings_hide_user_directory_subtitle">Pokaż ~/Projects/… zamiast /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">Okno ostatnich</string>
     <string name="settings_recent_window_message">Sesje zostają w Ostatnich, gdy są w toku lub gotowe, albo zaktualizowano je w tym oknie.</string>
@@ -1319,7 +1319,7 @@
     <string name="settings_timeline_style_standard_title">Standardowy</string>
     <string name="settings_timeline_style_standard_subtitle">Karty narzędzi i grupy między wiadomościami agenta</string>
     <string name="settings_timeline_style_step_rail_title">Szyna kroków</string>
-    <string name="settings_timeline_style_step_rail_subtitle">Jedna linia na krok, na żywo podczas pracy agenta</string>
+    <string name="settings_timeline_style_step_rail_subtitle">Jeden wiersz na krok, na żywo podczas pracy agenta</string>
     <string name="settings_timeline_style_activity_card_title">Karta aktywności</string>
     <string name="settings_timeline_style_activity_card_subtitle">Trwające kroki na jednej karcie na żywo, składanej do podsumowania</string>
     <string name="settings_follow_up_title">Wysyłanie kolejnych wiadomości</string>
@@ -1328,13 +1328,13 @@
     <string name="settings_follow_up_subtitle_steer">Steruj · tylko serwery V2. V1 tego nie obsługuje.</string>
     <string name="settings_follow_up_subtitle_queue">Kolejka · tylko serwery V2. V1 tego nie obsługuje.</string>
     <string name="settings_follow_up_unsupported">Nieobsługiwane w V1. Ten serwer zawsze wysyła od razu.</string>
-    <string name="settings_worktrees_title">Worktrees</string>
-    <string name="settings_worktrees_subtitle">Pokazuj worktrees i gałęzie każdego projektu na ekranie głównym i pozwól, by Nowa sesja wybierała worktree po przytrzymaniu.</string>
+    <string name="settings_worktrees_title">Worktree</string>
+    <string name="settings_worktrees_subtitle">Pokazuj worktree i gałęzie każdego projektu na ekranie głównym i pozwól, by Nowa sesja wybierała worktree po przytrzymaniu.</string>
     <string name="settings_session_rows_title">Wiersze sesji</string>
     <string name="settings_session_rows_compact_title">Kompaktowy</string>
-    <string name="settings_session_rows_compact_subtitle">Dwie linie: tytuł i czas, potem projekt / worktree</string>
+    <string name="settings_session_rows_compact_subtitle">Dwa wiersze: tytuł i czas, potem projekt / worktree</string>
     <string name="settings_session_rows_classic_title">Klasyczny</string>
-    <string name="settings_session_rows_classic_subtitle">Projekt i worktree w osobnych liniach</string>
+    <string name="settings_session_rows_classic_subtitle">Projekt i worktree w osobnych wierszach</string>
     <string name="settings_session_cache_size">Rozmiar</string>
     <string name="settings_session_cache_size_label">Rozmiar pamięci podręcznej sesji</string>
     <string name="settings_session_cache_empty">Pusta</string>
@@ -1369,10 +1369,10 @@
     <string name="diagnostics_loading">Wczytywanie logów diagnostycznych</string>
     <string name="diagnostics_entries_title">Wpisy</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d zamaskowana linia w zachowanym oknie</item>
-        <item quantity="few">%1$d zamaskowane linie w zachowanym oknie</item>
-        <item quantity="many">%1$d zamaskowanych linii w zachowanym oknie</item>
-        <item quantity="other">%1$d zamaskowanej linii w zachowanym oknie</item>
+        <item quantity="one">%1$d zamaskowany wiersz w zachowanym oknie</item>
+        <item quantity="few">%1$d zamaskowane wiersze w zachowanym oknie</item>
+        <item quantity="many">%1$d zamaskowanych wierszy w zachowanym oknie</item>
+        <item quantity="other">%1$d zamaskowanego wiersza w zachowanym oknie</item>
     </plurals>
     <string name="diagnostics_entries_empty">Brak wpisów w zachowanym oknie</string>
     <string name="diagnostics_kept_title">Zachowane</string>
@@ -1436,7 +1436,7 @@
     <string name="appearance_mode_note_system">Zgodny z jasnym lub ciemnym ustawieniem telefonu.</string>
     <string name="appearance_mode_note_light">Zawsze jasny, niezależnie od ustawień telefonu.</string>
     <string name="appearance_mode_note_dark">Zawsze ciemny, niezależnie od ustawień telefonu.</string>
-    <string name="appearance_text_home_title">Tekst listy głównej</string>
+    <string name="appearance_text_home_title">Tekst listy na ekranie głównym</string>
     <string name="appearance_text_session_chat_title">Tekst czatu sesji</string>
     <string name="appearance_text_code_title">Tekst kodu</string>
     <string name="appearance_text_size_label">Rozmiar</string>
@@ -1529,7 +1529,7 @@
         <item quantity="other">Ostatnich %1$d minut · skompresowane gzipem przy wysyłaniu. Zamaskowane na tym telefonie.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Wczytywanie…</string>
-    <string name="feedback_log_preview_empty_title">Brak linii logu</string>
+    <string name="feedback_log_preview_empty_title">Brak wierszy logu</string>
     <plurals name="feedback_log_preview_empty_message">
         <item quantity="one">Nic nie zalogowano w ostatniej %1$d minucie.</item>
         <item quantity="few">Nic nie zalogowano w ostatnich %1$d minutach.</item>
@@ -1609,7 +1609,7 @@
     <string name="changes_source_last_turn_empty_title">Brak zmian</string>
     <string name="changes_source_last_turn_empty_message">Ostatnia zakończona tura nie zmieniła żadnych plików.</string>
     <string name="changes_loading_title">Wczytywanie zmian</string>
-    <string name="changes_loading_message">Pobieranie diffa…</string>
+    <string name="changes_loading_message">Pobieranie różnic…</string>
     <string name="changes_no_turn_title">Brak zakończonej tury</string>
     <string name="changes_no_turn_message">Wyślij prompt, poczekaj na zakończenie i spróbuj ponownie.</string>
     <string name="changes_error_title">Nie udało się wczytać zmian</string>
@@ -1623,7 +1623,7 @@
     <string name="changes_no_matches_message">Spróbuj innej ścieżki lub wyczyść filtr.</string>
     <string name="changes_no_matches_clear_filter">Wyczyść filtr</string>
     <string name="changes_select_file_title">Wybierz plik</string>
-    <string name="changes_select_file_message">Wybierz zmieniony plik, aby zobaczyć diff.</string>
+    <string name="changes_select_file_message">Wybierz zmieniony plik, aby zobaczyć różnice.</string>
     <string name="changes_preview_unavailable_title">Podgląd niedostępny</string>
     <string name="changes_preview_unavailable_message">Podgląd tekstowy tego pliku jest niedostępny.</string>
     <string name="changes_file_viewer_truncated">Pokazano pierwszy 1 MB zmian w tym pliku.</string>
@@ -1678,8 +1678,8 @@
     <string name="component_unified_diff_row_kind_context">kontekst</string>
     <string name="component_unified_diff_row_kind_addition">dodanie</string>
     <string name="component_unified_diff_row_kind_deletion">usunięcie</string>
-    <string name="component_unified_diff_old_line">stara linia %1$d</string>
-    <string name="component_unified_diff_new_line">nowa linia %1$d</string>
+    <string name="component_unified_diff_old_line">stary wiersz %1$d</string>
+    <string name="component_unified_diff_new_line">nowy wiersz %1$d</string>
     <string name="component_floating_pill_state_live">W toku</string>
     <string name="component_floating_pill_state_ready">Gotowe</string>
     <string name="component_floating_pill_state_needs_attention">Wymaga uwagi</string>
@@ -1690,7 +1690,7 @@
     <string name="common_expanded">Rozwinięto</string>
     <string name="common_collapsed">Zwinięto</string>
     <string name="component_tree_row_loading">Wczytywanie</string>
-    <string name="component_timeline_notice_shows_one_line_hint">Pokazuje jedną linię</string>
+    <string name="component_timeline_notice_shows_one_line_hint">Pokazuje jeden wiersz</string>
     <string name="component_timeline_notice_shows_full_value_hint">Pokazuje całą wartość</string>
     <string name="component_attachment_accessibility_label">%1$s, %2$s</string>
     <string name="component_subagent_state_waiting_for_input">czeka na odpowiedź</string>
@@ -1843,7 +1843,7 @@
     </plurals>
     <plurals name="component_activity_card_agent_count">
         <item quantity="one">%1$d agent</item>
-        <item quantity="few">%1$d agenci</item>
+        <item quantity="few">%1$d agenty</item>
         <item quantity="many">%1$d agentów</item>
         <item quantity="other">%1$d agenta</item>
     </plurals>
@@ -1885,7 +1885,7 @@
     <string name="component_composer_send_queue">Wyślij do kolejki</string>
     <string name="session_list_dock_new_session_hint">Użyj opcji „Wybierz projekt lub worktree”, aby zacząć gdzie indziej.</string>
     <string name="session_list_section_yesterday">Wczoraj</string>
-    <string name="component_code_file_line_label">Linia %1$d, %2$s</string>
+    <string name="component_code_file_line_label">Wiersz %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">Zgłoszenie pomysłu dla OpenCode Mobile</string>
     <string name="component_hunk_navigation_previous">Poprzedni fragment</string>
     <string name="session_list_section_week_of">Tydzień %1$s – %2$s</string>
@@ -1976,7 +1976,7 @@
         <item quantity="many">%1$d worktree</item>
         <item quantity="other">%1$d worktree</item>
     </plurals>
-    <string name="worktrees_main_checkout">Główne repozytorium</string>
+    <string name="worktrees_main_checkout">Główny checkout</string>
     <string name="worktrees_cannot_remove">Nie można usunąć</string>
     <plurals name="worktrees_changed">
         <item quantity="one">%1$d zmieniony</item>
@@ -1985,14 +1985,14 @@
         <item quantity="other">%1$d zmienionego</item>
     </plurals>
     <string name="worktrees_none_in_project">Brak worktree. Nowa sesja → Wybierz projekt lub worktree tworzy nowe.</string>
-    <string name="worktrees_footer">Usunięcie worktree kasuje jego folder na serwerze. Jego sesje zostają, ale nie mogą w nim znów działać.</string>
+    <string name="worktrees_footer">Usunięcie worktree usuwa jego folder na serwerze. Jego sesje zostają, ale nie mogą w nim znów działać.</string>
     <string name="worktrees_more">Więcej akcji dla: %1$s</string>
     <string name="worktrees_removing">Usuwanie…</string>
     <string name="worktrees_actions_show_on_home">Pokaż sesje na ekranie głównym</string>
     <string name="worktrees_actions_new_session">Nowa sesja tutaj</string>
     <string name="worktrees_actions_remove">Usuń worktree…</string>
     <string name="worktrees_remove_title">Usunąć worktree „%1$s”?</string>
-    <string name="worktrees_remove_message">Kasuje %1$s na serwerze.</string>
+    <string name="worktrees_remove_message">Usuwa %1$s na serwerze.</string>
     <plurals name="worktrees_remove_changes">
         <item quantity="one">Zostanie utracona %1$d niezatwierdzona zmiana.</item>
         <item quantity="few">Zostaną utracone %1$d niezatwierdzone zmiany.</item>

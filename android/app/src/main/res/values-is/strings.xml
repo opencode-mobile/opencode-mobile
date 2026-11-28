@@ -9,7 +9,7 @@
     <string name="top_bar_back">Til baka</string>
     <string name="common_cancel">Hætta við</string>
     <string name="common_remove">Fjarlægja</string>
-    <string name="common_loading_sessions">Hleð fundum</string>
+    <string name="common_loading_sessions">Hleð lotum</string>
     <string name="common_checking_server">Athuga netþjón…</string>
     <string name="connection_setup_title_first">Tengjast netþjóni</string>
     <string name="connection_setup_title_add">Bæta við netþjóni</string>
@@ -53,9 +53,9 @@
     <string name="connection_setup_pair_again_unreachable">Næ ekki í vistaða vistfangið. Paraðu aftur.</string>
     <string name="connection_setup_pair_again_unauthorized">Þessi netþjónn hafnaði vistaðri innskráningu. Paraðu aftur. Nýtt lykilorð skráir öll tæki út.</string>
     <string name="connection_cleartext_title">Tengingin er ekki dulkóðuð</string>
-    <string name="connection_cleartext_message_one_host">%1$s notar venjulegt http utan staðarnetsins eða Tailscale. Lykilorð netþjónsins og allt í fundunum þínum færi ódulkóðað yfir netið. Notaðu frekar https, VPN eða göng.</string>
-    <string name="connection_cleartext_message_hosts">%1$s nota venjulegt http utan staðarnetsins eða Tailscale. Lykilorð netþjónsins og allt í fundunum þínum færi ódulkóðað yfir netið. Notaðu frekar https, VPN eða göng.</string>
-    <string name="connection_cleartext_message_this_address">Þetta vistfang notar venjulegt http utan staðarnetsins eða Tailscale. Lykilorð netþjónsins og allt í fundunum þínum færi ódulkóðað yfir netið. Notaðu frekar https, VPN eða göng.</string>
+    <string name="connection_cleartext_message_one_host">%1$s notar venjulegt http utan staðarnetsins eða Tailscale. Lykilorð netþjónsins og allt í lotunum þínum færi ódulkóðað yfir netið. Notaðu frekar https, VPN eða göng.</string>
+    <string name="connection_cleartext_message_hosts">%1$s nota venjulegt http utan staðarnetsins eða Tailscale. Lykilorð netþjónsins og allt í lotunum þínum færi ódulkóðað yfir netið. Notaðu frekar https, VPN eða göng.</string>
+    <string name="connection_cleartext_message_this_address">Þetta vistfang notar venjulegt http utan staðarnetsins eða Tailscale. Lykilorð netþjónsins og allt í lotunum þínum færi ódulkóðað yfir netið. Notaðu frekar https, VPN eða göng.</string>
     <string name="connection_cleartext_connect_anyway">Tengjast samt</string>
     <string name="connection_error_invalid_qr">Þetta er ekki pörunar-QR fyrir OpenCode 2</string>
     <string name="connection_error_localhost_qr">Þessi QR inniheldur aðeins localhost-vistfang</string>
@@ -78,26 +78,26 @@
     <string name="connection_scanner_card_title">OpenCode pörunar-QR</string>
     <string name="connection_scanner_card_body">Úr opencode pair --remote. Venjulegt pair sýnir QR-kóða aðeins þegar netþjónninn er aðgengilegur utan localhost.</string>
     <string name="connection_onboarding_title">Tengdu við netþjóninn þinn</string>
-    <string name="connection_onboarding_body">OpenCode Mobile stjórnar fundum á opencode netþjóni sem keyrir á þróunartölvunni þinni.</string>
+    <string name="connection_onboarding_body">OpenCode Mobile stjórnar lotum á opencode netþjóni sem keyrir á þróunartölvunni þinni.</string>
     <string name="connection_onboarding_connect">Tengjast netþjóni</string>
     <string name="onboarding_skip">Sleppa</string>
     <string name="onboarding_next">Áfram</string>
     <string name="onboarding_connect">Tengjast netþjóni</string>
     <string name="onboarding_unofficial_title">Óopinber\nopencode-biðlari</string>
-    <string name="onboarding_unofficial_body">OpenCode Mobile er natífur biðlari fyrir opencode fundi — í vinnslu. Þetta er ekki opinber OpenCode vara.</string>
+    <string name="onboarding_unofficial_body">OpenCode Mobile er natífur biðlari fyrir opencode lotur — í vinnslu. Þetta er ekki opinber OpenCode vara.</string>
     <string name="onboarding_unofficial_badge">Óopinber</string>
     <string name="onboarding_connect_page_title">Tengdu við\nnetþjónana þína</string>
     <string name="onboarding_connect_page_body">Beindu appinu að opencode netþjóni á tölvunni þinni. Við mælum með Tailscale svo síminn nái örugglega sambandi hvaðan sem er.</string>
     <string name="onboarding_connect_page_setup_link">Vantar þig netþjón fyrst?</string>
     <string name="onboarding_features_title">Hvað þú getur\ngert héðan</string>
-    <string name="onboarding_features_sessions_title">Fundir</string>
-    <string name="onboarding_features_sessions_detail">Skoða, opna, búa til, endurnefna, afrita, setja í skjalasafn, eyða</string>
+    <string name="onboarding_features_sessions_title">Lotur</string>
+    <string name="onboarding_features_sessions_detail">Skoða, opna, búa til, endurnefna, kvísla, setja í skjalasafn, eyða</string>
     <string name="onboarding_features_chat_title">Spjall og stöðvun</string>
     <string name="onboarding_features_chat_detail">Sendu fyrirmæli og stöðvaðu vinnu í gangi</string>
     <string name="onboarding_features_permissions_title">Heimildir</string>
     <string name="onboarding_features_permissions_detail">Samþykktu eða neitaðu beiðnum (engin varanleg minning)</string>
     <string name="onboarding_features_changes_title">Breytingar</string>
-    <string name="onboarding_features_changes_detail">Skoðaðu mismun funda</string>
+    <string name="onboarding_features_changes_detail">Skoðaðu mismun í lotum</string>
     <string name="onboarding_features_live_title">Í beinni meðan opið er</string>
     <string name="onboarding_features_live_detail">Atburðastraumur í forgrunni; endurhleðsla eftir endurtengingu</string>
     <string name="onboarding_setup_title">Settu upp opencode serve</string>
@@ -121,7 +121,7 @@
         <item quantity="other">%1$d netþjónstengingar</item>
     </plurals>
     <string name="servers_saved">Vistað</string>
-    <string name="server_health_title">Heilsa netþjóns</string>
+    <string name="server_health_title">Ástand netþjóns</string>
     <string name="server_health_ms_ping">ms ping</string>
     <string name="server_health_last_30_min">Síðustu 30 mín.</string>
     <string name="server_health_30_min_ago">fyrir 30 mín.</string>
@@ -197,7 +197,7 @@
     </plurals>
     <string name="server_health_quick_view_measuring">Mæli…</string>
     <string name="server_health_details">Nánar</string>
-    <string name="server_health_open_details">Opna heilsu netþjóns</string>
+    <string name="server_health_open_details">Opna ástand netþjóns</string>
     <string name="server_health_unknown_value">—</string>
     <string name="server_health_axis_ago">fyrir %1$s</string>
     <string name="server_health_hero_streams">%1$d af %2$d atburðastraumum í beinni</string>
@@ -205,7 +205,7 @@
     <string name="servers_add">Bæta við netþjóni</string>
     <string name="servers_edit_profile">Breyta %1$s</string>
     <string name="servers_remove_dialog_title_named">Fjarlægja „%1$s“?</string>
-    <string name="servers_remove_dialog_message">Þetta tæki gleymir netþjónstengingunni. Fundir haldast á þeim netþjóni. Ef þetta er virki netþjónninn velur þú annan — eða endar á Tengdu ef enginn er eftir.</string>
+    <string name="servers_remove_dialog_message">Þetta tæki gleymir netþjónstengingunni. Lotur haldast á þeim netþjóni. Ef þetta er virki netþjónninn velur þú annan — eða endar á Tengdu ef enginn er eftir.</string>
     <string name="common_retry">Reyndu aftur</string>
     <string name="common_save">Vista</string>
     <string name="common_delete">Eyða</string>
@@ -216,7 +216,7 @@
     <string name="common_settings">Stillingar</string>
     <string name="common_terminal">Terminal</string>
     <string name="common_selected">Valið</string>
-    <string name="home_sessions_title">Fundir</string>
+    <string name="home_sessions_title">Lotur</string>
     <string name="home_servers_sheet_using_now">Í notkun</string>
     <string name="home_servers_sheet_switch_to">Skipta yfir í</string>
     <string name="home_servers_sheet_manage">Stjórna í stillingum</string>
@@ -230,11 +230,11 @@
     <string name="home_probe_failed_message">Næ ekki að tengjast.</string>
     <string name="home_probe_failed_edit_connection">Breyta tengingu</string>
     <string name="home_error_load_projects">Næ ekki að hlaða verkefnum</string>
-    <string name="home_error_project_load_failed">Gat ekki hlaðið fundum</string>
-    <string name="home_remove_project_title">Fjarlægja af upphafsskjá?</string>
-    <string name="home_remove_project_message">Fjarlægja „%1$s“ af upphafsskjá? Fundir þess haldast á netþjóninum.</string>
-    <string name="home_snackbar_removed">„%1$s“ fjarlægt af upphafsskjá</string>
-    <string name="home_snackbar_already_on_home">„%1$s“ er þegar á upphafsskjá</string>
+    <string name="home_error_project_load_failed">Gat ekki hlaðið lotum</string>
+    <string name="home_remove_project_title">Fjarlægja af heimaskjá?</string>
+    <string name="home_remove_project_message">Fjarlægja „%1$s“ af heimaskjá? Lotur þess haldast á netþjóninum.</string>
+    <string name="home_snackbar_removed">„%1$s“ fjarlægt af heimaskjá</string>
+    <string name="home_snackbar_already_on_home">„%1$s“ er þegar á heimaskjá</string>
     <string name="home_snackbar_joined_project">Sama safn og %1$s. Birt þar sem worktree.</string>
     <string name="home_all">Allt</string>
     <string name="home_all_projects">Öll verkefni</string>
@@ -265,25 +265,25 @@
     <string name="home_reorder_note">Dragðu til að raða upp á nýtt. Worktree haldast með verkefninu sínu.</string>
     <string name="home_session_actions_title">Aðgerðir lotu</string>
     <string name="home_session_actions_rename">Endurnefna lotu</string>
-    <string name="home_session_actions_fork">Afrita lotu</string>
-    <string name="home_session_actions_archive">Skjalasafn</string>
+    <string name="home_session_actions_fork">Kvísla lotu</string>
+    <string name="home_session_actions_archive">Setja í skjalasafn</string>
     <string name="home_rename_title">Endurnefna lotu</string>
     <string name="home_session_title_hint">Titill</string>
-    <string name="home_fork_title">Afrita lotu</string>
-    <string name="home_fork_confirm">Afrita</string>
-    <string name="home_fork_result_title">Lota afrituð</string>
+    <string name="home_fork_title">Kvísla lotu</string>
+    <string name="home_fork_confirm">Kvísla</string>
+    <string name="home_fork_result_title">Lotu kvíslað</string>
     <string name="home_fork_result_message">„%1$s“ er tilbúin.</string>
     <string name="home_fork_result_stay">Vera hér</string>
     <string name="home_delete_title">Eyða lotu</string>
     <string name="home_delete_message">Eyða lotunni „%1$s“?</string>
     <string name="home_session_error_empty_title">Sláðu inn titil lotu</string>
-    <string name="home_session_error_nothing_to_fork">Ekkert til að afrita ennþá</string>
+    <string name="home_session_error_nothing_to_fork">Ekkert til að kvísla ennþá</string>
     <string name="home_session_error_archive_failed">Gat ekki sett lotu í skjalasafn.</string>
     <string name="home_session_error_delete_failed">Gat ekki eytt lotu.</string>
     <string name="home_session_error_request_failed">Beiðni mistókst</string>
     <string name="home_session_error_unreadable_response">Næ ekki að lesa svar netþjóns</string>
     <string name="home_session_error_generic">Eitthvað fór úrskeiðis</string>
-    <string name="archived_sessions_title">Skjalasafn funda</string>
+    <string name="archived_sessions_title">Skjalasafn lota</string>
     <string name="home_menu_archived_count">%1$d í %2$s</string>
     <string name="archived_sessions_section_this_week">Þessi vika</string>
     <string name="archived_sessions_section_earlier">Fyrr</string>
@@ -293,10 +293,10 @@
     <string name="archived_sessions_archived_at">Sett í skjalasafn %1$s</string>
     <string name="archived_sessions_unarchived">„%1$s“ tekin úr skjalasafni</string>
     <string name="archived_sessions_undo">Afturkalla</string>
-    <string name="archived_sessions_empty_title">Engir fundir í skjalasafni</string>
-    <string name="archived_sessions_empty_message">Fundir sem þú setur í skjalasafn í %1$s birtast hér.</string>
+    <string name="archived_sessions_empty_title">Engar lotur í skjalasafni</string>
+    <string name="archived_sessions_empty_message">Lotur sem þú setur í skjalasafn í %1$s birtast hér.</string>
     <string name="archived_sessions_show_all_projects">Sýna öll verkefni</string>
-    <string name="archived_sessions_footer">Ýttu á lotu til að sjá meira. Að taka úr skjalasafni setur hana aftur á upphafsskjáinn.</string>
+    <string name="archived_sessions_footer">Ýttu á lotu til að sjá meira. Að taka úr skjalasafni setur hana aftur á heimaskjáinn.</string>
     <string name="archived_sessions_load_failed">Gat ekki hlaðið fundum úr skjalasafni.</string>
     <string name="archived_sessions_unarchive_failed">Gat ekki tekið lotu úr skjalasafni.</string>
     <string name="session_chat_archived_banner">Sett í skjalasafn %1$s</string>
@@ -314,13 +314,13 @@
     <string name="add_project_up_one_folder">Upp um eina möppu</string>
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Veldu möppu</string>
-    <string name="add_project_already_on_home">Þegar á upphafsskjá</string>
+    <string name="add_project_already_on_home">Þegar á heimaskjá</string>
     <string name="add_project_add_home_folder">Bæta við heimamöppu</string>
     <string name="add_project_add_this_folder">Bæta þessari möppu við</string>
     <string name="add_project_path_not_found">Slóð fannst ekki</string>
     <string name="add_project_no_folder_named">Engin mappa heitir „%1$s“</string>
-    <string name="add_project_on_home">Á upphafsskjá</string>
-    <string name="add_project_on_home_with_count">Á upphafsskjá · %1$s</string>
+    <string name="add_project_on_home">Á heimaskjá</string>
+    <string name="add_project_on_home_with_count">Á heimaskjá · %1$s</string>
     <string name="add_project_folder_empty">Tóm</string>
     <plurals name="add_project_folder_count">
         <item quantity="one">%1$d mappa</item>
@@ -333,7 +333,7 @@
         <item quantity="other">Sýni fyrstu %1$d möppurnar. Skrifaðu meira af nafninu til að þrengja listann.</item>
     </plurals>
     <string name="add_project_in_folder">Í %1$s</string>
-    <string name="add_project_root_home">Heima</string>
+    <string name="add_project_root_home">Heimamappa</string>
     <string name="add_project_error_add_failed">Næ ekki að bæta þessari möppu við</string>
     <string name="worktree_new_row">Nýtt worktree…</string>
     <string name="worktree_run_in_subtitle">Búa til checkout og byrja þar</string>
@@ -437,7 +437,7 @@
     <string name="terminal_close_dialog_title_named">Loka „%1$s“?</string>
     <string name="terminal_close_dialog_message">Þetta stöðvar shell á netþjóninum.</string>
     <string name="terminal_projects_empty_title">Engin verkefni ennþá</string>
-    <string name="terminal_projects_empty_message">Bættu við verkefni á upphafsskjá og ræstu svo shell hér.</string>
+    <string name="terminal_projects_empty_message">Bættu við verkefni á heimaskjá og ræstu svo shell hér.</string>
     <string name="terminal_error_create">Gat ekki ræst shell.</string>
     <string name="terminal_connecting_title">Tengist</string>
     <string name="terminal_connecting_subtitle">Ræsi shell…</string>
@@ -456,11 +456,11 @@
     <string name="session_chat_more_options">Fleiri valkostir</string>
     <string name="session_chat_menu_rename">Endurnefna lotu</string>
     <string name="session_chat_menu_review_changes">Yfirfara breytingar</string>
-    <string name="session_chat_menu_fork">Afrita lotu</string>
+    <string name="session_chat_menu_fork">Kvísla lotu</string>
     <string name="session_chat_menu_browse_files">Skoða skrár</string>
     <string name="session_chat_menu_session_context">Samhengi lotu</string>
     <string name="session_chat_menu_copy_session_id">Afrita auðkenni lotu</string>
-    <string name="session_chat_menu_archive">Skjalasafn</string>
+    <string name="session_chat_menu_archive">Setja í skjalasafn</string>
     <string name="session_chat_menu_report_problem">Tilkynna vandamál</string>
     <string name="session_chat_menu_delete">Eyða</string>
     <string name="session_chat_delete_dialog_title">Eyða lotu</string>
@@ -469,11 +469,11 @@
     <string name="session_chat_rename_dialog_title">Endurnefna lotu</string>
     <string name="session_chat_rename_dialog_save">Vista</string>
     <string name="session_chat_title_hint">Titill</string>
-    <string name="session_chat_fork_dialog_title">Afrita lotu</string>
-    <string name="session_chat_fork_dialog_confirm">Afrita</string>
+    <string name="session_chat_fork_dialog_title">Kvísla lotu</string>
+    <string name="session_chat_fork_dialog_confirm">Kvísla</string>
     <string name="session_chat_fork_dialog_error_empty_title">Sláðu inn titil lotu</string>
-    <string name="session_chat_fork_dialog_error_failed">Gat ekki afritað lotu.</string>
-    <string name="session_chat_fork_result_title">Lota afrituð</string>
+    <string name="session_chat_fork_dialog_error_failed">Gat ekki kvíslað lotu.</string>
+    <string name="session_chat_fork_result_title">Lotu kvíslað</string>
     <string name="session_chat_fork_result_message_ready">„%1$s“ er tilbúin.</string>
     <string name="session_chat_fork_result_open">Opna</string>
     <string name="session_chat_fork_result_stay_here">Vera hér</string>
@@ -487,8 +487,8 @@
     <string name="session_chat_commands_back">Til baka í skipanir</string>
     <string name="session_chat_commands_new_label">Ný</string>
     <string name="session_chat_commands_new_description">Hefja nýja lotu</string>
-    <string name="session_chat_commands_fork_label">Afrita</string>
-    <string name="session_chat_commands_fork_description">Afrita þessa lotu</string>
+    <string name="session_chat_commands_fork_label">Kvísla</string>
+    <string name="session_chat_commands_fork_description">Kvísla þessa lotu</string>
     <string name="session_chat_commands_undo_label">Afturkalla</string>
     <string name="session_chat_commands_undo_description">Afturkalla síðustu skilaboð</string>
     <string name="session_chat_commands_redo_label">Endurtaka</string>
@@ -566,8 +566,8 @@
         <item quantity="other">%1$d í biðröð</item>
     </plurals>
     <plurals name="session_chat_activity_queued_prompts">
-        <item quantity="one">%1$d kvaðning í biðröð</item>
-        <item quantity="other">%1$d kvaðningar í biðröð</item>
+        <item quantity="one">%1$d fyrirmæli í biðröð</item>
+        <item quantity="other">%1$d fyrirmæli í biðröð</item>
     </plurals>
     <string name="session_chat_activity_side_question_failed">Hliðarspurning mistókst</string>
     <plurals name="session_chat_activity_side_questions_failed">
@@ -637,7 +637,7 @@
     <string name="timeline_state_error_title">Ekki tókst að hlaða skilaboðum</string>
     <string name="timeline_state_error_fallback">Tímalínan hlóðst ekki.</string>
     <string name="timeline_state_retry">Reyndu aftur</string>
-    <string name="timeline_state_empty">Engin skilaboð enn. Sendu kvaðningu til að byrja.</string>
+    <string name="timeline_state_empty">Engin skilaboð enn. Sendu fyrirmæli til að byrja.</string>
     <string name="timeline_state_refreshing">Endurnýja skilaboð</string>
     <string name="timeline_message_assistant">Skilaboð frá aðstoðarmanni</string>
     <string name="timeline_message_actions_hint_long_press">Haltu inni til að sýna aðgerðir skilaboða</string>
@@ -871,12 +871,12 @@
     <string name="session_chat_compact_success_usage">Samhengi þjappað · %1$d%% → %2$d%%</string>
     <string name="session_chat_compact_failure">Ekki tókst að þjappa samhengi lotunnar.</string>
     <string name="session_chat_revert_undo_failed">Ekki tókst að afturkalla síðustu skilaboð.</string>
-    <string name="session_chat_revert_failed">Ekki tókst að snúa skilaboðum til baka.</string>
+    <string name="session_chat_revert_failed">Ekki tókst að afturkalla skilaboð.</string>
     <string name="session_chat_revert_redo_failed">Ekki tókst að endurtaka.</string>
     <string name="session_chat_revert_cancel_failed">Ekki tókst að hætta við afturköllun.</string>
     <string name="session_chat_revert_commit_failed">Ekki tókst að staðfesta afturköllun.</string>
-    <string name="session_chat_fork_rename_failed">Fork var stofnað en ekki tókst að endurnefna það.</string>
-    <string name="session_chat_pending_prompt_update_failed">Ekki tókst að uppfæra bíðandi kvaðningu</string>
+    <string name="session_chat_fork_rename_failed">Kvísl var stofnuð en ekki tókst að endurnefna hana.</string>
+    <string name="session_chat_pending_prompt_update_failed">Ekki tókst að uppfæra bíðandi fyrirmæli</string>
     <string name="session_chat_shell_stop_failed">Ekki tókst að stöðva shell. Reyndu aftur.</string>
     <string name="session_chat_shell_status_running">Í gangi</string>
     <string name="session_chat_shell_status_exited">Lokið</string>
@@ -891,7 +891,7 @@
     <string name="session_chat_sheet_copy_output">Afrita úttak</string>
     <string name="session_chat_sheet_message_actions_title">Skilaboð</string>
     <string name="session_chat_sheet_message_actions_revert">Afturkalla skilaboð</string>
-    <string name="session_chat_sheet_message_actions_fork">Fork héðan</string>
+    <string name="session_chat_sheet_message_actions_fork">Kvísla héðan</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Afrita kóðablokk</string>
     <string name="session_chat_sheet_message_actions_copy_message">Afrita skilaboð</string>
     <string name="session_chat_sheet_message_actions_select_text">Velja texta</string>
@@ -1017,8 +1017,8 @@
         <item quantity="one">%1$d óvistuð skrá</item>
         <item quantity="other">%1$d óvistaðar skrár</item>
     </plurals>
-    <string name="component_branch_pill_a11y_branch">Branch %1$s</string>
-    <string name="component_branch_pill_a11y_worktree_branch">Worktree-branch %1$s</string>
+    <string name="component_branch_pill_a11y_branch">Grein %1$s</string>
+    <string name="component_branch_pill_a11y_worktree_branch">Worktree-grein %1$s</string>
     <string name="component_branch_pill_a11y_no_changes">%1$s, engar breytingar</string>
     <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
     <string name="component_branch_pill_a11y_added">%1$s, %2$d bætt við</string>
@@ -1033,8 +1033,8 @@
     <string name="session_chat_reply_error_permission_reason">Ekki tókst að senda svarið. %1$s.</string>
     <string name="session_chat_reply_error_question">Ekki tókst að senda svarið. Reyndu aftur.</string>
     <string name="session_chat_reply_error_question_reason">Ekki tókst að senda svarið. %1$s.</string>
-    <string name="session_chat_reply_error_dismiss">Ekki tókst að hafna spurningunni. Reyndu aftur.</string>
-    <string name="session_chat_reply_error_dismiss_reason">Ekki tókst að hafna spurningunni. %1$s.</string>
+    <string name="session_chat_reply_error_dismiss">Ekki tókst að loka spurningunni. Reyndu aftur.</string>
+    <string name="session_chat_reply_error_dismiss_reason">Ekki tókst að loka spurningunni. %1$s.</string>
     <string name="session_chat_permission_unavailable">Heimildarbeiðnin er ekki lengur tiltæk</string>
     <string name="session_chat_question_unavailable">Spurningin er ekki lengur tiltæk</string>
     <string name="session_chat_permission_tree_failed">Ekki tókst að endurnýja lotutré heimildarbeiðna</string>
@@ -1052,9 +1052,9 @@
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Virknikort</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Skref í gangi á einu lifandi korti sem fellur saman í yfirlit</string>
     <string name="session_chat_sheet_picker_model">Líkan</string>
-    <string name="session_chat_sheet_picker_agent_mode">Fulltrúaháttur</string>
+    <string name="session_chat_sheet_picker_agent_mode">Fulltrúahamur</string>
     <string name="session_chat_sheet_picker_variant">Afbrigði</string>
-    <string name="session_chat_sheet_picker_back_to_providers">Til baka í veitendur</string>
+    <string name="session_chat_sheet_picker_back_to_providers">Til baka í þjónustuveitur</string>
     <string name="session_chat_sheet_picker_no_models_match">Engin líkön passa við síuna</string>
     <string name="session_chat_sheet_picker_filter_models_hint">Sía líkön...</string>
     <string name="session_chat_sheet_tool_detail_provider_response">Svar þjónustuveitu</string>
@@ -1126,7 +1126,7 @@
     <string name="session_context_stat_usage">Notkun</string>
     <string name="session_context_stat_input_tokens">Inntakstókn</string>
     <string name="session_context_stat_output_tokens">Úttakstókn</string>
-    <string name="session_context_stat_reasoning_tokens">Rökstuðningstókn</string>
+    <string name="session_context_stat_reasoning_tokens">Rökhugsunartókn</string>
     <string name="session_context_stat_cache_tokens">Skyndiminnistókn (lestur/skrif)</string>
     <string name="session_context_stat_user_messages">Skilaboð notanda</string>
     <string name="session_context_stat_assistant_messages">Skilaboð aðstoðarmanns</string>
@@ -1146,7 +1146,7 @@
     <string name="settings_section_help_feedback">Hjálp og ábendingar</string>
     <string name="settings_section_appearance">Útlit</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Heim</string>
+    <string name="settings_section_home">Heimaskjár</string>
     <string name="settings_section_session_cache">Skyndiminni lota</string>
     <string name="settings_section_privacy">Persónuvernd</string>
     <string name="settings_section_about">Um appið</string>
@@ -1185,7 +1185,7 @@
     <string name="settings_follow_up_subtitle_queue">Biðröð · aðeins V2-netþjónar. V1 styður þetta ekki.</string>
     <string name="settings_follow_up_unsupported">Ekki stutt á V1. Þessi netþjónn sendir alltaf strax.</string>
     <string name="settings_worktrees_title">Worktree</string>
-    <string name="settings_worktrees_subtitle">Sýna worktree og branches hvers verkefnis á heimaskjá og leyfa Nýrri lotu að velja worktree þegar þú heldur henni inni.</string>
+    <string name="settings_worktrees_subtitle">Sýna worktree og greinar hvers verkefnis á heimaskjá og leyfa Nýrri lotu að velja worktree þegar þú heldur henni inni.</string>
     <string name="settings_session_rows_title">Raðir lota</string>
     <string name="settings_session_rows_compact_title">Þétt</string>
     <string name="settings_session_rows_compact_subtitle">Tvær línur: titill og tími, svo verkefni / worktree</string>
@@ -1267,7 +1267,7 @@
     <string name="appearance_theme_blurb_hotline">Hlutlaust viðmót, áberandi bleikt</string>
     <string name="appearance_theme_blurb_phosphor">Hlutlaust viðmót, CRT-grænt</string>
     <string name="appearance_syntax_name_match">Passa við þema</string>
-    <string name="appearance_syntax_blurb_match">Nota eigin tákn þema viðmótsins</string>
+    <string name="appearance_syntax_blurb_match">Nota eigin tókn þema viðmótsins</string>
     <string name="appearance_syntax_blurb_nocturne">One Dark-fjölskylda</string>
     <string name="appearance_syntax_blurb_citrus">Solarized-fjölskylda</string>
     <string name="appearance_syntax_blurb_paper">GitHub-fjölskylda</string>
@@ -1396,7 +1396,7 @@
     <string name="session_search_archived_tag">Í skjalasafni</string>
     <string name="session_search_scope_selected">%1$s, valið</string>
     <string name="keyboard_shortcuts_group_session">Lota</string>
-    <string name="keyboard_shortcuts_group_prompt">Prompt</string>
+    <string name="keyboard_shortcuts_group_prompt">Fyrirmæli</string>
     <string name="keyboard_shortcuts_group_go">Fara</string>
     <string name="keyboard_shortcuts_new_session">Ný lota</string>
     <string name="keyboard_shortcuts_command_palette">Skipanaspjald</string>
@@ -1411,7 +1411,7 @@
     <string name="keyboard_shortcuts_send_note">Senda athugasemd</string>
     <string name="keyboard_shortcuts_next_question">Næsta spurning</string>
     <string name="keyboard_shortcuts_submit_answers">Senda svör</string>
-    <string name="keyboard_shortcuts_dismiss_question">Hafna spurningu</string>
+    <string name="keyboard_shortcuts_dismiss_question">Loka spurningu</string>
     <string name="keyboard_shortcuts_toggle_sidebar">Sýna/fela hliðarstiku</string>
     <string name="keyboard_shortcuts_next_session">Næsta lota</string>
     <string name="keyboard_shortcuts_previous_session">Fyrri lota</string>
@@ -1436,11 +1436,11 @@
     <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
     <string name="changes_source_last_turn_empty_title">Engar breytingar</string>
     <string name="changes_source_last_turn_empty_message">Síðasta lokna umferð breytti engum skrám.</string>
-    <string name="changes_loading_title">Hleð breytingar</string>
+    <string name="changes_loading_title">Hleð breytingum</string>
     <string name="changes_loading_message">Sæki mismun…</string>
     <string name="changes_no_turn_title">Engin lokin umferð</string>
-    <string name="changes_no_turn_message">Sendu prompt, bíddu eftir að honum ljúki og reyndu aftur.</string>
-    <string name="changes_error_title">Ekki tókst að hlaða breytingar</string>
+    <string name="changes_no_turn_message">Sendu fyrirmæli, bíddu eftir að þeim ljúki og reyndu aftur.</string>
+    <string name="changes_error_title">Ekki tókst að hlaða breytingum</string>
     <string name="changes_error_fallback">Breytingarnar hlóðust ekki.</string>
     <string name="changes_error_request_failed">Beiðni mistókst</string>
     <string name="changes_error_turn_moved_folders">Þessi umferð færði möppur, svo ekki er hægt að sýna breytingar hennar saman.</string>
@@ -1485,8 +1485,8 @@
     <string name="component_todo_item_status_in_progress">í vinnslu</string>
     <string name="component_todo_item_status_completed">lokið</string>
     <string name="component_todo_item_status_cancelled">hætt við</string>
-    <string name="component_todos_pill_accessibility_label">Verkefni lotu, %1$d af %2$d lokið</string>
-    <string name="component_todos_pill_accessibility_label_active">Verkefni lotu, %1$d af %2$d lokið, %3$s</string>
+    <string name="component_todos_pill_accessibility_label">Gátlisti lotu, %1$d af %2$d lokið</string>
+    <string name="component_todos_pill_accessibility_label_active">Gátlisti lotu, %1$d af %2$d lokið, %3$s</string>
     <string name="component_reasoning_row_thought_duration">Hugsaði · %1$s</string>
     <string name="component_reasoning_row_duration_seconds">%1$s sek.</string>
     <string name="component_reasoning_row_duration_ms">%1$dms</string>
@@ -1520,7 +1520,7 @@
     <string name="component_filter_tabs_unseen">nýtt</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Í gær</string>
-    <string name="component_composer_reverting_title">Sný þessum skilaboðum til baka</string>
+    <string name="component_composer_reverting_title">Afturkalla þessi skilaboð</string>
     <string name="session_new_title">Ný seta</string>
     <string name="session_list_dock_add_project">Bæta við verkefni</string>
     <string name="theme_error_preset_not_found">Þemaforstilling fannst ekki</string>
@@ -1551,7 +1551,7 @@
     <string name="component_image_loading_label">%1$s, hleðst</string>
     <string name="session_list_dock_new_session">Ný lota</string>
     <string name="component_composer_always_allows">Leyfir alltaf: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">Hætta í hliðarspurningu</string>
+    <string name="component_composer_leave_side_question_mode">Hætta í hliðarspurningarham</string>
     <string name="session_list_worktree_empty_other_projects">Hreinsaðu síuna til að sjá lotur í öðrum verkefnum.</string>
     <string name="component_attachment_uploading">Hleð upp…</string>
     <string name="component_composer_deny">Neita</string>
@@ -1588,7 +1588,7 @@
     <string name="component_page_indicator_label">Síða %1$d af %2$d</string>
     <string name="component_composer_next">Næsta</string>
     <string name="component_message_image_label">Mynd %1$s</string>
-    <string name="component_composer_leave_shell_mode">Hætta í skelham</string>
+    <string name="component_composer_leave_shell_mode">Hætta í shell-ham</string>
     <string name="dictation_action_downloading">Sæki…</string>
     <string name="component_image_viewer_share">Deila</string>
     <string name="session_list_status_failed">Mistókst</string>
@@ -1640,7 +1640,7 @@
     <string name="component_composer_previous_question">Fyrri spurning</string>
     <string name="component_activity_card_agent">Fulltrúi</string>
     <string name="session_list_section_today">Í dag</string>
-    <string name="component_composer_child_lockout">Ekki er hægt að senda prompt í undirlotur.</string>
+    <string name="component_composer_child_lockout">Ekki er hægt að senda fyrirmæli í undirlotur.</string>
     <string name="component_attachment_uploading_percent">Hleð upp %1$d%%</string>
     <string name="component_composer_custom_answer_hint">Sláðu inn eigið svar</string>
     <string name="component_composer_cancel_revert">Hætta við afturköllun</string>
@@ -1747,7 +1747,7 @@
     <string name="component_composer_next_permission">Næsta heimildarbeiðni</string>
     <string name="session_list_dock_project_filter">Verkefnasía</string>
     <string name="component_split_pane_resize_hint">Ýttu tvisvar til að fela hliðarstikuna</string>
-    <string name="component_branch_pill_shows_details_hint">Sýnir upplýsingar um branch</string>
+    <string name="component_branch_pill_shows_details_hint">Sýnir upplýsingar um grein</string>
     <string name="component_composer_permission_requested">Heimildar óskað</string>
     <string name="component_thinking">Hugsar</string>
     <string name="dictation_model_downloading_title">%1$s sækir %2$s</string>
@@ -1776,7 +1776,7 @@
         <item quantity="one">%1$d worktree</item>
         <item quantity="other">%1$d worktree</item>
     </plurals>
-    <string name="worktrees_main_checkout">Aðal-checkout</string>
+    <string name="worktrees_main_checkout">Aðalmappa</string>
     <string name="worktrees_cannot_remove">Ekki hægt að fjarlægja</string>
     <plurals name="worktrees_changed">
         <item quantity="one">%1$d breytt</item>

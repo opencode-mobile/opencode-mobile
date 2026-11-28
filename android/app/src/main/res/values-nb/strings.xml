@@ -73,7 +73,7 @@
     <string name="server_error_session_busy">Sesjonen er opptatt</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Autentisering mislyktes</string>
-    <string name="connection_error_unhealthy">Serveren rapporterer dårlig helsetilstand</string>
+    <string name="connection_error_unhealthy">Serveren melder at den ikke fungerer som den skal</string>
     <string name="connection_scanner_title">Skann QR-kode for paring</string>
     <string name="connection_scanner_card_title">QR-kode for paring i OpenCode</string>
     <string name="connection_scanner_card_body">Fra opencode pair --remote. Vanlig pair viser en QR-kode bare når serveren er tilgjengelig utenfor localhost.</string>
@@ -91,9 +91,9 @@
     <string name="onboarding_connect_page_setup_link">Trenger du serveren først?</string>
     <string name="onboarding_features_title">Dette kan du\ngjøre herfra</string>
     <string name="onboarding_features_sessions_title">Sesjoner</string>
-    <string name="onboarding_features_sessions_detail">Vis, åpne, opprett, gi nytt navn, forgren, arkiver, slett</string>
+    <string name="onboarding_features_sessions_detail">Vis, åpne, opprett, gi nytt navn, fork, arkiver, slett</string>
     <string name="onboarding_features_chat_title">Chat og avbryt</string>
-    <string name="onboarding_features_chat_detail">Send meldinger og stopp pågående arbeid</string>
+    <string name="onboarding_features_chat_detail">Send prompter og stopp pågående arbeid</string>
     <string name="onboarding_features_permissions_title">Tillatelser</string>
     <string name="onboarding_features_permissions_detail">Godkjenn eller avslå forespørsler (valget huskes ikke varig)</string>
     <string name="onboarding_features_changes_title">Endringer</string>
@@ -102,7 +102,7 @@
     <string name="onboarding_features_live_detail">Hendelsesstrøm i forgrunnen; oppdater etter gjenoppkobling</string>
     <string name="onboarding_setup_title">Sett opp opencode serve</string>
     <string name="onboarding_setup_intro">Appen snakker med en opencode-server du kjører selv. Kort veiledning under – alle detaljer finner du i den offisielle dokumentasjonen.</string>
-    <string name="onboarding_setup_step_number">Trinn %1$d</string>
+    <string name="onboarding_setup_step_number">Steg %1$d</string>
     <string name="onboarding_setup_step1_title">Start serveren på maskinen din</string>
     <string name="onboarding_setup_step1_body">Kjør opencode-serveren (headless) i prosjektet ditt. La den kjøre mens du bruker telefonen.</string>
     <string name="onboarding_setup_step2_title">Krev passord</string>
@@ -121,7 +121,7 @@
         <item quantity="other">%1$d servertilkoblinger</item>
     </plurals>
     <string name="servers_saved">Lagret</string>
-    <string name="server_health_title">Serverhelse</string>
+    <string name="server_health_title">Serverstatus</string>
     <string name="server_health_ms_ping">ms ping</string>
     <string name="server_health_last_30_min">Siste 30 min</string>
     <string name="server_health_30_min_ago">30 min siden</string>
@@ -197,7 +197,7 @@
     </plurals>
     <string name="server_health_quick_view_measuring">Måler…</string>
     <string name="server_health_details">Detaljer</string>
-    <string name="server_health_open_details">Åpne serverhelse</string>
+    <string name="server_health_open_details">Åpne serverstatus</string>
     <string name="server_health_unknown_value">—</string>
     <string name="server_health_axis_ago">%1$s siden</string>
     <string name="server_health_hero_streams">%1$d av %2$d hendelsesstrømmer live</string>
@@ -265,19 +265,19 @@
     <string name="home_reorder_note">Dra for å endre rekkefølge. Worktrees følger prosjektet sitt.</string>
     <string name="home_session_actions_title">Sesjonshandlinger</string>
     <string name="home_session_actions_rename">Gi sesjonen nytt navn</string>
-    <string name="home_session_actions_fork">Forgren sesjon</string>
+    <string name="home_session_actions_fork">Fork sesjon</string>
     <string name="home_session_actions_archive">Arkiver</string>
     <string name="home_rename_title">Gi sesjonen nytt navn</string>
     <string name="home_session_title_hint">Tittel</string>
-    <string name="home_fork_title">Forgren sesjon</string>
-    <string name="home_fork_confirm">Forgren</string>
-    <string name="home_fork_result_title">Sesjon forgrenet</string>
+    <string name="home_fork_title">Fork sesjon</string>
+    <string name="home_fork_confirm">Fork</string>
+    <string name="home_fork_result_title">Sesjon forket</string>
     <string name="home_fork_result_message">«%1$s» er klar.</string>
     <string name="home_fork_result_stay">Bli her</string>
     <string name="home_delete_title">Slett sesjon</string>
     <string name="home_delete_message">Slette sesjonen «%1$s»?</string>
     <string name="home_session_error_empty_title">Skriv inn en sesjonstittel</string>
-    <string name="home_session_error_nothing_to_fork">Ingenting å forgrene ennå</string>
+    <string name="home_session_error_nothing_to_fork">Ingenting å forke ennå</string>
     <string name="home_session_error_archive_failed">Kunne ikke arkivere sesjonen.</string>
     <string name="home_session_error_delete_failed">Kunne ikke slette sesjonen.</string>
     <string name="home_session_error_request_failed">Forespørselen mislyktes</string>
@@ -427,7 +427,7 @@
     <string name="terminal_title">Terminal</string>
     <string name="terminal_catalog_title">Terminaler</string>
     <string name="terminal_catalog_loading">Laster terminaler</string>
-    <string name="terminal_catalog_empty_title">Ingen kjørende shell</string>
+    <string name="terminal_catalog_empty_title">Ingen kjørende shells</string>
     <string name="terminal_catalog_empty_message">Start en shell for et prosjekt. Den er ikke knyttet til en chatsesjon.</string>
     <string name="terminal_select_title">Velg en shell</string>
     <string name="terminal_select_message">Velg en shell fra listen.</string>
@@ -456,7 +456,7 @@
     <string name="session_chat_more_options">Flere valg</string>
     <string name="session_chat_menu_rename">Gi sesjonen nytt navn</string>
     <string name="session_chat_menu_review_changes">Se gjennom endringer</string>
-    <string name="session_chat_menu_fork">Forgren sesjon</string>
+    <string name="session_chat_menu_fork">Fork sesjon</string>
     <string name="session_chat_menu_browse_files">Bla gjennom filer</string>
     <string name="session_chat_menu_session_context">Sesjonskontekst</string>
     <string name="session_chat_menu_copy_session_id">Kopier sesjons-ID</string>
@@ -469,11 +469,11 @@
     <string name="session_chat_rename_dialog_title">Gi sesjonen nytt navn</string>
     <string name="session_chat_rename_dialog_save">Lagre</string>
     <string name="session_chat_title_hint">Tittel</string>
-    <string name="session_chat_fork_dialog_title">Forgren sesjon</string>
-    <string name="session_chat_fork_dialog_confirm">Forgren</string>
+    <string name="session_chat_fork_dialog_title">Fork sesjon</string>
+    <string name="session_chat_fork_dialog_confirm">Fork</string>
     <string name="session_chat_fork_dialog_error_empty_title">Skriv inn en sesjonstittel</string>
-    <string name="session_chat_fork_dialog_error_failed">Kunne ikke forgrene sesjonen.</string>
-    <string name="session_chat_fork_result_title">Sesjon forgrenet</string>
+    <string name="session_chat_fork_dialog_error_failed">Kunne ikke forke sesjonen.</string>
+    <string name="session_chat_fork_result_title">Sesjon forket</string>
     <string name="session_chat_fork_result_message_ready">«%1$s» er klar.</string>
     <string name="session_chat_fork_result_open">Åpne</string>
     <string name="session_chat_fork_result_stay_here">Bli her</string>
@@ -487,13 +487,13 @@
     <string name="session_chat_commands_back">Tilbake til kommandoer</string>
     <string name="session_chat_commands_new_label">Ny</string>
     <string name="session_chat_commands_new_description">Start en ny sesjon</string>
-    <string name="session_chat_commands_fork_label">Forgren</string>
-    <string name="session_chat_commands_fork_description">Forgren denne sesjonen</string>
+    <string name="session_chat_commands_fork_label">Fork</string>
+    <string name="session_chat_commands_fork_description">Fork denne sesjonen</string>
     <string name="session_chat_commands_undo_label">Angre</string>
     <string name="session_chat_commands_undo_description">Angre siste melding</string>
     <string name="session_chat_commands_redo_label">Gjør om</string>
     <string name="session_chat_commands_redo_description">Gjør om angret melding</string>
-    <string name="session_chat_commands_compact_label">Kompakt</string>
+    <string name="session_chat_commands_compact_label">Komprimer</string>
     <string name="session_chat_commands_compact_description">Komprimer sesjonskonteksten</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">Åpne prosjektets shell</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_suggestion_file">Fil</string>
     <string name="session_chat_suggestion_no_matches">Ingen treff</string>
     <string name="session_chat_suggestion_no_commands">Ingen kommandoer</string>
-    <string name="session_chat_suggestion_badge_skill">ferdighet</string>
+    <string name="session_chat_suggestion_badge_skill">skill</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
     <string name="session_chat_move_worktree_current">Gjeldende worktree</string>
     <string name="session_chat_move_worktree_menu_title">Flytt til worktree…</string>
@@ -566,8 +566,8 @@
         <item quantity="other">%1$d i kø</item>
     </plurals>
     <plurals name="session_chat_activity_queued_prompts">
-        <item quantity="one">%1$d melding i kø</item>
-        <item quantity="other">%1$d meldinger i kø</item>
+        <item quantity="one">%1$d prompt i kø</item>
+        <item quantity="other">%1$d prompter i kø</item>
     </plurals>
     <string name="session_chat_activity_side_question_failed">Sidespørsmålet mislyktes</string>
     <plurals name="session_chat_activity_side_questions_failed">
@@ -637,7 +637,7 @@
     <string name="timeline_state_error_title">Kunne ikke laste meldinger</string>
     <string name="timeline_state_error_fallback">Tidslinjen ble ikke lastet.</string>
     <string name="timeline_state_retry">Prøv igjen</string>
-    <string name="timeline_state_empty">Ingen meldinger ennå. Send en melding for å starte.</string>
+    <string name="timeline_state_empty">Ingen meldinger ennå. Send en prompt for å starte.</string>
     <string name="timeline_state_refreshing">Oppdaterer meldinger</string>
     <string name="timeline_message_assistant">Assistentmelding</string>
     <string name="timeline_message_actions_hint_long_press">Trykk og hold for å vise meldingshandlinger</string>
@@ -687,7 +687,7 @@
     <string name="tool_title_plan">Plan</string>
     <string name="tool_title_edit">Rediger</string>
     <string name="tool_title_write">Skriv</string>
-    <string name="tool_title_skill">Ferdighet</string>
+    <string name="tool_title_skill">Skill</string>
     <string name="tool_title_patch">Patch</string>
     <string name="tool_title_get_issue">Hent sak</string>
     <string name="tool_title_save_issue">Lagre sak</string>
@@ -743,8 +743,8 @@
         <item quantity="other">%1$d skrivinger</item>
     </plurals>
     <plurals name="tool_count_skill">
-        <item quantity="one">%1$d ferdighet</item>
-        <item quantity="other">%1$d ferdigheter</item>
+        <item quantity="one">%1$d skill</item>
+        <item quantity="other">%1$d skills</item>
     </plurals>
     <plurals name="tool_count_patch">
         <item quantity="one">%1$d patch</item>
@@ -815,9 +815,9 @@
     <string name="timeline_step_running_named">Kjører %1$s</string>
     <string name="timeline_step_ran_named">Kjørte %1$s</string>
     <string name="timeline_step_ran_command">Kjørte kommando</string>
-    <string name="timeline_step_loading_skill">Laster ferdighet…</string>
-    <string name="timeline_step_loading_skill_named">Laster ferdighet %1$s</string>
-    <string name="timeline_step_skill_named">Ferdighet %1$s</string>
+    <string name="timeline_step_loading_skill">Laster skill…</string>
+    <string name="timeline_step_loading_skill_named">Laster skill %1$s</string>
+    <string name="timeline_step_skill_named">Skill %1$s</string>
     <string name="timeline_step_thought_duration">Tenkte · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">Utforsket — %1$s</string>
@@ -863,7 +863,7 @@
     <string name="timeline_failure_session_work_failed">Sesjonsarbeidet mislyktes</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Velg en modell</string>
-    <string name="timeline_failure_compact">Kompakt</string>
+    <string name="timeline_failure_compact">Komprimer</string>
     <string name="session_chat_compact_status">Komprimerer…</string>
     <string name="session_chat_turn_sending">Sender…</string>
     <string name="session_chat_turn_sending_percent">Sender %1$d %%</string>
@@ -875,8 +875,8 @@
     <string name="session_chat_revert_redo_failed">Kunne ikke gjøre om.</string>
     <string name="session_chat_revert_cancel_failed">Kunne ikke avbryte tilbakestillingen.</string>
     <string name="session_chat_revert_commit_failed">Kunne ikke bekrefte tilbakestillingen.</string>
-    <string name="session_chat_fork_rename_failed">Forgreningen ble opprettet, men kunne ikke gis nytt navn.</string>
-    <string name="session_chat_pending_prompt_update_failed">Kunne ikke oppdatere ventende melding</string>
+    <string name="session_chat_fork_rename_failed">Forken ble opprettet, men kunne ikke gis nytt navn.</string>
+    <string name="session_chat_pending_prompt_update_failed">Kunne ikke oppdatere ventende prompt</string>
     <string name="session_chat_shell_stop_failed">Kunne ikke stoppe shellen. Prøv igjen.</string>
     <string name="session_chat_shell_status_running">Kjører</string>
     <string name="session_chat_shell_status_exited">Avsluttet</string>
@@ -891,7 +891,7 @@
     <string name="session_chat_sheet_copy_output">Kopier utdata</string>
     <string name="session_chat_sheet_message_actions_title">Melding</string>
     <string name="session_chat_sheet_message_actions_revert">Tilbakestill melding</string>
-    <string name="session_chat_sheet_message_actions_fork">Forgren herfra</string>
+    <string name="session_chat_sheet_message_actions_fork">Fork herfra</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Kopier kodeblokk</string>
     <string name="session_chat_sheet_message_actions_copy_message">Kopier melding</string>
     <string name="session_chat_sheet_message_actions_select_text">Merk tekst</string>
@@ -927,7 +927,7 @@
     <string name="session_chat_sheet_pending_prompts_delete">Slett</string>
     <string name="session_chat_sheet_side_question_done">Ferdig</string>
     <string name="session_chat_sheet_side_question_not_added">Ikke lagt til i samtalen</string>
-    <string name="session_chat_sheet_todos_title">Sesjonens gjøremål</string>
+    <string name="session_chat_sheet_todos_title">Oppgaver i sesjonen</string>
     <string name="session_chat_sheet_todos_progress">%1$d av %2$d fullført</string>
     <string name="session_chat_goal_pill">Mål</string>
     <string name="session_chat_goal_pill_paused">Mål satt på pause</string>
@@ -1286,7 +1286,7 @@
     <string name="appearance_mode_note_system">Følger telefonens lyse eller mørke innstilling.</string>
     <string name="appearance_mode_note_light">Alltid lys, uansett telefonens innstilling.</string>
     <string name="appearance_mode_note_dark">Alltid mørk, uansett telefonens innstilling.</string>
-    <string name="appearance_text_home_title">Tekst i hjemlisten</string>
+    <string name="appearance_text_home_title">Tekst i Hjem-listen</string>
     <string name="appearance_text_session_chat_title">Tekst i sesjonschatten</string>
     <string name="appearance_text_code_title">Kodetekst</string>
     <string name="appearance_text_size_label">Størrelse</string>
@@ -1396,7 +1396,7 @@
     <string name="session_search_archived_tag">Arkivert</string>
     <string name="session_search_scope_selected">%1$s, valgt</string>
     <string name="keyboard_shortcuts_group_session">Sesjon</string>
-    <string name="keyboard_shortcuts_group_prompt">Melding</string>
+    <string name="keyboard_shortcuts_group_prompt">Prompt</string>
     <string name="keyboard_shortcuts_group_go">Gå til</string>
     <string name="keyboard_shortcuts_new_session">Ny sesjon</string>
     <string name="keyboard_shortcuts_command_palette">Kommandopalett</string>
@@ -1439,7 +1439,7 @@
     <string name="changes_loading_title">Laster endringer</string>
     <string name="changes_loading_message">Henter diffen…</string>
     <string name="changes_no_turn_title">Ingen fullført runde</string>
-    <string name="changes_no_turn_message">Send en melding, vent til den er fullført, og prøv igjen.</string>
+    <string name="changes_no_turn_message">Send en prompt, vent til den er fullført, og prøv igjen.</string>
     <string name="changes_error_title">Kunne ikke laste endringer</string>
     <string name="changes_error_fallback">Endringene ble ikke lastet.</string>
     <string name="changes_error_request_failed">Forespørselen mislyktes</string>
@@ -1640,7 +1640,7 @@
     <string name="component_composer_previous_question">Forrige spørsmål</string>
     <string name="component_activity_card_agent">Agent</string>
     <string name="session_list_section_today">I dag</string>
-    <string name="component_composer_child_lockout">Underordnede sesjoner kan ikke få meldinger.</string>
+    <string name="component_composer_child_lockout">Underordnede sesjoner kan ikke få prompter.</string>
     <string name="component_attachment_uploading_percent">Laster opp %1$d %%</string>
     <string name="component_composer_custom_answer_hint">Skriv inn et eget svar</string>
     <string name="component_composer_cancel_revert">Avbryt tilbakestilling</string>
@@ -1743,7 +1743,7 @@
     <string name="component_activity_sheet_working_count">Jobber %1$d</string>
     <string name="session_list_status_retrying">Prøver igjen</string>
     <string name="component_attachment_remove">Fjern %1$s</string>
-    <string name="component_composer_send_steer">Send som styring</string>
+    <string name="component_composer_send_steer">Send som Styr</string>
     <string name="component_composer_next_permission">Neste tillatelsesforespørsel</string>
     <string name="session_list_dock_project_filter">Prosjektfilter</string>
     <string name="component_split_pane_resize_hint">Dobbelttrykk for å skjule sidefeltet</string>
@@ -1776,7 +1776,7 @@
         <item quantity="one">%1$d worktree</item>
         <item quantity="other">%1$d worktrees</item>
     </plurals>
-    <string name="worktrees_main_checkout">Hovedmappe</string>
+    <string name="worktrees_main_checkout">Hovedkopi</string>
     <string name="worktrees_cannot_remove">Kan ikke fjernes</string>
     <plurals name="worktrees_changed">
         <item quantity="one">%1$d endret</item>

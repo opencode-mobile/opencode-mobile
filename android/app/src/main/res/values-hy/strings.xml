@@ -14,7 +14,7 @@
     <string name="connection_setup_title_first">Միանալ սերվերին</string>
     <string name="connection_setup_title_add">Ավելացնել սերվեր</string>
     <string name="connection_setup_title_edit">Խմբագրել սերվերը</string>
-    <string name="connection_setup_action_connect">Միացեք</string>
+    <string name="connection_setup_action_connect">Միանալ</string>
     <string name="connection_setup_action_connecting">Միացում…</string>
     <string name="connection_setup_action_save">Պահել</string>
     <string name="connection_setup_action_saving">Պահվում է…</string>
@@ -29,7 +29,7 @@
     <string name="connection_setup_instructions_run">Ձեր համակարգչում գործարկեք սա, ապա սկանավորեք QR-ը։</string>
     <string name="connection_setup_instructions_first_run">Առաջին գործարկումը տևում է մոտ մեկ րոպե։ Պահանջվում է OpenCode 2.0.25 կամ ավելի նոր տարբերակ։ Ծառայությունը կգործարկվի, եթե դեռ միացված չէ։</string>
     <string name="connection_setup_instructions_same_wifi_title">Փոխարենը նույն Wi-Fi-ով</string>
-    <string name="connection_setup_instructions_same_wifi_body">Սովորական զուգակցումը ցույց է տալիս QR միայն այն բանից հետո, երբ սերվերը հասանելի է դառնում localhost-ից դուրս։</string>
+    <string name="connection_setup_instructions_same_wifi_body">Սովորական pair-ը ցույց է տալիս QR միայն այն բանից հետո, երբ սերվերը հասանելի է դառնում localhost-ից դուրս։</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">Հոսթ</string>
     <string name="connection_setup_host_help">LAN, Tailscale MagicDNS կամ թունել. ոչ localhost հեռախոսի վրա։</string>
@@ -67,7 +67,7 @@
     <string name="connection_error_duplicate_profile">Այս հասցեով և օգտանունով սերվեր արդեն պահպանված է</string>
     <string name="connection_error_qr_scan_failed">QR-ով միանալ չհաջողվեց։ OpenCode 2-ի զուգակցման API-ն դեռ փոփոխվում է, ուստի սկանավորումը կարող է ձախողվել, նույնիսկ երբ հավելվածը նորմալ է աշխատում։ Մուտքագրեք հասցեն և միացեք։ Գաղտնաբառը պարտադիր չէ։ Կարող եք օգտագործել նաև զուգակցման կոդ։</string>
     <string name="connection_error_unreachable">Չհաջողվեց կապ հաստատել սերվերի հետ</string>
-    <string name="server_error_pairing_expired">Զուգակցման ժամկետը լրացել է, նորից զուգակցեք</string>
+    <string name="server_error_pairing_expired">Զուգակցման ժամկետը լրացել է, կրկին զուգակցեք</string>
     <string name="server_error_not_found">Պանակը կամ ֆայլը չի գտնվել</string>
     <string name="server_error_not_found_path">Պանակը կամ ֆայլը չի գտնվել · %1$s</string>
     <string name="server_error_session_busy">Նիստը զբաղված է</string>
@@ -93,13 +93,13 @@
     <string name="onboarding_features_sessions_title">Նիստեր</string>
     <string name="onboarding_features_sessions_detail">Դիտել ցանկը, բացել, ստեղծել, վերանվանել, ճյուղավորել, արխիվացնել, ջնջել</string>
     <string name="onboarding_features_chat_title">Զրույց և ընդհատում</string>
-    <string name="onboarding_features_chat_detail">Ուղարկել prompt-եր և կանգնեցնել ընթացիկ աշխատանքը</string>
+    <string name="onboarding_features_chat_detail">Ուղարկել հուշումներ և կանգնեցնել ընթացիկ աշխատանքը</string>
     <string name="onboarding_features_permissions_title">Թույլտվություններ</string>
     <string name="onboarding_features_permissions_detail">Հաստատել կամ մերժել հարցումները (առանց մշտական պահպանման)</string>
     <string name="onboarding_features_changes_title">Փոփոխություններ</string>
-    <string name="onboarding_features_changes_detail">Դիտել նիստի ֆայլերի փոփոխությունները</string>
+    <string name="onboarding_features_changes_detail">Դիտել նիստի տարբերությունները</string>
     <string name="onboarding_features_live_title">Ակտիվ է, քանի դեռ բաց է</string>
-    <string name="onboarding_features_live_detail">Իրադարձությունների հոսք բաց վիճակում․ վերակապակցումից հետո թարմացվում է</string>
+    <string name="onboarding_features_live_detail">Իրադարձությունների հոսք բաց վիճակում․ վերամիացումից հետո թարմացվում է</string>
     <string name="onboarding_setup_title">Կարգավորել opencode serve-ը</string>
     <string name="onboarding_setup_intro">Հավելվածը միանում է ձեր գործարկած opencode սերվերին։ Ստորև համառոտ ուղեցույցն է, իսկ մանրամասները՝ պաշտոնական փաստաթղթերում։</string>
     <string name="onboarding_setup_step_number">Քայլ %1$d</string>
@@ -117,8 +117,8 @@
     <string name="privacy_cover_unlock">Ապակողպել</string>
     <string name="servers_title">Սերվերներ</string>
     <plurals name="servers_profile_count">
-        <item quantity="one">%1$d պահպանված կապ</item>
-        <item quantity="other">%1$d պահպանված կապ</item>
+        <item quantity="one">%1$d պահված սերվերի կապ</item>
+        <item quantity="other">%1$d պահված սերվերի կապ</item>
     </plurals>
     <string name="servers_saved">Պահպանված</string>
     <string name="server_health_title">Սերվերի վիճակ</string>
@@ -130,9 +130,9 @@
     <string name="server_health_range_hour">1 ժ</string>
     <string name="server_health_range_day">24 ժ</string>
     <string name="server_health_range_week">7 օր</string>
-    <string name="server_health_uptime">Աշխատաժամանակ</string>
+    <string name="server_health_uptime">Աշխատանքի տևողություն</string>
     <string name="server_health_uptime_detail">չափված %1$s-ից</string>
-    <string name="server_health_reconnects">Վերակապակցումներ</string>
+    <string name="server_health_reconnects">Վերամիացումներ</string>
     <string name="server_health_reconnects_detail">վերականգնում՝ միջինը %1$s</string>
     <string name="server_health_no_drops">անջատումներ չկան</string>
     <string name="server_health_error_rate">Սխալների մասնաբաժին</string>
@@ -152,8 +152,8 @@
     <string name="server_health_legend_unsteady">Անկայուն</string>
     <string name="server_health_legend_down">Անջատված</string>
     <plurals name="server_health_reconnects_summary">
-        <item quantity="one">%1$d վերակապակցում</item>
-        <item quantity="other">%1$d վերակապակցում</item>
+        <item quantity="one">%1$d վերամիացում</item>
+        <item quantity="other">%1$d վերամիացում</item>
     </plurals>
     <string name="server_health_errors">Սխալներ</string>
     <string name="server_health_errors_empty">Այս ընթացքում սխալներ չկան։</string>
@@ -187,13 +187,13 @@
     <string name="server_health_empty_message">Վիճակը չափվում է, երբ հավելվածը բաց է և միացված է այս սերվերին։</string>
     <string name="server_health_status_live">Ակտիվ</string>
     <string name="server_health_status_connecting">Միանում է</string>
-    <string name="server_health_status_reconnecting">Կրկին միանում է</string>
+    <string name="server_health_status_reconnecting">Վերամիանում է</string>
     <string name="server_health_status_offline">Անցանց</string>
     <string name="server_health_status_auth_failed">Նույնականացումը ձախողվեց</string>
     <string name="server_health_status_stopped">Չի չափվում</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Աշխատաժամանակ %1$s · %2$d վերակապակցում այսօր</item>
-        <item quantity="other">Աշխատաժամանակ %1$s · %2$d վերակապակցում այսօր</item>
+        <item quantity="one">Աշխատանքի տևողություն %1$s · %2$d վերամիացում այսօր</item>
+        <item quantity="other">Աշխատանքի տևողություն %1$s · %2$d վերամիացում այսօր</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Չափվում է…</string>
     <string name="server_health_details">Մանրամասներ</string>
@@ -223,7 +223,7 @@
     <string name="home_more_options">Այլ ընտրանքներ</string>
     <string name="home_filter_sheet_title">Զտել ըստ նախագծի</string>
     <string name="home_empty_title">Դեռ նախագծեր չկան</string>
-    <string name="home_empty_message">Սեղմեք ներքևի «Ավելացնել նախագիծ» պատկերակին՝ ձեր սերվերում պանակ ընտրելու համար։</string>
+    <string name="home_empty_message">Հպեք ներքևի «Ավելացնել նախագիծ» պատկերակին՝ ձեր սերվերում պանակ ընտրելու համար։</string>
     <string name="home_no_session_selected_title">Նիստ ընտրված չէ</string>
     <string name="home_no_session_selected_message">Ընտրեք նիստ ցանկից</string>
     <string name="home_probe_failed_title">Չհաջողվեց միանալ</string>
@@ -242,7 +242,7 @@
         <item quantity="one">%1$d նախագիծ</item>
         <item quantity="other">%1$d նախագիծ</item>
     </plurals>
-    <string name="home_main_checkout">հիմնական պանակ</string>
+    <string name="home_main_checkout">հիմնական checkout</string>
     <plurals name="home_worktree_count">
         <item quantity="one">%1$d worktree</item>
         <item quantity="other">%1$d worktree</item>
@@ -296,7 +296,7 @@
     <string name="archived_sessions_empty_title">Արխիվացված նիստեր չկան</string>
     <string name="archived_sessions_empty_message">Արխիվացրած նիստերը (%1$s) կհայտնվեն այստեղ։</string>
     <string name="archived_sessions_show_all_projects">Ցույց տալ բոլոր նախագծերը</string>
-    <string name="archived_sessions_footer">Հպեք նիստին՝ լրացուցիչ ընտրանքների համար։ Արխիվից հանելիս այն կվերադառնա Գլխավոր էջին։</string>
+    <string name="archived_sessions_footer">Հպեք նիստին՝ լրացուցիչ ընտրանքների համար։ Արխիվից հանելիս այն կվերադառնա գլխավոր էջին։</string>
     <string name="archived_sessions_load_failed">Չհաջողվեց բեռնել արխիվացված նիստերը։</string>
     <string name="archived_sessions_unarchive_failed">Չհաջողվեց նիստը հանել արխիվից։</string>
     <string name="session_chat_archived_banner">Արխիվացվել է %1$s</string>
@@ -308,13 +308,13 @@
     <string name="add_project_loading_projects">Նախագծերի բեռնում</string>
     <string name="add_project_loading_folders">Պանակների բեռնում</string>
     <string name="add_project_list_error_title">Չհաջողվեց բացել այս պանակը</string>
-    <string name="add_project_list_error_message">Ստուգեք ուղին և նորից փորձեք։</string>
+    <string name="add_project_list_error_message">Ստուգեք ուղին և կրկին փորձեք։</string>
     <string name="add_project_no_other_projects">Այս սերվերում այլ նախագծեր չկան։</string>
     <string name="add_project_folder_path">Պանակի ուղին</string>
     <string name="add_project_up_one_folder">Մեկ պանակ վերև</string>
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Ընտրեք պանակ</string>
-    <string name="add_project_already_on_home">Արդեն Գլխավոր էջում է</string>
+    <string name="add_project_already_on_home">Արդեն գլխավոր էջում է</string>
     <string name="add_project_add_home_folder">Ավելացնել տնային պանակը</string>
     <string name="add_project_add_this_folder">Ավելացնել այս պանակը</string>
     <string name="add_project_path_not_found">Ուղին չի գտնվել</string>
@@ -339,7 +339,7 @@
     <string name="worktree_run_in_subtitle">Ստեղծել checkout և սկսել այնտեղ</string>
     <string name="worktree_move_subtitle">Ստեղծել checkout և տեղափոխվել այնտեղ</string>
     <string name="worktree_needs_v2">Պահանջում է opencode v2 սերվեր</string>
-    <string name="worktree_turn_on">Միացրեք Worktrees-ը Կարգավորումներում</string>
+    <string name="worktree_turn_on">Միացրեք Worktree-ները Կարգավորումներում</string>
     <string name="worktree_not_git">Պահանջում է git repository</string>
     <string name="worktree_no_commit">Պահանջում է git repository, որն ունի commit</string>
     <string name="worktree_unsupported">Այս սերվերը չի կարող ստեղծել worktree-ներ</string>
@@ -458,7 +458,7 @@
     <string name="session_chat_menu_review_changes">Դիտել փոփոխությունները</string>
     <string name="session_chat_menu_fork">Ճյուղավորել նիստը</string>
     <string name="session_chat_menu_browse_files">Դիտել ֆայլերը</string>
-    <string name="session_chat_menu_session_context">Նիստի համատեքստը</string>
+    <string name="session_chat_menu_session_context">Նիստի համատեքստ</string>
     <string name="session_chat_menu_copy_session_id">Պատճենել նիստի ID-ն</string>
     <string name="session_chat_menu_archive">Արխիվացնել</string>
     <string name="session_chat_menu_report_problem">Հաղորդել խնդրի մասին</string>
@@ -493,7 +493,7 @@
     <string name="session_chat_commands_undo_description">Հետարկել վերջին հաղորդագրությունը</string>
     <string name="session_chat_commands_redo_label">Կրկնել</string>
     <string name="session_chat_commands_redo_description">Կրկնել հետարկված հաղորդագրությունը</string>
-    <string name="session_chat_commands_compact_label">Կոմպակտ</string>
+    <string name="session_chat_commands_compact_label">Սեղմել</string>
     <string name="session_chat_commands_compact_description">Սեղմել նիստի համատեքստը</string>
     <string name="session_chat_commands_terminal_label">Տերմինալ</string>
     <string name="session_chat_commands_terminal_description">Բացել նախագծի shell-ը</string>
@@ -643,7 +643,7 @@
     <string name="timeline_message_actions_hint_long_press">Երկար սեղմեք՝ հաղորդագրության գործողությունները ցուցադրելու համար</string>
     <string name="timeline_message_actions_hint">Ցուցադրում է հաղորդագրության գործողությունները</string>
     <string name="timeline_fallback_message">%1$s՝ %2$s</string>
-    <string name="timeline_failure_copy">Պատճեն</string>
+    <string name="timeline_failure_copy">Պատճենել</string>
     <string name="timeline_retry_retrying_in">կրկին փորձ %1$d վրկ հետո</string>
     <string name="timeline_retry_attempt_retrying_in">փորձ %1$d, կրկին փորձ %2$d վրկ հետո</string>
     <plurals name="timeline_background_work_subagent_count">
@@ -863,7 +863,7 @@
     <string name="timeline_failure_session_work_failed">Նիստի աշխատանքը ձախողվեց</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Ընտրել մոդել</string>
-    <string name="timeline_failure_compact">Կոմպակտ</string>
+    <string name="timeline_failure_compact">Սեղմել</string>
     <string name="session_chat_compact_status">Սեղմվում է…</string>
     <string name="session_chat_turn_sending">Ուղարկվում է…</string>
     <string name="session_chat_turn_sending_percent">Ուղարկվում է %1$d%%</string>
@@ -871,13 +871,13 @@
     <string name="session_chat_compact_success_usage">Համատեքստը սեղմվեց · %1$d%% → %2$d%%</string>
     <string name="session_chat_compact_failure">Չհաջողվեց սեղմել նիստի համատեքստը։</string>
     <string name="session_chat_revert_undo_failed">Չհաջողվեց հետարկել վերջին հաղորդագրությունը։</string>
-    <string name="session_chat_revert_failed">Չհաջողվեց հետ բերել հաղորդագրությունը։</string>
+    <string name="session_chat_revert_failed">Չհաջողվեց հետադարձել հաղորդագրությունը։</string>
     <string name="session_chat_revert_redo_failed">Չհաջողվեց կրկնել։</string>
-    <string name="session_chat_revert_cancel_failed">Չհաջողվեց չեղարկել հետ բերումը։</string>
-    <string name="session_chat_revert_commit_failed">Չհաջողվեց հաստատել հետ բերումը։</string>
+    <string name="session_chat_revert_cancel_failed">Չհաջողվեց չեղարկել հետադարձումը։</string>
+    <string name="session_chat_revert_commit_failed">Չհաջողվեց հաստատել հետադարձումը։</string>
     <string name="session_chat_fork_rename_failed">Ճյուղավորումը ստեղծվեց, բայց չհաջողվեց վերանվանել այն։</string>
     <string name="session_chat_pending_prompt_update_failed">Չհաջողվեց թարմացնել սպասող հուշումը</string>
-    <string name="session_chat_shell_stop_failed">Չհաջողվեց կանգնեցնել shell-ը։ Նորից փորձեք։</string>
+    <string name="session_chat_shell_stop_failed">Չհաջողվեց կանգնեցնել shell-ը։ Կրկին փորձեք։</string>
     <string name="session_chat_shell_status_running">Աշխատում է</string>
     <string name="session_chat_shell_status_exited">Ավարտվել է</string>
     <string name="session_chat_shell_status_timed_out">Ժամանակը սպառվեց</string>
@@ -890,7 +890,7 @@
     <string name="session_chat_sheet_copy">Պատճենել</string>
     <string name="session_chat_sheet_copy_output">Պատճենել արդյունքը</string>
     <string name="session_chat_sheet_message_actions_title">Հաղորդագրություն</string>
-    <string name="session_chat_sheet_message_actions_revert">Հետ բերել հաղորդագրությունը</string>
+    <string name="session_chat_sheet_message_actions_revert">Հետադարձել հաղորդագրությունը</string>
     <string name="session_chat_sheet_message_actions_fork">Ճյուղավորել այստեղից</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Պատճենել կոդի բլոկը</string>
     <string name="session_chat_sheet_message_actions_copy_message">Պատճենել հաղորդագրությունը</string>
@@ -960,7 +960,7 @@
     <string name="session_chat_goal_waiting_permission">Թույլտվության հարցում կա։ Նպատակը կշարունակվի, երբ պատասխանեք։</string>
     <string name="session_chat_goal_waiting_question">Բաց հարց կա։ Նպատակը կշարունակվի, երբ պատասխանեք։</string>
     <string name="session_chat_goal_evidence">Ապացույց</string>
-    <string name="session_chat_goal_reconnecting">Կրկին միանում է… Ցուցադրվում է վերջին հայտնի նպատակը։</string>
+    <string name="session_chat_goal_reconnecting">Վերամիանում է։ Ցուցադրվում է վերջին հայտնի նպատակը։</string>
     <string name="session_chat_goal_pause">Դադարեցնել</string>
     <string name="session_chat_goal_pausing">Դադարեցվում է…</string>
     <string name="session_chat_goal_resume">Շարունակել</string>
@@ -1014,8 +1014,8 @@
         <item quantity="other">%1$d ֆայլ</item>
     </plurals>
     <plurals name="component_branch_pill_uncommitted_files">
-        <item quantity="one">%1$d չփոխանցված ֆայլ</item>
-        <item quantity="other">%1$d չփոխանցված ֆայլ</item>
+        <item quantity="one">%1$d չկոմիտավորված ֆայլ</item>
+        <item quantity="other">%1$d չկոմիտավորված ֆայլ</item>
     </plurals>
     <string name="component_branch_pill_a11y_branch">Ճյուղ՝ %1$s</string>
     <string name="component_branch_pill_a11y_worktree_branch">Worktree ճյուղ՝ %1$s</string>
@@ -1122,12 +1122,12 @@
     <string name="session_context_stat_provider">Մատակարար</string>
     <string name="session_context_stat_model">Մոդել</string>
     <string name="session_context_stat_context_limit">Համատեքստի սահման</string>
-    <string name="session_context_stat_total_tokens">Ընդհանուր թոքեններ</string>
+    <string name="session_context_stat_total_tokens">Ընդհանուր տոկեններ</string>
     <string name="session_context_stat_usage">Օգտագործում</string>
-    <string name="session_context_stat_input_tokens">Մուտքի թոքեններ</string>
-    <string name="session_context_stat_output_tokens">Ելքի թոքեններ</string>
-    <string name="session_context_stat_reasoning_tokens">Պատճառաբանման թոքեններ</string>
-    <string name="session_context_stat_cache_tokens">Քեշի թոքեններ (ընթերցում/գրում)</string>
+    <string name="session_context_stat_input_tokens">Մուտքի տոկեններ</string>
+    <string name="session_context_stat_output_tokens">Ելքի տոկեններ</string>
+    <string name="session_context_stat_reasoning_tokens">Պատճառաբանման տոկեններ</string>
+    <string name="session_context_stat_cache_tokens">Քեշի տոկեններ (ընթերցում/գրում)</string>
     <string name="session_context_stat_user_messages">Օգտատիրոջ հաղորդագրություններ</string>
     <string name="session_context_stat_assistant_messages">Օգնականի հաղորդագրություններ</string>
     <string name="session_context_stat_total_cost">Ընդհանուր արժեք</string>
@@ -1140,13 +1140,13 @@
     <string name="session_context_breakdown_tool_calls">Գործիքների կանչեր</string>
     <string name="session_context_breakdown_other">Այլ</string>
     <string name="session_context_breakdown_legend">%1$s %2$s</string>
-    <string name="session_context_breakdown_footnote">Մուտքային թոքենների մոտավոր բաշխումը։ «Այլ»-ը ներառում է գործիքների նկարագրությունները և ծառայողական տվյալները։</string>
+    <string name="session_context_breakdown_footnote">Մուտքային տոկենների մոտավոր բաշխումը։ «Այլ»-ը ներառում է գործիքների նկարագրությունները և ծառայողական տվյալները։</string>
     <string name="settings_title">Կարգավորումներ</string>
     <string name="settings_section_server">Սերվեր</string>
     <string name="settings_section_help_feedback">Օգնություն և հետադարձ կապ</string>
     <string name="settings_section_appearance">Արտաքին տեսք</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Գլխավոր</string>
+    <string name="settings_section_home">Գլխավոր էջ</string>
     <string name="settings_section_session_cache">Նիստերի քեշ</string>
     <string name="settings_section_privacy">Գաղտնիություն</string>
     <string name="settings_section_about">Հավելվածի մասին</string>
@@ -1161,7 +1161,7 @@
     </plurals>
     <string name="settings_send_feedback_title">Ուղարկել հետադարձ կապ</string>
     <string name="settings_send_feedback_subtitle">Հաղորդեք սխալի մասին կամ կիսվեք գաղափարով</string>
-    <string name="settings_hide_user_directory_title">Թաքցնել օգտատիրոջ թղթապանակը</string>
+    <string name="settings_hide_user_directory_title">Թաքցնել օգտատիրոջ պանակը</string>
     <string name="settings_hide_user_directory_subtitle">Ցույց տալ ~/Projects/…՝ /Users/you/Projects/…-ի փոխարեն</string>
     <string name="settings_recent_window_title">Վերջինների ժամանակահատված</string>
     <string name="settings_recent_window_message">Նիստերը մնում են «Վերջին» բաժնում, քանի դեռ աշխատում են կամ պատրաստ են, կամ եթե թարմացվել են այս ժամանակահատվածում։</string>
@@ -1184,8 +1184,8 @@
     <string name="settings_follow_up_subtitle_steer">Ուղղորդել · միայն V2 սերվերներ։ V1-ը չի աջակցում։</string>
     <string name="settings_follow_up_subtitle_queue">Հերթ · միայն V2 սերվերներ։ V1-ը չի աջակցում։</string>
     <string name="settings_follow_up_unsupported">V1-ում չի աջակցվում։ Այս սերվերը միշտ ուղարկում է անմիջապես։</string>
-    <string name="settings_worktrees_title">Worktree-եր</string>
-    <string name="settings_worktrees_subtitle">Ցույց տալ յուրաքանչյուր նախագծի worktree-երն ու ճյուղերը գլխավոր էկրանին և թույլ տալ ընտրել worktree՝ «Նոր նիստ» կոճակը երկար սեղմելիս։</string>
+    <string name="settings_worktrees_title">Worktree-ներ</string>
+    <string name="settings_worktrees_subtitle">Ցույց տալ յուրաքանչյուր նախագծի worktree-ներն ու ճյուղերը գլխավոր էջում և թույլ տալ ընտրել worktree՝ «Նոր նիստ» կոճակը երկար սեղմելիս։</string>
     <string name="settings_session_rows_title">Նիստերի տողեր</string>
     <string name="settings_session_rows_compact_title">Կոմպակտ</string>
     <string name="settings_session_rows_compact_subtitle">Երկու տող՝ վերնագիր և ժամանակ, ապա նախագիծ / worktree</string>
@@ -1274,7 +1274,7 @@
     <string name="appearance_syntax_blurb_neon">Dracula ընտանիք</string>
     <string name="appearance_preview_light">Բաց</string>
     <string name="appearance_preview_dark">Մուգ</string>
-    <string name="appearance_preview_sample_message">Անցիր թոքենների պահոցով։</string>
+    <string name="appearance_preview_sample_message">Անցեք տոկենների պահոցով։</string>
     <string name="appearance_preview_sample_reply">Թարմացնում եմ մեկ անգամ, հետո կրկին կփորձեմ։</string>
     <string name="appearance_more_options">Այլ ընտրանքներ</string>
     <string name="appearance_reset_text_sizes">Վերականգնել տեքստի չափերը</string>
@@ -1286,7 +1286,7 @@
     <string name="appearance_mode_note_system">Հետևում է հեռախոսի բաց կամ մուգ կարգավորմանը։</string>
     <string name="appearance_mode_note_light">Միշտ բաց՝ անկախ հեռախոսի կարգավորումից։</string>
     <string name="appearance_mode_note_dark">Միշտ մուգ՝ անկախ հեռախոսի կարգավորումից։</string>
-    <string name="appearance_text_home_title">Գլխավոր ցանկի տեքստ</string>
+    <string name="appearance_text_home_title">Գլխավոր էջի ցանկի տեքստ</string>
     <string name="appearance_text_session_chat_title">Նիստի զրույցի տեքստ</string>
     <string name="appearance_text_code_title">Կոդի տեքստ</string>
     <string name="appearance_text_size_label">Չափ</string>
@@ -1422,7 +1422,7 @@
     <string name="changes_source_menu_selected">%1$s, ընտրված է</string>
     <string name="changes_source_working_tree_name">Git-ի փոփոխություններ</string>
     <string name="changes_source_working_tree_empty_title">Git-ի փոփոխություններ չկան</string>
-    <string name="changes_source_working_tree_empty_message">Աշխատանքային ծառում չկատարված (uncommitted) փոփոխություններ չկան։</string>
+    <string name="changes_source_working_tree_empty_message">Աշխատանքային ծառում չկոմիտավորված փոփոխություններ չկան։</string>
     <string name="changes_source_last_turn_name">Վերջին քայլի փոփոխություններ</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">Git-ի փոփոխություններում %1$d փոփոխված ֆայլ կա։</item>
@@ -1437,13 +1437,13 @@
     <string name="changes_source_last_turn_empty_title">Փոփոխություններ չկան</string>
     <string name="changes_source_last_turn_empty_message">Վերջին ավարտված քայլը ոչ մի ֆայլ չի փոփոխել։</string>
     <string name="changes_loading_title">Փոփոխությունները բեռնվում են</string>
-    <string name="changes_loading_message">Ստանում եմ տարբերությունը…</string>
+    <string name="changes_loading_message">Տարբերությունը ստացվում է…</string>
     <string name="changes_no_turn_title">Ավարտված քայլ չկա</string>
     <string name="changes_no_turn_message">Ուղարկեք հուշում, սպասեք՝ մինչև ավարտվի, և կրկին փորձեք։</string>
     <string name="changes_error_title">Չհաջողվեց բեռնել փոփոխությունները</string>
     <string name="changes_error_fallback">Փոփոխությունները չբեռնվեցին։</string>
     <string name="changes_error_request_failed">Հարցումը ձախողվեց</string>
-    <string name="changes_error_turn_moved_folders">Այս քայլը փոխել է թղթապանակները, ուստի նրա փոփոխությունները չեն կարող ցուցադրվել միասին։</string>
+    <string name="changes_error_turn_moved_folders">Այս քայլը փոխել է պանակները, ուստի դրա փոփոխությունները չեն կարող ցուցադրվել միասին։</string>
     <string name="changes_refresh_failed">Թարմացումը ձախողվեց․ %1$s</string>
     <string name="changes_filter_hint">Զտիչ</string>
     <string name="changes_filter_accessibility_label">Զտել փոփոխված ֆայլերը</string>
@@ -1520,7 +1520,7 @@
     <string name="component_filter_tabs_unseen">նոր</string>
     <string name="component_text_size_slider_sample_letter">Ա</string>
     <string name="component_message_time_yesterday">Երեկ</string>
-    <string name="component_composer_reverting_title">Այս հաղորդագրությունը հետ է բերվում</string>
+    <string name="component_composer_reverting_title">Այս հաղորդագրությունը հետադարձվում է</string>
     <string name="session_new_title">Նոր նիստ</string>
     <string name="session_list_dock_add_project">Ավելացնել նախագիծ</string>
     <string name="theme_error_preset_not_found">Թեմայի նախադրյալը չի գտնվել</string>
@@ -1583,7 +1583,7 @@
     <string name="component_image_could_not_load_label">%1$s, չհաջողվեց բեռնել</string>
     <string name="component_composer_question">Հարց</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Մաքրեք զտիչը՝ այլ worktree-երի նիստերը տեսնելու համար։</string>
+    <string name="session_list_worktree_empty_other_worktrees">Մաքրեք զտիչը՝ այլ worktree-ների նիստերը տեսնելու համար։</string>
     <string name="component_composer_side_question_mode">Կողմնակի հարցի ռեժիմ</string>
     <string name="component_page_indicator_label">Էջ %1$d՝ %2$d-ից</string>
     <string name="component_composer_next">Հաջորդը</string>
@@ -1609,7 +1609,7 @@
     <string name="session_list_scope_load_failed_title">Չհաջողվեց բեռնել %1$s-ը</string>
     <string name="dictation_status_listening">Լսում եմ</string>
     <string name="dictation_downloading_model">Խոսքի մոդելը ներբեռնվում է</string>
-    <string name="session_list_worktree_empty_every_worktree">Մաքրեք զտիչը՝ բոլոր worktree-երը տեսնելու համար։</string>
+    <string name="session_list_worktree_empty_every_worktree">Մաքրեք զտիչը՝ բոլոր worktree-ները տեսնելու համար։</string>
     <string name="component_overflow_menu_more_options">Այլ ընտրանքներ</string>
     <string name="session_list_status_retrying_attempt">Կրկին փորձում է · %1$d</string>
     <string name="live_updates_status_offline">անցանց</string>
@@ -1688,7 +1688,7 @@
     <string name="component_image_viewer_loading_full">Ամբողջ պատկերը բեռնվում է</string>
     <string name="session_list_worktree_empty_action">Մաքրել զտիչը</string>
     <string name="dictation_model_download_failed_detail">Ստուգեք կապը և սարքի ազատ հիշողությունը, ապա կրկին փորձեք։</string>
-    <string name="component_composer_send_queue">Ուղարկել հերթում</string>
+    <string name="component_composer_send_queue">Ուղարկել որպես հերթ</string>
     <string name="session_list_dock_new_session_hint">Այլ տեղ սկսելու համար օգտագործեք «Ընտրել նախագիծ կամ worktree»-ն։</string>
     <string name="session_list_section_yesterday">Երեկ</string>
     <string name="component_code_file_line_label">Տող %1$d, %2$s</string>
@@ -1783,21 +1783,21 @@
         <item quantity="other">%1$d փոփոխված</item>
     </plurals>
     <string name="worktrees_none_in_project">Worktree-եր չկան։ «Նոր նիստ → Ընտրել նախագիծ կամ worktree»-ը ստեղծում է մեկը։</string>
-    <string name="worktrees_footer">Worktree-ի հեռացումը ջնջում է դրա թղթապանակը սերվերում։ Նիստերը մնում են, բայց այլևս չեն կարող աշխատել դրանում։</string>
+    <string name="worktrees_footer">Worktree-ի հեռացումը ջնջում է դրա պանակը սերվերում։ Նիստերը մնում են, բայց այլևս չեն կարող աշխատել դրանում։</string>
     <string name="worktrees_more">Այլ գործողություններ՝ %1$s</string>
     <string name="worktrees_removing">Հեռացվում է…</string>
-    <string name="worktrees_actions_show_on_home">Ցույց տալ նիստերը գլխավորում</string>
+    <string name="worktrees_actions_show_on_home">Ցույց տալ նիստերը գլխավոր էջում</string>
     <string name="worktrees_actions_new_session">Նոր նիստ այստեղ</string>
     <string name="worktrees_actions_remove">Հեռացնել worktree-ը…</string>
     <string name="worktrees_remove_title">Հեռացնե՞լ «%1$s» worktree-ը։</string>
     <string name="worktrees_remove_message">Ջնջում է %1$s-ը սերվերում։</string>
     <plurals name="worktrees_remove_changes">
-        <item quantity="one">%1$d չկատարված փոփոխություն կկորչի։</item>
-        <item quantity="other">%1$d չկատարված փոփոխություն կկորչի։</item>
+        <item quantity="one">%1$d չկոմիտավորված փոփոխություն կկորչի։</item>
+        <item quantity="other">%1$d չկոմիտավորված փոփոխություն կկորչի։</item>
     </plurals>
-    <string name="worktrees_remove_changes_unknown">Չկատարված փոփոխությունները կկորչեն։</string>
-    <string name="worktrees_remove_changes_unchecked">Չհաջողվեց ստուգել չկատարված փոփոխությունները։ Եթե կան, դրանք կկորչեն։</string>
-    <string name="worktrees_remove_sessions_stay">Այս worktree-ն օգտագործող նիստերը մնում են գլխավորում, բայց այլևս չեն կարող աշխատել այստեղ։</string>
+    <string name="worktrees_remove_changes_unknown">Չկոմիտավորված փոփոխությունները կկորչեն։</string>
+    <string name="worktrees_remove_changes_unchecked">Չհաջողվեց ստուգել չկոմիտավորված փոփոխությունները։ Եթե կան, դրանք կկորչեն։</string>
+    <string name="worktrees_remove_sessions_stay">Այս worktree-ն օգտագործող նիստերը մնում են գլխավոր էջում, բայց այլևս չեն կարող աշխատել այստեղ։</string>
     <string name="worktrees_remove_confirm_anyway">Այնուամենայնիվ հեռացնել</string>
     <string name="worktrees_blocked_title">«%1$s»-ը դեռ հնարավոր չէ հեռացնել</string>
     <string name="worktrees_blocked_message">Այս worktree-ում նիստ է աշխատում։ Կանգնեցրեք այն, ապա հեռացրեք worktree-ը։</string>

@@ -61,10 +61,10 @@
     <string name="connection_error_localhost_qr">Esse QR só tem um endereço localhost</string>
     <string name="connection_error_camera_denied">Permita o acesso à câmera para escanear o QR de pareamento</string>
     <string name="connection_error_camera_unavailable">A câmera não está disponível neste dispositivo</string>
-    <string name="connection_error_enter_host">Informe um host</string>
+    <string name="connection_error_enter_host">Insira um host</string>
     <string name="connection_error_enter_pairing_code">Insira um código de pareamento</string>
     <string name="connection_error_pairing_link_expired">Este link de pareamento expirou ou já foi usado</string>
-    <string name="connection_error_duplicate_profile">Já existe um servidor salvo com este host e usuário</string>
+    <string name="connection_error_duplicate_profile">Já existe uma conexão salva com este host e usuário</string>
     <string name="connection_error_qr_scan_failed">O QR não conectou. A API de pareamento do OpenCode 2 ainda está mudando, então a leitura pode falhar mesmo com o app funcionando. Informe o host e conecte. A senha é opcional. Um código de pareamento também funciona.</string>
     <string name="connection_error_unreachable">Não foi possível acessar o servidor</string>
     <string name="server_error_pairing_expired">Pareamento expirado, pareie novamente</string>
@@ -73,11 +73,11 @@
     <string name="server_error_session_busy">A sessão está ocupada</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Falha na autenticação</string>
-    <string name="connection_error_unhealthy">O servidor informou que não está saudável</string>
+    <string name="connection_error_unhealthy">O servidor informou problemas de integridade</string>
     <string name="connection_scanner_title">Escanear QR de pareamento</string>
     <string name="connection_scanner_card_title">QR de pareamento do OpenCode</string>
     <string name="connection_scanner_card_body">De opencode pair --remote. O pair simples só mostra um QR quando o servidor está acessível além do localhost.</string>
-    <string name="connection_onboarding_title">Conecte ao seu servidor</string>
+    <string name="connection_onboarding_title">Conecte-se ao seu servidor</string>
     <string name="connection_onboarding_body">O OpenCode Mobile controla sessões em um servidor opencode executado na sua máquina de desenvolvimento.</string>
     <string name="connection_onboarding_connect">Conectar ao servidor</string>
     <string name="onboarding_skip">Pular</string>
@@ -86,7 +86,7 @@
     <string name="onboarding_unofficial_title">Um cliente não\noficial do opencode</string>
     <string name="onboarding_unofficial_body">O OpenCode Mobile é um cliente nativo para sessões do opencode — em desenvolvimento. Não é um produto oficial do OpenCode.</string>
     <string name="onboarding_unofficial_badge">Não oficial</string>
-    <string name="onboarding_connect_page_title">Conecte aos\nseus servidores</string>
+    <string name="onboarding_connect_page_title">Conecte-se\naos seus servidores</string>
     <string name="onboarding_connect_page_body">Aponte o app para um servidor opencode na sua máquina. Recomendamos o Tailscale para que seu celular o acesse com segurança de qualquer lugar.</string>
     <string name="onboarding_connect_page_setup_link">Precisa do servidor primeiro?</string>
     <string name="onboarding_features_title">O que você pode\nfazer por aqui</string>
@@ -95,7 +95,7 @@
     <string name="onboarding_features_chat_title">Chat e interrupção</string>
     <string name="onboarding_features_chat_detail">Envie prompts e pare o trabalho em andamento</string>
     <string name="onboarding_features_permissions_title">Permissões</string>
-    <string name="onboarding_features_permissions_detail">Aprove ou negue pedidos (sem lembrar de forma permanente)</string>
+    <string name="onboarding_features_permissions_detail">Aprove ou negue solicitações (sem lembrar de forma permanente)</string>
     <string name="onboarding_features_changes_title">Alterações</string>
     <string name="onboarding_features_changes_detail">Inspecione os diffs da sessão</string>
     <string name="onboarding_features_live_title">Ao vivo enquanto aberto</string>
@@ -109,7 +109,7 @@
     <string name="onboarding_setup_step2_body">Defina OPENCODE_SERVER_PASSWORD. O usuário padrão é opencode, a menos que você defina OPENCODE_SERVER_USERNAME.</string>
     <string name="onboarding_setup_step3_title">Acesse do seu celular</string>
     <string name="onboarding_setup_step3_body">Recomendado: Tailscale — instale o Tailscale na máquina e no celular e use o IP do Tailscale ou o nome MagicDNS da máquina como URL do servidor.\n\nTambém funciona: mesma rede local, VPN, HTTPS ou outro túnel que você gerencie. O app não cria um relay para você.</string>
-    <string name="onboarding_setup_step4_title">Conecte no app</string>
+    <string name="onboarding_setup_step4_title">Conecte-se no app</string>
     <string name="onboarding_setup_step4_body">Informe a URL base e a senha. O app verifica GET /global/health e salva uma conexão de servidor neste dispositivo.</string>
     <string name="onboarding_setup_open_docs">Abrir documentação do servidor</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
@@ -122,7 +122,7 @@
         <item quantity="other">%1$d conexões salvas</item>
     </plurals>
     <string name="servers_saved">Salvos</string>
-    <string name="server_health_title">Saúde do servidor</string>
+    <string name="server_health_title">Integridade do servidor</string>
     <string name="server_health_ms_ping">ms de ping</string>
     <string name="server_health_last_30_min">Últimos 30 min</string>
     <string name="server_health_30_min_ago">há 30 min</string>
@@ -131,7 +131,7 @@
     <string name="server_health_range_hour">1 h</string>
     <string name="server_health_range_day">24 h</string>
     <string name="server_health_range_week">7 d</string>
-    <string name="server_health_uptime">Tempo ativo</string>
+    <string name="server_health_uptime">Tempo de atividade</string>
     <string name="server_health_uptime_detail">de %1$s medidos</string>
     <string name="server_health_reconnects">Reconexões</string>
     <string name="server_health_reconnects_detail">volta em %1$s (mediana)</string>
@@ -159,7 +159,7 @@
     </plurals>
     <string name="server_health_errors">Erros</string>
     <string name="server_health_errors_empty">Nenhum erro neste período.</string>
-    <string name="server_health_error_log">Registro de erros</string>
+    <string name="server_health_error_log">Log de erros</string>
     <string name="server_health_error_log_check">Verificação de saúde</string>
     <string name="server_health_error_log_stream">Conexão ao vivo</string>
     <string name="server_health_error_log_repeated">%1$d seguidos em %2$s</string>
@@ -194,13 +194,13 @@
     <string name="server_health_status_auth_failed">Falha de autenticação</string>
     <string name="server_health_status_stopped">Sem medição</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Tempo ativo %1$s · %2$d reconexão hoje</item>
-        <item quantity="many">Tempo ativo %1$s · %2$d de reconexões hoje</item>
-        <item quantity="other">Tempo ativo %1$s · %2$d reconexões hoje</item>
+        <item quantity="one">Tempo de atividade %1$s · %2$d reconexão hoje</item>
+        <item quantity="many">Tempo de atividade %1$s · %2$d de reconexões hoje</item>
+        <item quantity="other">Tempo de atividade %1$s · %2$d reconexões hoje</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Medindo…</string>
     <string name="server_health_details">Detalhes</string>
-    <string name="server_health_open_details">Abrir saúde do servidor</string>
+    <string name="server_health_open_details">Abrir integridade do servidor</string>
     <string name="server_health_unknown_value">—</string>
     <string name="server_health_axis_ago">há %1$s</string>
     <string name="server_health_hero_streams">%1$d de %2$d fluxos de eventos ao vivo</string>
@@ -570,7 +570,7 @@
     <string name="attachment_drop_some_skipped">Alguns serão ignorados</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
     <string name="session_chat_activity_review_permission">Revisar permissão</string>
-    <string name="session_chat_activity_review_permission_request">Revisar pedido de permissão</string>
+    <string name="session_chat_activity_review_permission_request">Revisar solicitação de permissão</string>
     <string name="session_chat_activity_answer_question">Responder pergunta</string>
     <string name="session_chat_activity_request_failed">A solicitação falhou</string>
     <string name="session_chat_activity_btw_failed">/btw falhou · Tentar novamente</string>
@@ -606,7 +606,7 @@
         <item quantity="other">%1$d perguntas paralelas em andamento</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
-    <string name="session_chat_activity_action_open_request">Abrir pedido</string>
+    <string name="session_chat_activity_action_open_request">Abrir solicitação</string>
     <string name="session_chat_activity_action_open_background_work">Abrir trabalho em segundo plano</string>
     <string name="session_chat_activity_action_show_in_chat">Mostrar no chat</string>
     <string name="session_chat_activity_action_retry">Tentar novamente</string>
@@ -640,7 +640,7 @@
     <string name="timeline_state_creating_title">Iniciando sessão…</string>
     <string name="timeline_state_creating_subtitle">Criando no servidor…</string>
     <string name="new_session_title">Nova sessão</string>
-    <string name="new_session_draft_subtitle">Rascunho · criada ao enviar</string>
+    <string name="new_session_draft_subtitle">Rascunho · criado ao enviar</string>
     <string name="new_session_discard_draft">Descartar rascunho</string>
     <string name="new_session_run_in_caption">Executar sessão em</string>
     <string name="new_session_project">Projeto</string>
@@ -1215,7 +1215,7 @@
     <string name="settings_section_help_feedback">Ajuda e feedback</string>
     <string name="settings_section_appearance">Aparência</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Início</string>
+    <string name="settings_section_home">Tela inicial</string>
     <string name="settings_section_session_cache">Cache de sessões</string>
     <string name="settings_section_privacy">Privacidade</string>
     <string name="settings_section_about">Sobre</string>
@@ -1232,7 +1232,7 @@
     </plurals>
     <string name="settings_send_feedback_title">Enviar feedback</string>
     <string name="settings_send_feedback_subtitle">Relate um bug ou compartilhe uma ideia</string>
-    <string name="settings_hide_user_directory_title">Ocultar diretório do usuário</string>
+    <string name="settings_hide_user_directory_title">Ocultar pasta do usuário</string>
     <string name="settings_hide_user_directory_subtitle">Mostrar ~/Projects/… em vez de /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">Janela de recentes</string>
     <string name="settings_recent_window_message">As sessões ficam em Recentes enquanto estiverem em execução ou prontas, ou se forem atualizadas dentro desta janela.</string>
@@ -1257,7 +1257,7 @@
     <string name="settings_follow_up_subtitle_queue">Fila · somente servidores V2. A V1 não oferece suporte.</string>
     <string name="settings_follow_up_unsupported">Sem suporte na V1. Este servidor sempre envia na hora.</string>
     <string name="settings_worktrees_title">Worktrees</string>
-    <string name="settings_worktrees_subtitle">Mostre os worktrees e as branches de cada projeto no Início e deixe Nova sessão escolher um worktree quando você a mantiver pressionada.</string>
+    <string name="settings_worktrees_subtitle">Mostre os worktrees e as branches de cada projeto na tela inicial e deixe Nova sessão escolher um worktree quando você a mantiver pressionada.</string>
     <string name="settings_session_rows_title">Linhas de sessão</string>
     <string name="settings_session_rows_compact_title">Compacto</string>
     <string name="settings_session_rows_compact_subtitle">Duas linhas: título e hora, depois projeto / worktree</string>
@@ -1361,7 +1361,7 @@
     <string name="appearance_mode_note_system">Segue a configuração de claro ou escuro do celular.</string>
     <string name="appearance_mode_note_light">Sempre claro, seja qual for a configuração do celular.</string>
     <string name="appearance_mode_note_dark">Sempre escuro, seja qual for a configuração do celular.</string>
-    <string name="appearance_text_home_title">Texto da lista inicial</string>
+    <string name="appearance_text_home_title">Texto da lista da tela inicial</string>
     <string name="appearance_text_session_chat_title">Texto do chat da sessão</string>
     <string name="appearance_text_code_title">Texto de código</string>
     <string name="appearance_text_size_label">Tamanho</string>
@@ -1525,7 +1525,7 @@
     <string name="changes_loading_title">Carregando alterações</string>
     <string name="changes_loading_message">Buscando o diff…</string>
     <string name="changes_no_turn_title">Nenhum turno concluído</string>
-    <string name="changes_no_turn_message">Envie um prompt, aguarde a conclusão e tente de novo.</string>
+    <string name="changes_no_turn_message">Envie um prompt, aguarde a conclusão e tente novamente.</string>
     <string name="changes_error_title">Não foi possível carregar as alterações</string>
     <string name="changes_error_fallback">As alterações não foram carregadas.</string>
     <string name="changes_error_request_failed">Falha na solicitação</string>
@@ -1540,7 +1540,7 @@
     <string name="changes_select_file_message">Escolha um arquivo alterado para ver o diff.</string>
     <string name="changes_preview_unavailable_title">Prévia indisponível</string>
     <string name="changes_preview_unavailable_message">Não há prévia de texto para este arquivo.</string>
-    <string name="changes_file_viewer_truncated">Mostrando o primeiro 1 MB das alterações deste arquivo.</string>
+    <string name="changes_file_viewer_truncated">Mostrando apenas o início das alterações deste arquivo (1 MB).</string>
     <plurals name="changes_summary_changed_files">
         <item quantity="one">%1$d arquivo alterado</item>
         <item quantity="many">%1$d de arquivos alterados</item>
@@ -1703,7 +1703,7 @@
     <string name="dictation_downloading_model">Baixando modelo de fala</string>
     <string name="session_list_worktree_empty_every_worktree">Limpe o filtro para ver todos os worktrees.</string>
     <string name="component_overflow_menu_more_options">Mais opções</string>
-    <string name="session_list_status_retrying_attempt">Tentando de novo · %1$d</string>
+    <string name="session_list_status_retrying_attempt">Tentando novamente · %1$d</string>
     <string name="live_updates_status_offline">offline</string>
     <string name="component_attachment_kind_text">Texto</string>
     <string name="component_composer_next_question">Próxima pergunta</string>
@@ -1839,7 +1839,7 @@
     <string name="dictation_model_not_installed_title">%1$s precisa do %2$s</string>
     <string name="component_composer_back_to_main_session">Voltar à sessão principal</string>
     <string name="component_activity_sheet_working_count">Trabalhando: %1$d</string>
-    <string name="session_list_status_retrying">Tentando de novo</string>
+    <string name="session_list_status_retrying">Tentando novamente</string>
     <string name="component_attachment_remove">Remover %1$s</string>
     <string name="component_composer_send_steer">Enviar para orientar</string>
     <string name="component_composer_next_permission">Próxima solicitação de permissão</string>
@@ -1887,7 +1887,7 @@
     <string name="worktrees_footer">Remover um worktree exclui a pasta dele no servidor. As sessões permanecem, mas não podem mais ser executadas nele.</string>
     <string name="worktrees_more">Mais ações para %1$s</string>
     <string name="worktrees_removing">Removendo…</string>
-    <string name="worktrees_actions_show_on_home">Mostrar sessões na Home</string>
+    <string name="worktrees_actions_show_on_home">Mostrar sessões na tela inicial</string>
     <string name="worktrees_actions_new_session">Nova sessão aqui</string>
     <string name="worktrees_actions_remove">Remover worktree…</string>
     <string name="worktrees_remove_title">Remover o worktree “%1$s”?</string>
@@ -1899,7 +1899,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">As alterações não commitadas serão perdidas.</string>
     <string name="worktrees_remove_changes_unchecked">Não foi possível verificar alterações não commitadas. Qualquer uma que exista será perdida.</string>
-    <string name="worktrees_remove_sessions_stay">As sessões que usam este worktree permanecem na Home, mas não podem mais ser executadas aqui.</string>
+    <string name="worktrees_remove_sessions_stay">As sessões que usam este worktree permanecem na tela inicial, mas não podem mais ser executadas aqui.</string>
     <string name="worktrees_remove_confirm_anyway">Remover mesmo assim</string>
     <string name="worktrees_blocked_title">Ainda não é possível remover “%1$s”</string>
     <string name="worktrees_blocked_message">Há uma sessão em execução neste worktree. Pare-a e remova o worktree.</string>

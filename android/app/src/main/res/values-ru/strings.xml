@@ -22,7 +22,7 @@
     <string name="connection_setup_action_scan_new_qr">Сканировать новый QR</string>
     <string name="connection_setup_action_enter_pairing_code">Ввести код сопряжения</string>
     <string name="connection_setup_action_use_host_password">Указать хост и пароль</string>
-    <string name="connection_setup_action_scan_qr_instead">Сканировать QR</string>
+    <string name="connection_setup_action_scan_qr_instead">Вместо этого сканировать QR</string>
     <string name="connection_setup_scan_qr_instead_hint">Из opencode pair</string>
     <string name="connection_setup_remove_server">Удалить сервер</string>
     <string name="connection_setup_remove_dialog_title_unnamed">Удалить «сервер»?</string>
@@ -79,10 +79,10 @@
     <string name="connection_scanner_card_body">Из opencode pair --remote. Обычная команда pair показывает QR, только когда сервер доступен не только с localhost.</string>
     <string name="connection_onboarding_title">Подключитесь к серверу</string>
     <string name="connection_onboarding_body">OpenCode Mobile управляет сессиями на сервере opencode, запущенном на вашем компьютере для разработки.</string>
-    <string name="connection_onboarding_connect">Подключить сервер</string>
+    <string name="connection_onboarding_connect">Подключиться к серверу</string>
     <string name="onboarding_skip">Пропустить</string>
     <string name="onboarding_next">Далее</string>
-    <string name="onboarding_connect">Подключить сервер</string>
+    <string name="onboarding_connect">Подключиться к серверу</string>
     <string name="onboarding_unofficial_title">Неофициальный\nклиент opencode</string>
     <string name="onboarding_unofficial_body">OpenCode Mobile — нативный клиент для сессий opencode, ещё в разработке. Это не официальный продукт OpenCode.</string>
     <string name="onboarding_unofficial_badge">Неофициальный</string>
@@ -91,9 +91,9 @@
     <string name="onboarding_connect_page_setup_link">Ещё нет сервера?</string>
     <string name="onboarding_features_title">Что можно\nделать отсюда</string>
     <string name="onboarding_features_sessions_title">Сессии</string>
-    <string name="onboarding_features_sessions_detail">Список, открытие, создание, переименование, ответвление, архивирование, удаление</string>
+    <string name="onboarding_features_sessions_detail">Список, открытие, создание, переименование, форк, архивирование, удаление</string>
     <string name="onboarding_features_chat_title">Чат и остановка</string>
-    <string name="onboarding_features_chat_detail">Отправляйте запросы и останавливайте работу на ходу</string>
+    <string name="onboarding_features_chat_detail">Отправляйте промпты и останавливайте работу на ходу</string>
     <string name="onboarding_features_permissions_title">Разрешения</string>
     <string name="onboarding_features_permissions_detail">Разрешайте или запрещайте запросы (без постоянного запоминания)</string>
     <string name="onboarding_features_changes_title">Изменения</string>
@@ -132,7 +132,7 @@
     <string name="server_health_range_hour">1 ч</string>
     <string name="server_health_range_day">24 ч</string>
     <string name="server_health_range_week">7 д</string>
-    <string name="server_health_uptime">Аптайм</string>
+    <string name="server_health_uptime">Время работы</string>
     <string name="server_health_uptime_detail">от измеренных %1$s</string>
     <string name="server_health_reconnects">Переподключения</string>
     <string name="server_health_reconnects_detail">медиана восстановления: %1$s</string>
@@ -196,10 +196,10 @@
     <string name="server_health_status_auth_failed">Ошибка входа</string>
     <string name="server_health_status_stopped">Не измеряется</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Аптайм %1$s · %2$d переподключение сегодня</item>
-        <item quantity="few">Аптайм %1$s · %2$d переподключения сегодня</item>
-        <item quantity="many">Аптайм %1$s · %2$d переподключений сегодня</item>
-        <item quantity="other">Аптайм %1$s · %2$d переподключения сегодня</item>
+        <item quantity="one">Время работы %1$s · %2$d переподключение сегодня</item>
+        <item quantity="few">Время работы %1$s · %2$d переподключения сегодня</item>
+        <item quantity="many">Время работы %1$s · %2$d переподключений сегодня</item>
+        <item quantity="other">Время работы %1$s · %2$d переподключения сегодня</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Измерение…</string>
     <string name="server_health_details">Подробнее</string>
@@ -250,7 +250,7 @@
         <item quantity="many">%1$d проектов</item>
         <item quantity="other">%1$d проекта</item>
     </plurals>
-    <string name="home_main_checkout">основная копия</string>
+    <string name="home_main_checkout">основная рабочая копия</string>
     <plurals name="home_worktree_count">
         <item quantity="one">%1$d worktree</item>
         <item quantity="few">%1$d worktree</item>
@@ -281,19 +281,19 @@
     <string name="home_reorder_note">Перетащите, чтобы изменить порядок. Worktree остаются со своим проектом.</string>
     <string name="home_session_actions_title">Действия с сессией</string>
     <string name="home_session_actions_rename">Переименовать сессию</string>
-    <string name="home_session_actions_fork">Ответвить сессию</string>
+    <string name="home_session_actions_fork">Форкнуть сессию</string>
     <string name="home_session_actions_archive">Архивировать</string>
     <string name="home_rename_title">Переименовать сессию</string>
     <string name="home_session_title_hint">Название</string>
-    <string name="home_fork_title">Ответвить сессию</string>
-    <string name="home_fork_confirm">Ответвить</string>
-    <string name="home_fork_result_title">Сессия ответвлена</string>
+    <string name="home_fork_title">Форкнуть сессию</string>
+    <string name="home_fork_confirm">Форкнуть</string>
+    <string name="home_fork_result_title">Сессия форкнута</string>
     <string name="home_fork_result_message">Сессия «%1$s» готова.</string>
     <string name="home_fork_result_stay">Остаться здесь</string>
     <string name="home_delete_title">Удалить сессию</string>
     <string name="home_delete_message">Удалить сессию «%1$s»?</string>
     <string name="home_session_error_empty_title">Введите название сессии</string>
-    <string name="home_session_error_nothing_to_fork">Пока нечего ответвлять</string>
+    <string name="home_session_error_nothing_to_fork">Пока нечего форкнуть</string>
     <string name="home_session_error_archive_failed">Не удалось архивировать сессию.</string>
     <string name="home_session_error_delete_failed">Не удалось удалить сессию.</string>
     <string name="home_session_error_request_failed">Запрос не выполнен</string>
@@ -482,7 +482,7 @@
     <string name="session_chat_more_options">Ещё</string>
     <string name="session_chat_menu_rename">Переименовать сессию</string>
     <string name="session_chat_menu_review_changes">Просмотреть изменения</string>
-    <string name="session_chat_menu_fork">Ответвить сессию</string>
+    <string name="session_chat_menu_fork">Форкнуть сессию</string>
     <string name="session_chat_menu_browse_files">Обзор файлов</string>
     <string name="session_chat_menu_session_context">Контекст сессии</string>
     <string name="session_chat_menu_copy_session_id">Копировать ID сессии</string>
@@ -495,11 +495,11 @@
     <string name="session_chat_rename_dialog_title">Переименовать сессию</string>
     <string name="session_chat_rename_dialog_save">Сохранить</string>
     <string name="session_chat_title_hint">Название</string>
-    <string name="session_chat_fork_dialog_title">Ответвить сессию</string>
-    <string name="session_chat_fork_dialog_confirm">Ответвить</string>
+    <string name="session_chat_fork_dialog_title">Форкнуть сессию</string>
+    <string name="session_chat_fork_dialog_confirm">Форкнуть</string>
     <string name="session_chat_fork_dialog_error_empty_title">Введите название сессии</string>
-    <string name="session_chat_fork_dialog_error_failed">Не удалось ответвить сессию.</string>
-    <string name="session_chat_fork_result_title">Сессия ответвлена</string>
+    <string name="session_chat_fork_dialog_error_failed">Не удалось форкнуть сессию.</string>
+    <string name="session_chat_fork_result_title">Сессия форкнута</string>
     <string name="session_chat_fork_result_message_ready">Сессия «%1$s» готова.</string>
     <string name="session_chat_fork_result_open">Открыть</string>
     <string name="session_chat_fork_result_stay_here">Остаться здесь</string>
@@ -513,8 +513,8 @@
     <string name="session_chat_commands_back">Назад к командам</string>
     <string name="session_chat_commands_new_label">Новая</string>
     <string name="session_chat_commands_new_description">Начать новую сессию</string>
-    <string name="session_chat_commands_fork_label">Ответвить</string>
-    <string name="session_chat_commands_fork_description">Ответвить эту сессию</string>
+    <string name="session_chat_commands_fork_label">Форкнуть</string>
+    <string name="session_chat_commands_fork_description">Форкнуть эту сессию</string>
     <string name="session_chat_commands_undo_label">Отменить</string>
     <string name="session_chat_commands_undo_description">Отменить последнее сообщение</string>
     <string name="session_chat_commands_redo_label">Повторить</string>
@@ -1088,7 +1088,7 @@
     <string name="session_chat_goal_clear">Сбросить</string>
     <string name="session_chat_goal_clearing">Сброс…</string>
     <string name="session_chat_goal_new">Новая цель…</string>
-    <string name="session_chat_goal_footnote_active">После каждого хода проверяющий сверяет работу с целью. Агент продолжает, пока цель не достигнута, ему не понадобитесь вы или не исчерпан лимит раундов (%1$d).</string>
+    <string name="session_chat_goal_footnote_active">После каждого хода проверяющий сверяет работу с целью. Агент продолжает, пока цель не достигнута, ему не потребуется ваш ответ или не исчерпан лимит раундов (%1$d).</string>
     <string name="session_chat_goal_footnote_paused">После возобновления лимит раундов (%1$d) начнётся заново.</string>
     <string name="session_chat_goal_footnote_met">Новая цель заменит эту.</string>
     <string name="session_chat_goal_paused">Цель на паузе</string>
@@ -1118,7 +1118,7 @@
     <string name="session_chat_goal_resume_failed_reason">Не удалось возобновить цель: %1$s</string>
     <string name="session_chat_goal_clear_failed">Не удалось сбросить цель</string>
     <string name="session_chat_goal_clear_failed_reason">Не удалось сбросить цель: %1$s</string>
-    <string name="session_chat_timeline_style_notice">Лента: %1$s. Изменить можно в любой момент в Настройках.</string>
+    <string name="session_chat_timeline_style_notice">Лента: %1$s. Изменить можно в любой момент в настройках.</string>
     <string name="session_chat_branch_copied">Имя ветки скопировано</string>
     <string name="session_chat_follow_up_switched_steer">Переключено на «Направить»</string>
     <string name="session_chat_follow_up_switched_queue">Переключено на «В очередь»</string>
@@ -1136,10 +1136,10 @@
         <item quantity="other">%1$d файла</item>
     </plurals>
     <plurals name="component_branch_pill_uncommitted_files">
-        <item quantity="one">%1$d незакоммиченный файл</item>
-        <item quantity="few">%1$d незакоммиченных файла</item>
-        <item quantity="many">%1$d незакоммиченных файлов</item>
-        <item quantity="other">%1$d незакоммиченного файла</item>
+        <item quantity="one">%1$d незафиксированный файл</item>
+        <item quantity="few">%1$d незафиксированных файла</item>
+        <item quantity="many">%1$d незафиксированных файлов</item>
+        <item quantity="other">%1$d незафиксированного файла</item>
     </plurals>
     <string name="component_branch_pill_a11y_branch">Ветка %1$s</string>
     <string name="component_branch_pill_a11y_worktree_branch">Ветка worktree %1$s</string>
@@ -1163,7 +1163,7 @@
     <string name="session_chat_question_unavailable">Вопрос больше недоступен</string>
     <string name="session_chat_permission_tree_failed">Не удалось обновить дерево сессий запроса разрешения</string>
     <string name="session_chat_question_tree_failed">Не удалось обновить дерево сессий вопроса</string>
-    <string name="session_chat_sheet_timeline_style_picker_title">Новое: выберите вид ленты</string>
+    <string name="session_chat_sheet_timeline_style_picker_title">Новое: выберите стиль ленты</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">В этом обновлении появились новые способы следить за работой агента.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">Изменить можно в любой момент: Настройки → Стиль ленты.</string>
     <string name="session_chat_sheet_timeline_style_picker_use">Выбрать: %1$s</string>
@@ -1284,7 +1284,7 @@
     <string name="settings_section_help_feedback">Помощь и отзывы</string>
     <string name="settings_section_appearance">Внешний вид</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Главная</string>
+    <string name="settings_section_home">Главный экран</string>
     <string name="settings_section_session_cache">Кэш сессий</string>
     <string name="settings_section_privacy">Конфиденциальность</string>
     <string name="settings_section_about">О приложении</string>
@@ -1329,7 +1329,7 @@
     <string name="settings_follow_up_subtitle_queue">В очередь · только серверы V2. V1 это не поддерживает.</string>
     <string name="settings_follow_up_unsupported">Не поддерживается в V1. Этот сервер всегда отправляет сразу.</string>
     <string name="settings_worktrees_title">Worktree</string>
-    <string name="settings_worktrees_subtitle">Показывать worktree и ветки каждого проекта на главной и давать выбрать worktree в «Новой сессии» при долгом нажатии.</string>
+    <string name="settings_worktrees_subtitle">Показывать worktree и ветки каждого проекта на главном экране и давать выбрать worktree в «Новой сессии» при долгом нажатии.</string>
     <string name="settings_session_rows_title">Строки сессий</string>
     <string name="settings_session_rows_compact_title">Компактные</string>
     <string name="settings_session_rows_compact_subtitle">Две строки: название и время, затем проект / worktree</string>
@@ -1404,7 +1404,7 @@
     <string name="diagnostics_save_to_files">Сохранить в файл</string>
     <string name="diagnostics_clear_dialog_title">Очистить журналы диагностики?</string>
     <string name="diagnostics_clear_dialog_message">Сохранённый журнал диагностики будет удалён.</string>
-    <string name="diagnostics_error_share">Не удалось подготовить журнал диагностики к отправке.</string>
+    <string name="diagnostics_error_share">Не удалось подготовить журнал диагностики, чтобы поделиться им.</string>
     <string name="diagnostics_error_save">Не удалось сохранить журнал диагностики.</string>
     <string name="diagnostics_saved">Журнал диагностики сохранён.</string>
     <string name="appearance_title">Внешний вид</string>
@@ -1436,7 +1436,7 @@
     <string name="appearance_mode_note_system">Повторяет светлое или тёмное оформление телефона.</string>
     <string name="appearance_mode_note_light">Всегда светлый, независимо от настроек телефона.</string>
     <string name="appearance_mode_note_dark">Всегда тёмный, независимо от настроек телефона.</string>
-    <string name="appearance_text_home_title">Текст списка на главной</string>
+    <string name="appearance_text_home_title">Текст списка на главном экране</string>
     <string name="appearance_text_session_chat_title">Текст чата сессии</string>
     <string name="appearance_text_code_title">Текст кода</string>
     <string name="appearance_text_size_label">Размер</string>
@@ -1609,7 +1609,7 @@
     <string name="changes_source_last_turn_empty_title">Нет изменений</string>
     <string name="changes_source_last_turn_empty_message">Последний завершённый ход не изменил ни одного файла.</string>
     <string name="changes_loading_title">Загрузка изменений</string>
-    <string name="changes_loading_message">Получаем diff…</string>
+    <string name="changes_loading_message">Получение диффа…</string>
     <string name="changes_no_turn_title">Нет завершённого хода</string>
     <string name="changes_no_turn_message">Отправьте промпт, дождитесь завершения и повторите попытку.</string>
     <string name="changes_error_title">Не удалось загрузить изменения</string>
@@ -1623,7 +1623,7 @@
     <string name="changes_no_matches_message">Попробуйте другой путь или сбросьте фильтр.</string>
     <string name="changes_no_matches_clear_filter">Сбросить фильтр</string>
     <string name="changes_select_file_title">Выберите файл</string>
-    <string name="changes_select_file_message">Выберите изменённый файл, чтобы увидеть diff.</string>
+    <string name="changes_select_file_message">Выберите изменённый файл, чтобы увидеть дифф.</string>
     <string name="changes_preview_unavailable_title">Предпросмотр недоступен</string>
     <string name="changes_preview_unavailable_message">Для этого файла нет текстового предпросмотра.</string>
     <string name="changes_file_viewer_truncated">Показан первый 1 MB изменений этого файла.</string>
@@ -1725,13 +1725,13 @@
     <string name="component_outgoing_message_shows_actions_hint">Показывает действия с сообщением</string>
     <string name="component_activity_status_stopped">остановлено</string>
     <string name="dictation_action_try_again">Повторить</string>
-    <string name="component_composer_model_effort">Модель %1$s, усилие %2$s</string>
+    <string name="component_composer_model_effort">Модель %1$s, уровень рассуждения %2$s</string>
     <string name="component_activity_card_working">Работает</string>
     <string name="component_activity_card_opens_activity">%1$s, открывает активность</string>
     <string name="component_image_loading_label">%1$s, загрузка</string>
     <string name="session_list_dock_new_session">Новая сессия</string>
     <string name="component_composer_always_allows">Будет разрешено всегда: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">Выйти из режима побочного вопроса</string>
+    <string name="component_composer_leave_side_question_mode">Выйти из режима попутного вопроса</string>
     <string name="session_list_worktree_empty_other_projects">Сбросьте фильтр, чтобы увидеть сессии из других проектов.</string>
     <string name="component_attachment_uploading">Загрузка…</string>
     <string name="component_composer_deny">Запретить</string>
@@ -1748,7 +1748,7 @@
     </plurals>
     <string name="dictation_stopped">Диктовка остановлена</string>
     <string name="dictation_microphone_failed">Не удалось использовать микрофон</string>
-    <string name="dictation_busy">Распознавание речи занято</string>
+    <string name="dictation_busy">Диктовка занята</string>
     <string name="component_composer_question_position">%1$d из %2$d</string>
     <string name="session_list_status_ready">Готово</string>
     <string name="session_list_dock_hint_swipe">Открывает фильтр проектов. Смахните, чтобы переключить проект.</string>
@@ -1758,7 +1758,7 @@
     <string name="session_list_section_recent">Недавние</string>
     <string name="session_list_section_recent_hint">Стоит взглянуть</string>
     <string name="component_activity_status_completed">завершено</string>
-    <string name="share_diagnostics_chooser_title">Поделиться диагностическими логами</string>
+    <string name="share_diagnostics_chooser_title">Поделиться журналами диагностики</string>
     <string name="dictation_model_queued_title">%1$s скачает %2$s позже</string>
     <string name="session_list_dock_choose_project_or_worktree">Выбрать проект или worktree</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
@@ -1766,17 +1766,17 @@
     <string name="component_composer_question">Вопрос</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">Сбросьте фильтр, чтобы увидеть сессии из других worktree.</string>
-    <string name="component_composer_side_question_mode">Режим побочного вопроса</string>
+    <string name="component_composer_side_question_mode">Режим попутного вопроса</string>
     <string name="component_page_indicator_label">Страница %1$d из %2$d</string>
     <string name="component_composer_next">Далее</string>
     <string name="component_message_image_label">Изображение %1$s</string>
-    <string name="component_composer_leave_shell_mode">Выйти из режима shell</string>
+    <string name="component_composer_leave_shell_mode">Выйти из режима оболочки</string>
     <string name="dictation_action_downloading">Загрузка…</string>
     <string name="component_image_viewer_share">Поделиться</string>
     <string name="session_list_status_failed">Сбой</string>
     <string name="component_composer_custom_answer_title">Введите свой ответ</string>
     <string name="component_composer_always">Всегда</string>
-    <string name="component_composer_send_side_question">Задать побочный вопрос</string>
+    <string name="component_composer_send_side_question">Задать попутный вопрос</string>
     <string name="component_composer_select_exactly">Выберите: %1$d</string>
     <string name="dictation_action_open_settings">Открыть настройки</string>
     <string name="component_composer_open_commands">Открыть команды</string>
@@ -1788,7 +1788,7 @@
         <item quantity="other">%1$d дн. назад</item>
     </plurals>
     <string name="component_server_address_scheme_button_description">Схема %1$s. Открывает выбор схемы</string>
-    <string name="share_diagnostics_subject">Диагностические логи OpenCode</string>
+    <string name="share_diagnostics_subject">Журналы диагностики OpenCode</string>
     <string name="component_reorderable_list_move_up">Переместить вверх</string>
     <string name="session_list_scope_load_failed_title">Не удалось загрузить: %1$s</string>
     <string name="dictation_status_listening">Слушаю</string>
@@ -1821,7 +1821,7 @@
     <string name="session_list_status_done">Готово</string>
     <string name="session_list_status_idle">Бездействует</string>
     <string name="component_attachment_kind_file">Файл</string>
-    <string name="component_composer_run_shell_command">Выполнить команду в shell</string>
+    <string name="component_composer_run_shell_command">Выполнить команду в оболочке</string>
     <string name="component_image_could_not_load">Не удалось загрузить</string>
     <string name="component_outgoing_message_show_actions">Показать действия с сообщением</string>
     <string name="live_updates_accessibility_label">Живые обновления: %1$s</string>
@@ -1871,7 +1871,7 @@
         <item quantity="other">%1$d мин назад</item>
     </plurals>
     <string name="component_composer_request_position">%1$d из %2$d</string>
-    <string name="component_composer_side_question_placeholder">Побочный вопрос, в чат не добавляется</string>
+    <string name="component_composer_side_question_placeholder">Попутный вопрос, в чат не добавляется</string>
     <string name="session_list_worktree_empty_every_project">Сбросьте фильтр, чтобы увидеть все проекты.</string>
     <string name="component_image_viewer_could_not_load_named">Не удалось загрузить %1$s</string>
     <string name="component_composer_select_up_to">Выберите не больше %1$d</string>
@@ -1910,14 +1910,14 @@
     <string name="session_list_status_stopped">Остановлено</string>
     <string name="component_attachment_cancel_upload">Отменить загрузку %1$s</string>
     <string name="dictation_cancel_description">Отменить диктовку</string>
-    <string name="component_composer_shell_mode">Режим shell</string>
+    <string name="component_composer_shell_mode">Режим оболочки</string>
     <string name="component_skeleton_illustration_connect">Подключить</string>
     <string name="component_composer_not_selected">Не выбрано</string>
-    <string name="component_composer_shell_mode_description">Режим shell. Выйти из режима shell</string>
+    <string name="component_composer_shell_mode_description">Режим оболочки. Выйти из режима оболочки</string>
     <string name="component_branch_pill_based_on">На основе %1$s</string>
     <string name="component_composer_add_attachment">Добавить вложение</string>
     <string name="dictation_microphone_off">Доступ к микрофону отключён</string>
-    <string name="component_composer_shell">Shell</string>
+    <string name="component_composer_shell">Оболочка</string>
     <string name="live_updates_status_auth_failed">Ошибка аутентификации</string>
     <string name="component_branch_pill_view_all_changes">Посмотреть все изменения</string>
     <string name="component_composer_send">Отправить</string>
@@ -1926,7 +1926,7 @@
     <string name="relative_time_now">сейчас</string>
     <string name="component_composer_previous_permission">Предыдущий запрос разрешения</string>
     <string name="component_composer_dictate">Диктовать</string>
-    <string name="component_composer_side_question_mode_description">Режим побочного вопроса. Выйти из режима побочного вопроса</string>
+    <string name="component_composer_side_question_mode_description">Режим попутного вопроса. Выйти из режима попутного вопроса</string>
     <string name="component_composer_abort">Прервать текущую работу</string>
     <string name="component_server_address_scheme_button">Схема %1$s</string>
     <string name="component_composer_open_subagent_session">Открыть сессию субагента</string>

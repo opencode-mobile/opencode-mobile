@@ -51,7 +51,7 @@
     <string name="connection_setup_address_using_now">Tiek izmantots</string>
     <string name="connection_setup_address_saved">Saglabāts</string>
     <string name="connection_setup_pair_again_unreachable">Saglabātā adrese nav sasniedzama. Savieno pārī vēlreiz.</string>
-    <string name="connection_setup_pair_again_unauthorized">Serveris noraidīja saglabāto pieteikšanos. Savieno pārī vēlreiz. Jauna parole atsakās no visām ierīcēm.</string>
+    <string name="connection_setup_pair_again_unauthorized">Serveris noraidīja saglabāto pieteikšanos. Savieno pārī vēlreiz. Ar jaunu paroli visas ierīces tiek izrakstītas.</string>
     <string name="connection_cleartext_title">Savienojums nav šifrēts</string>
     <string name="connection_cleartext_message_one_host">%1$s izmanto vienkāršu http ārpus tava vietējā tīkla vai Tailscale. Tava servera parole un viss tavās sesijās tiktu sūtīts nešifrēts. Labāk izmanto https, VPN vai tuneli.</string>
     <string name="connection_cleartext_message_hosts">%1$s izmanto vienkāršu http ārpus tava vietējā tīkla vai Tailscale. Tava servera parole un viss tavās sesijās tiktu sūtīts nešifrēts. Labāk izmanto https, VPN vai tuneli.</string>
@@ -95,9 +95,9 @@
     <string name="onboarding_features_chat_title">Tērzēšana un pārtraukšana</string>
     <string name="onboarding_features_chat_detail">Sūti uzvednes un aptur notiekošo darbu</string>
     <string name="onboarding_features_permissions_title">Atļaujas</string>
-    <string name="onboarding_features_permissions_detail">Apstiprini vai liedz pieprasījumus (bez pastāvīgas atcerēšanās)</string>
+    <string name="onboarding_features_permissions_detail">Apstiprini vai noraidi pieprasījumus (bez pastāvīgas atcerēšanās)</string>
     <string name="onboarding_features_changes_title">Izmaiņas</string>
-    <string name="onboarding_features_changes_detail">Apskati sesiju diffus</string>
+    <string name="onboarding_features_changes_detail">Apskati sesiju izmaiņas</string>
     <string name="onboarding_features_live_title">Tiešraidē, kamēr atvērts</string>
     <string name="onboarding_features_live_detail">Notikumu straume priekšplānā; atsvaidzināšana pēc atkārtotas savienošanas</string>
     <string name="onboarding_setup_title">Iestatīt opencode serve</string>
@@ -131,7 +131,7 @@
     <string name="server_health_range_hour">1 h</string>
     <string name="server_health_range_day">24 h</string>
     <string name="server_health_range_week">7 d</string>
-    <string name="server_health_uptime">Darbspējas laiks</string>
+    <string name="server_health_uptime">Darbības laiks</string>
     <string name="server_health_uptime_detail">no %1$s izmērītā</string>
     <string name="server_health_reconnects">Atkārtotas savienošanās</string>
     <string name="server_health_reconnects_detail">atgriežas vidēji %1$s</string>
@@ -194,9 +194,9 @@
     <string name="server_health_status_auth_failed">Autentifikācija neizdevās</string>
     <string name="server_health_status_stopped">Nemēra</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="zero">Darbspēja %1$s · %2$d atkārtotu savienošanos šodien</item>
-        <item quantity="one">Darbspēja %1$s · %2$d atkārtota savienošanās šodien</item>
-        <item quantity="other">Darbspēja %1$s · %2$d atkārtotas savienošanās šodien</item>
+        <item quantity="zero">Darbības laiks %1$s · %2$d atkārtotu savienošanos šodien</item>
+        <item quantity="one">Darbības laiks %1$s · %2$d atkārtota savienošanās šodien</item>
+        <item quantity="other">Darbības laiks %1$s · %2$d atkārtotas savienošanās šodien</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Mēra…</string>
     <string name="server_health_details">Detaļas</string>
@@ -246,7 +246,7 @@
         <item quantity="one">%1$d projekts</item>
         <item quantity="other">%1$d projekti</item>
     </plurals>
-    <string name="home_main_checkout">galvenais checkout</string>
+    <string name="home_main_checkout">galvenā darba kopija</string>
     <plurals name="home_worktree_count">
         <item quantity="zero">%1$d worktree</item>
         <item quantity="one">%1$d worktree</item>
@@ -355,17 +355,17 @@
     <string name="worktree_unsupported">Šis serveris nevar izveidot worktree</string>
     <string name="worktree_form_title">Jauns worktree</string>
     <string name="worktree_name">Nosaukums</string>
-    <string name="worktree_branch">Zars</string>
+    <string name="worktree_branch">Atzars</string>
     <string name="worktree_base">Izveidot no</string>
     <string name="worktree_v1_branch_note">opencode v1 nosauc to pēc worktree</string>
-    <string name="worktree_v2_no_branch">Nav zara (detached)</string>
-    <string name="worktree_v2_branch_note">opencode v2 checkout nav zara</string>
+    <string name="worktree_v2_no_branch">Nav atzara (detached)</string>
+    <string name="worktree_v2_branch_note">opencode v2 darba kopijām nav atzara</string>
     <string name="worktree_current_checkout">Pašreizējais checkout</string>
     <string name="worktree_v1_base_note">opencode v1 izmanto pašreizējo checkout</string>
-    <string name="worktree_base_pick_hint">Pieskaries, lai izvēlētos zaru</string>
+    <string name="worktree_base_pick_hint">Pieskaries, lai izvēlētos atzaru</string>
     <string name="worktree_current_branch">%1$s (pašreizējais)</string>
-    <string name="worktree_base_loading">Ielādē zarus…</string>
-    <string name="worktree_base_failed">Neizdevās ielādēt zarus</string>
+    <string name="worktree_base_loading">Ielādē atzarus…</string>
+    <string name="worktree_base_failed">Neizdevās ielādēt atzarus</string>
     <string name="worktree_name_empty">Ievadi nosaukumu</string>
     <string name="worktree_name_chars">Izmanto burtus, ciparus, punktus, domuzīmes vai pasvītras</string>
     <plurals name="worktree_name_long">
@@ -503,10 +503,10 @@
     <string name="session_chat_commands_fork_label">Atzarot</string>
     <string name="session_chat_commands_fork_description">Atzarot šo sesiju</string>
     <string name="session_chat_commands_undo_label">Atsaukt</string>
-    <string name="session_chat_commands_undo_description">Atsaukt pēdējo ziņu</string>
+    <string name="session_chat_commands_undo_description">Atsaukt pēdējo ziņojumu</string>
     <string name="session_chat_commands_redo_label">Atatsaukt</string>
     <string name="session_chat_commands_redo_description">Atjaunot atsaukto ziņu</string>
-    <string name="session_chat_commands_compact_label">Kompakts</string>
+    <string name="session_chat_commands_compact_label">Saspiest</string>
     <string name="session_chat_commands_compact_description">Saspiest sesijas kontekstu</string>
     <string name="session_chat_commands_terminal_label">Terminālis</string>
     <string name="session_chat_commands_terminal_description">Atvērt projekta shell</string>
@@ -515,7 +515,7 @@
     <string name="session_chat_commands_mcp_label">MCP serveri</string>
     <string name="session_chat_commands_mcp_description">Rādīt MCP serveru statusu</string>
     <string name="session_chat_commands_btw_label">Btw</string>
-    <string name="session_chat_commands_btw_description">Uzdot blakus jautājumu</string>
+    <string name="session_chat_commands_btw_description">Uzdot blakusjautājumu</string>
     <string name="session_chat_suggestion_file">Fails</string>
     <string name="session_chat_suggestion_no_matches">Nav atbilstošu rezultātu</string>
     <string name="session_chat_suggestion_no_commands">Nav komandu</string>
@@ -534,7 +534,7 @@
     <string name="session_chat_model_notice_none_usable">Nav izmantojamu modeļu. Pieskaries čipam „Modelis“, lai mēģinātu vēlreiz.</string>
     <string name="session_chat_model_notice_variant_unavailable">Saglabātais variants nav pieejams. Tiek izmantots noklusējums.</string>
     <string name="session_chat_model_notice_model_unavailable">Izvēlētais modelis nav pieejams. Tiek izmantots %1$s.</string>
-    <string name="session_chat_side_question_unsupported">/btw nepieciešams opencode v2 serveris, kas atbild uz blakus jautājumiem. Šis serveris nevar atbildēt, nepapildinot sarunu.</string>
+    <string name="session_chat_side_question_unsupported">/btw nepieciešams opencode v2 serveris, kas atbild uz blakusjautājumiem. Šis serveris nevar atbildēt, nepapildinot sarunu.</string>
     <string name="session_chat_side_question_unavailable">/btw nepieciešams jaunāks opencode serveris.</string>
     <string name="session_chat_side_question_copied">Atbilde nokopēta</string>
     <string name="session_chat_side_question_failed">/btw neizdevās: „%1$s“</string>
@@ -587,23 +587,23 @@
         <item quantity="one">%1$d uzvedne rindā</item>
         <item quantity="other">%1$d uzvednes rindā</item>
     </plurals>
-    <string name="session_chat_activity_side_question_failed">Blakus jautājums neizdevās</string>
+    <string name="session_chat_activity_side_question_failed">Blakusjautājums neizdevās</string>
     <plurals name="session_chat_activity_side_questions_failed">
-        <item quantity="zero">Neizdevās %1$d blakus jautājumu</item>
-        <item quantity="one">Neizdevās %1$d blakus jautājums</item>
-        <item quantity="other">Neizdevās %1$d blakus jautājumi</item>
+        <item quantity="zero">Neizdevās %1$d blakusjautājumu</item>
+        <item quantity="one">Neizdevās %1$d blakusjautājums</item>
+        <item quantity="other">Neizdevās %1$d blakusjautājumi</item>
     </plurals>
-    <string name="session_chat_activity_side_question_ready">Blakus jautājuma atbilde gatava</string>
+    <string name="session_chat_activity_side_question_ready">Blakusjautājuma atbilde gatava</string>
     <plurals name="session_chat_activity_side_questions_ready">
-        <item quantity="zero">Gatavas atbildes uz %1$d blakus jautājumu</item>
-        <item quantity="one">Gatava atbilde uz %1$d blakus jautājumu</item>
-        <item quantity="other">Gatavas atbildes uz %1$d blakus jautājumiem</item>
+        <item quantity="zero">Gatavas atbildes uz %1$d blakusjautājumu</item>
+        <item quantity="one">Gatava atbilde uz %1$d blakusjautājumu</item>
+        <item quantity="other">Gatavas atbildes uz %1$d blakusjautājumiem</item>
     </plurals>
-    <string name="session_chat_activity_side_question_running">Blakus jautājums darbojas</string>
+    <string name="session_chat_activity_side_question_running">Blakusjautājums darbojas</string>
     <plurals name="session_chat_activity_side_questions_running">
-        <item quantity="zero">Darbojas %1$d blakus jautājumu</item>
-        <item quantity="one">Darbojas %1$d blakus jautājums</item>
-        <item quantity="other">Darbojas %1$d blakus jautājumi</item>
+        <item quantity="zero">Darbojas %1$d blakusjautājumu</item>
+        <item quantity="one">Darbojas %1$d blakusjautājums</item>
+        <item quantity="other">Darbojas %1$d blakusjautājumi</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
     <string name="session_chat_activity_action_open_request">Atvērt pieprasījumu</string>
@@ -928,11 +928,11 @@
     <string name="session_chat_compact_success_usage">Konteksts saspiests · %1$d%% → %2$d%%</string>
     <string name="session_chat_compact_failure">Neizdevās saspiest sesijas kontekstu.</string>
     <string name="session_chat_revert_undo_failed">Neizdevās atsaukt pēdējo ziņojumu.</string>
-    <string name="session_chat_revert_failed">Neizdevās atjaunot ziņojumu.</string>
+    <string name="session_chat_revert_failed">Neizdevās atsaukt ziņojumu.</string>
     <string name="session_chat_revert_redo_failed">Neizdevās atatsaukt.</string>
-    <string name="session_chat_revert_cancel_failed">Neizdevās atcelt atjaunošanu.</string>
-    <string name="session_chat_revert_commit_failed">Neizdevās apstiprināt atjaunošanu.</string>
-    <string name="session_chat_fork_rename_failed">Atzars izveidots, bet to neizdevās pārdēvēt.</string>
+    <string name="session_chat_revert_cancel_failed">Neizdevās atcelt atsaukšanu.</string>
+    <string name="session_chat_revert_commit_failed">Neizdevās apstiprināt atsaukšanu.</string>
+    <string name="session_chat_fork_rename_failed">Atzarotā sesija izveidota, bet to neizdevās pārdēvēt.</string>
     <string name="session_chat_pending_prompt_update_failed">Neizdevās atjaunināt gaidošo uzvedni</string>
     <string name="session_chat_shell_stop_failed">Neizdevās apturēt shell. Mēģini vēlreiz.</string>
     <string name="session_chat_shell_status_running">Darbojas</string>
@@ -947,7 +947,7 @@
     <string name="session_chat_sheet_copy">Kopēt</string>
     <string name="session_chat_sheet_copy_output">Kopēt izvadi</string>
     <string name="session_chat_sheet_message_actions_title">Ziņojums</string>
-    <string name="session_chat_sheet_message_actions_revert">Atjaunot ziņojumu</string>
+    <string name="session_chat_sheet_message_actions_revert">Atsaukt ziņojumu</string>
     <string name="session_chat_sheet_message_actions_fork">Atzarot no šejienes</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Kopēt koda bloku</string>
     <string name="session_chat_sheet_message_actions_copy_message">Kopēt ziņojumu</string>
@@ -1089,19 +1089,19 @@
     <string name="session_chat_delete_failed">Neizdevās dzēst sesiju.</string>
     <string name="session_chat_mcp_load_failed">Neizdevās ielādēt MCP serverus. Pārbaudiet savienojumu un mēģiniet vēlreiz.</string>
     <string name="session_chat_create_failed">Neizdevās izveidot sesiju</string>
-    <string name="session_chat_send_timed_out">Neizdevās nosūtīt. Mēģiniet vēlreiz.</string>
-    <string name="session_chat_shell_cannot_queue">Shell komandas nevar likt rindā. Pārslēdzieties uz Virzīt, lai tās palaistu tūlīt.</string>
-    <string name="session_chat_reply_error_permission">Neizdevās nosūtīt atbildi. Mēģiniet vēlreiz.</string>
+    <string name="session_chat_send_timed_out">Neizdevās nosūtīt. Mēģini vēlreiz.</string>
+    <string name="session_chat_shell_cannot_queue">Shell komandas nevar likt rindā. Pārslēdzies uz Virzīt, lai to palaistu tūlīt.</string>
+    <string name="session_chat_reply_error_permission">Neizdevās nosūtīt atbildi. Mēģini vēlreiz.</string>
     <string name="session_chat_reply_error_permission_reason">Neizdevās nosūtīt atbildi. %1$s.</string>
-    <string name="session_chat_reply_error_question">Neizdevās nosūtīt atbildi. Mēģiniet vēlreiz.</string>
+    <string name="session_chat_reply_error_question">Neizdevās nosūtīt atbildi. Mēģini vēlreiz.</string>
     <string name="session_chat_reply_error_question_reason">Neizdevās nosūtīt atbildi. %1$s.</string>
-    <string name="session_chat_reply_error_dismiss">Neizdevās noraidīt jautājumu. Mēģiniet vēlreiz.</string>
+    <string name="session_chat_reply_error_dismiss">Neizdevās noraidīt jautājumu. Mēģini vēlreiz.</string>
     <string name="session_chat_reply_error_dismiss_reason">Neizdevās noraidīt jautājumu. %1$s.</string>
     <string name="session_chat_permission_unavailable">Atļaujas pieprasījums vairs nav pieejams</string>
     <string name="session_chat_question_unavailable">Jautājuma pieprasījums vairs nav pieejams</string>
     <string name="session_chat_permission_tree_failed">Neizdevās atsvaidzināt sesiju koku ar atļaujām</string>
     <string name="session_chat_question_tree_failed">Neizdevās atsvaidzināt sesiju koku ar jautājumiem</string>
-    <string name="session_chat_sheet_timeline_style_picker_title">Jaunums: izvēlieties savu laika līniju</string>
+    <string name="session_chat_sheet_timeline_style_picker_title">Jaunums: izvēlies savu laika līniju</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Šis atjauninājums piedāvā jaunus veidus, kā sekot līdzi aģenta darbam.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">To var mainīt jebkurā laikā sadaļā Iestatījumi → Laika līnijas stils.</string>
     <string name="session_chat_sheet_timeline_style_picker_use">Izmantot: %1$s</string>
@@ -1185,7 +1185,7 @@
     <string name="session_context_load_failed_message">Konteksts netika ielādēts.</string>
     <string name="session_context_refresh_failed">Neizdevās atsvaidzināt sesijas kontekstu</string>
     <string name="session_context_refreshing">Atsvaidzina sesijas kontekstu</string>
-    <string name="session_context_retry">Mēģiniet vēlreiz</string>
+    <string name="session_context_retry">Mēģināt vēlreiz</string>
     <string name="session_context_stat_session">Sesija</string>
     <string name="session_context_stat_messages">Ziņojumi</string>
     <string name="session_context_stat_provider">Pakalpojumu sniedzējs</string>
@@ -1231,7 +1231,7 @@
         <item quantity="other">%1$d saglabāti · aktīvs: %2$s</item>
     </plurals>
     <string name="settings_send_feedback_title">Sūtīt atsauksmi</string>
-    <string name="settings_send_feedback_subtitle">Ziņojiet par kļūdu vai dalieties idejā</string>
+    <string name="settings_send_feedback_subtitle">Ziņo par kļūdu vai dalies ar ideju</string>
     <string name="settings_hide_user_directory_title">Slēpt lietotāja direktoriju</string>
     <string name="settings_hide_user_directory_subtitle">Rādīt ~/Projects/… nevis /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">Nesenības periods</string>
@@ -1257,7 +1257,7 @@
     <string name="settings_follow_up_subtitle_queue">Rinda · tikai V2 serveriem. V1 to neatbalsta.</string>
     <string name="settings_follow_up_unsupported">V1 to neatbalsta. Šis serveris vienmēr sūta uzreiz.</string>
     <string name="settings_worktrees_title">Worktree</string>
-    <string name="settings_worktrees_subtitle">Rādīt katra projekta worktree un atzarus sākuma ekrānā un ļaut sadaļā Jauna sesija izvēlēties worktree, kad to turat nospiestu.</string>
+    <string name="settings_worktrees_subtitle">Rādīt katra projekta worktree un atzarus sākuma ekrānā un ļaut sadaļā Jauna sesija izvēlēties worktree, kad to turi nospiestu.</string>
     <string name="settings_session_rows_title">Sesiju rindas</string>
     <string name="settings_session_rows_compact_title">Kompakts</string>
     <string name="settings_session_rows_compact_subtitle">Divas rindas: nosaukums un laiks, tad projekts / worktree</string>
@@ -1274,16 +1274,16 @@
     <string name="settings_clear">Notīrīt</string>
     <string name="settings_app_lock_title">Lietotnes bloķēšana</string>
     <string name="settings_app_lock_subtitle_available">Pieprasīt pirksta nospiedumu, sejas atpazīšanu vai ekrāna bloķēšanu, kad lietotne atgriežas no fona</string>
-    <string name="settings_app_lock_subtitle_unavailable">Iestatiet ierīcē ekrāna bloķēšanu, lai izmantotu lietotnes bloķēšanu</string>
+    <string name="settings_app_lock_subtitle_unavailable">Iestati ierīcē ekrāna bloķēšanu, lai izmantotu lietotnes bloķēšanu</string>
     <string name="settings_privacy_policy_title">Privātuma politika</string>
     <string name="settings_privacy_policy_subtitle">Kā lietotnes apstrādā datus</string>
     <string name="settings_analytics_title">Analītika un avāriju atskaites</string>
     <string name="settings_analytics_subtitle">Atļaut neobligātus produkta lietošanas notikumus un avāriju atskaites. Izslēgts: uz Firebase netiek sūtīts nekas.</string>
     <string name="settings_analytics_label">Produkta analītika</string>
     <string name="settings_diagnostic_logs_subtitle">Kopīgot ritošu izpildlaika žurnāla logu ar noslēptiem datiem</string>
-    <string name="settings_clear_all_data_title">Dzēst visus datus</string>
+    <string name="settings_clear_all_data_title">Notīrīt visus datus</string>
     <string name="settings_clear_all_data_subtitle">Noņemt savienojumu un kešatmiņu</string>
-    <string name="settings_clear_all_data_dialog_title">Dzēst visus datus?</string>
+    <string name="settings_clear_all_data_dialog_title">Notīrīt visus datus?</string>
     <string name="settings_clear_all_data_dialog_message">Šo darbību nevar atsaukt.</string>
     <string name="settings_version">Versija</string>
     <string name="settings_build">Būvējums</string>
@@ -1392,9 +1392,9 @@
     <string name="feedback_title_listening">Klausās</string>
     <string name="feedback_kind_bug">Kļūda</string>
     <string name="feedback_kind_idea">Ideja</string>
-    <string name="feedback_placeholder_bug">Kas notika? Ko jūs gaidījāt?</string>
-    <string name="feedback_placeholder_idea">Kas padarītu OpenCode labāku jums?</string>
-    <string name="feedback_privacy_note">Tiek nosūtīts tikai OpenCode Mobile komandai. Nekad neietver jūsu servera adresi, lietotājvārdu vai paroli. Slepenie dati žurnālos tiek noslēpti šajā tālrunī.</string>
+    <string name="feedback_placeholder_bug">Kas notika? Ko tu gaidīji?</string>
+    <string name="feedback_placeholder_idea">Kas padarītu OpenCode labāku tev?</string>
+    <string name="feedback_privacy_note">Tiek nosūtīts tikai OpenCode Mobile komandai. Nekad neietver tava servera adresi, lietotājvārdu vai paroli. Slepenie dati žurnālos tiek noslēpti šajā tālrunī.</string>
     <string name="feedback_error_offline">Jūs esat bezsaistē. Jūsu ziņojums tiek glabāts šeit — mēģiniet vēlreiz, kad būsiet tiešsaistē.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="zero">Jūs tikko nosūtījāt ziņojumu. Mēģiniet vēlreiz pēc %1$d s.</item>
@@ -1490,8 +1490,8 @@
     <string name="keyboard_shortcuts_show_project">Rādīt %1$s</string>
     <string name="keyboard_shortcuts_allow_once">Atļaut vienreiz</string>
     <string name="keyboard_shortcuts_always_allow">Vienmēr atļaut</string>
-    <string name="keyboard_shortcuts_deny">Liegt</string>
-    <string name="keyboard_shortcuts_deny_with_note">Liegt ar piezīmi</string>
+    <string name="keyboard_shortcuts_deny">Noraidīt</string>
+    <string name="keyboard_shortcuts_deny_with_note">Noraidīt ar piezīmi</string>
     <string name="keyboard_shortcuts_send_note">Sūtīt piezīmi</string>
     <string name="keyboard_shortcuts_next_question">Nākamais jautājums</string>
     <string name="keyboard_shortcuts_submit_answers">Iesniegt atbildes</string>
@@ -1525,7 +1525,7 @@
     <string name="changes_loading_title">Ielādē izmaiņas</string>
     <string name="changes_loading_message">Iegūst izmaiņas…</string>
     <string name="changes_no_turn_title">Nav pabeigtas kārtas</string>
-    <string name="changes_no_turn_message">Nosūtiet uzvedni, pagaidiet, kamēr tā pabeidzas, un mēģiniet vēlreiz.</string>
+    <string name="changes_no_turn_message">Nosūti uzvedni, pagaidi, kamēr tā pabeidzas, un mēģini vēlreiz.</string>
     <string name="changes_error_title">Neizdevās ielādēt izmaiņas</string>
     <string name="changes_error_fallback">Izmaiņas netika ielādētas.</string>
     <string name="changes_error_request_failed">Pieprasījums neizdevās</string>
@@ -1534,10 +1534,10 @@
     <string name="changes_filter_hint">Filtrs</string>
     <string name="changes_filter_accessibility_label">Filtrēt mainītos failus</string>
     <string name="changes_no_matches_title">Nav atbilstošu failu</string>
-    <string name="changes_no_matches_message">Izmēģiniet citu ceļu vai notīriet filtru.</string>
+    <string name="changes_no_matches_message">Izmēģini citu ceļu vai notīri filtru.</string>
     <string name="changes_no_matches_clear_filter">Notīrīt filtru</string>
     <string name="changes_select_file_title">Izvēlieties failu</string>
-    <string name="changes_select_file_message">Izvēlieties mainītu failu, lai skatītu izmaiņas.</string>
+    <string name="changes_select_file_message">Izvēlies mainītu failu, lai skatītu izmaiņas.</string>
     <string name="changes_preview_unavailable_title">Priekšskatījums nav pieejams</string>
     <string name="changes_preview_unavailable_message">Šim failam teksta priekšskatījums nav pieejams.</string>
     <string name="changes_file_viewer_truncated">Rāda pirmo 1 MB no šī faila izmaiņām.</string>
@@ -1610,7 +1610,7 @@
     <string name="component_filter_tabs_unseen">jauns</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Vakar</string>
-    <string name="component_composer_reverting_title">Tiek atsaukta šī ziņa</string>
+    <string name="component_composer_reverting_title">Tiek atsaukts šis ziņojums</string>
     <string name="session_new_title">Jauna sesija</string>
     <string name="session_list_dock_add_project">Pievienot projektu</string>
     <string name="theme_error_preset_not_found">Tēmas sagatave nav atrasta</string>
@@ -1631,7 +1631,7 @@
     <string name="component_composer_hide_question">Paslēpt jautājumu</string>
     <string name="live_updates_status_connecting">savienojas</string>
     <string name="dictation_model_queued_detail">Lejupielāde ir ieplānota sistēmā %1$s. Tā var gaidīt Wi-Fi, uzlādi vai brīvu vietu. Pārbaudiet vēlreiz pēc dažām minūtēm.</string>
-    <string name="dictation_model_not_installed_detail">Diktēšana darbojas šajā ierīcē, tāpēc jūsu balss netiek augšupielādēta. %1$s modeli lejupielādē vienreiz un glabā visām lietotnēm.</string>
+    <string name="dictation_model_not_installed_detail">Diktēšana darbojas šajā ierīcē, tāpēc tava balss netiek augšupielādēta. %1$s modeli lejupielādē vienreiz un glabā visām lietotnēm.</string>
     <string name="component_outgoing_message_shows_actions_hint">Parāda ziņas darbības</string>
     <string name="component_activity_status_stopped">apturēts</string>
     <string name="dictation_action_try_again">Mēģināt vēlreiz</string>
@@ -1642,13 +1642,13 @@
     <string name="session_list_dock_new_session">Jauna sesija</string>
     <string name="component_composer_always_allows">Vienmēr atļauj: %1$s</string>
     <string name="component_composer_leave_side_question_mode">Iziet no blakusjautājuma režīma</string>
-    <string name="session_list_worktree_empty_other_projects">Notīriet filtru, lai redzētu sesijas citos projektos.</string>
+    <string name="session_list_worktree_empty_other_projects">Notīri filtru, lai redzētu sesijas citos projektos.</string>
     <string name="component_attachment_uploading">Augšupielādē…</string>
-    <string name="component_composer_deny">Liegt</string>
-    <string name="component_composer_deny_options">Vairāk liegšanas opciju</string>
-    <string name="component_composer_deny_with_note_menu">Liegt ar piezīmi…</string>
-    <string name="component_composer_deny_with_note_menu_subtitle">Pasakiet aģentam, ko darīt tā vietā</string>
-    <string name="component_composer_deny_with_note_title">Liegt ar piezīmi</string>
+    <string name="component_composer_deny">Noraidīt</string>
+    <string name="component_composer_deny_options">Vairāk noraidīšanas iespēju</string>
+    <string name="component_composer_deny_with_note_menu">Noraidīt ar piezīmi…</string>
+    <string name="component_composer_deny_with_note_menu_subtitle">Pasaki aģentam, ko darīt tā vietā</string>
+    <string name="component_composer_deny_with_note_title">Noraidīt ar piezīmi</string>
     <string name="component_composer_deny_note_placeholder">Pasakiet OpenCode, ko darīt citādi</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="zero">Liedz arī %1$d citu gaidošo pieprasījumu.</item>
@@ -1674,7 +1674,7 @@
     <string name="component_image_could_not_load_label">%1$s, neizdevās ielādēt</string>
     <string name="component_composer_question">Jautājums</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Notīriet filtru, lai redzētu sesijas citos worktree.</string>
+    <string name="session_list_worktree_empty_other_worktrees">Notīri filtru, lai redzētu sesijas citos worktree.</string>
     <string name="component_composer_side_question_mode">Blakusjautājuma režīms</string>
     <string name="component_page_indicator_label">%1$d. lapa no %2$d</string>
     <string name="component_composer_next">Tālāk</string>
@@ -1701,7 +1701,7 @@
     <string name="session_list_scope_load_failed_title">Neizdevās ielādēt: %1$s</string>
     <string name="dictation_status_listening">Klausās</string>
     <string name="dictation_downloading_model">Lejupielādē runas modeli</string>
-    <string name="session_list_worktree_empty_every_worktree">Notīriet filtru, lai redzētu visus worktree.</string>
+    <string name="session_list_worktree_empty_every_worktree">Notīri filtru, lai redzētu visus worktree.</string>
     <string name="component_overflow_menu_more_options">Citas opcijas</string>
     <string name="session_list_status_retrying_attempt">Mēģina vēlreiz · %1$d</string>
     <string name="live_updates_status_offline">bezsaistē</string>
@@ -1775,7 +1775,7 @@
     </plurals>
     <string name="component_composer_request_position">%1$d no %2$d</string>
     <string name="component_composer_side_question_placeholder">Blakusjautājums, netiek pievienots sarunai</string>
-    <string name="session_list_worktree_empty_every_project">Notīriet filtru, lai redzētu visus projektus.</string>
+    <string name="session_list_worktree_empty_every_project">Notīri filtru, lai redzētu visus projektus.</string>
     <string name="component_image_viewer_could_not_load_named">Neizdevās ielādēt: %1$s</string>
     <string name="component_composer_select_up_to">Izvēlieties līdz %1$d</string>
     <string name="live_updates_status_live">tiešraide</string>
@@ -1902,12 +1902,12 @@
     <string name="worktrees_remove_sessions_stay">Sesijas, kas izmanto šo worktree, paliek sākuma ekrānā, bet šeit vairs nevar darboties.</string>
     <string name="worktrees_remove_confirm_anyway">Tomēr noņemt</string>
     <string name="worktrees_blocked_title">„%1$s“ vēl nevar noņemt</string>
-    <string name="worktrees_blocked_message">Šajā worktree darbojas sesija. Apturiet to un pēc tam noņemiet worktree.</string>
+    <string name="worktrees_blocked_message">Šajā worktree darbojas sesija. Aptur to un pēc tam noņem worktree.</string>
     <string name="worktrees_blocked_ok">Labi</string>
     <string name="worktrees_blocked_show_session">Rādīt sesiju</string>
     <string name="worktrees_removed">Worktree „%1$s“ noņemts</string>
     <string name="worktrees_remove_failed">Neizdevās noņemt „%1$s“. %2$s</string>
-    <string name="worktrees_remove_failed_connection">Neizdevās noņemt „%1$s“. Pārbaudiet savienojumu un mēģiniet vēlreiz.</string>
+    <string name="worktrees_remove_failed_connection">Neizdevās noņemt „%1$s“. Pārbaudi savienojumu un mēģini vēlreiz.</string>
     <string name="worktrees_menu_subtitle">%1$d — %2$s</string>
     <string name="worktrees_menu_none">Nav</string>
     <string name="session_list_worktree_removed">worktree noņemts</string>

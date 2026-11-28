@@ -51,7 +51,7 @@
     <string name="connection_setup_address_using_now">使用中</string>
     <string name="connection_setup_address_saved">保存済み</string>
     <string name="connection_setup_pair_again_unreachable">保存したアドレスに到達できません。もう一度ペアリングしてください。</string>
-    <string name="connection_setup_pair_again_unauthorized">このサーバーは保存したサインインを拒否しました。もう一度ペアリングしてください。パスワードを変更すると、すべてのデバイスがログアウトされます。</string>
+    <string name="connection_setup_pair_again_unauthorized">このサーバーは保存済みの認証情報を拒否しました。もう一度ペアリングしてください。パスワードを変更すると、すべてのデバイスがサインアウトされます。</string>
     <string name="connection_cleartext_title">接続が暗号化されていません</string>
     <string name="connection_cleartext_message_one_host">%1$s は、ローカルネットワークやTailscale以外でプレーンなhttpを使用しています。サーバーのパスワードとセッションの内容がすべて暗号化されずに送信されます。https、VPN、トンネルの利用をおすすめします。</string>
     <string name="connection_cleartext_message_hosts">%1$s は、ローカルネットワークやTailscale以外でプレーンなhttpを使用しています。サーバーのパスワードとセッションの内容がすべて暗号化されずに送信されます。https、VPN、トンネルの利用をおすすめします。</string>
@@ -87,7 +87,7 @@
     <string name="onboarding_unofficial_body">OpenCode Mobileはopencodeセッション用のネイティブクライアントです（開発中）。OpenCodeの公式製品ではありません。</string>
     <string name="onboarding_unofficial_badge">非公式</string>
     <string name="onboarding_connect_page_title">サーバーに\n接続</string>
-    <string name="onboarding_connect_page_body">お使いのマシン上のopencodeサーバーをアプリに指定します。どこからでも安全にスマートフォンから接続できるよう、Tailscaleをおすすめします。</string>
+    <string name="onboarding_connect_page_body">お使いのマシン上のopencodeサーバーをアプリに指定します。スマートフォンからどこでも安全に接続できるよう、Tailscaleの利用をおすすめします。</string>
     <string name="onboarding_connect_page_setup_link">先にサーバーが必要ですか？</string>
     <string name="onboarding_features_title">ここでできること</string>
     <string name="onboarding_features_sessions_title">セッション</string>
@@ -97,7 +97,7 @@
     <string name="onboarding_features_permissions_title">権限</string>
     <string name="onboarding_features_permissions_detail">リクエストを許可または拒否（許可は保存されません）</string>
     <string name="onboarding_features_changes_title">変更</string>
-    <string name="onboarding_features_changes_detail">セッションのdiffを確認</string>
+    <string name="onboarding_features_changes_detail">セッションの差分を確認</string>
     <string name="onboarding_features_live_title">開いている間はライブ更新</string>
     <string name="onboarding_features_live_detail">フォアグラウンドのイベントストリーム。再接続後に更新</string>
     <string name="onboarding_setup_title">opencode serve をセットアップ</string>
@@ -129,7 +129,7 @@
     <string name="server_health_range_hour">1時間</string>
     <string name="server_health_range_day">24時間</string>
     <string name="server_health_range_week">7日</string>
-    <string name="server_health_uptime">稼働率</string>
+    <string name="server_health_uptime">稼働時間</string>
     <string name="server_health_uptime_detail">計測時間 %1$s 中</string>
     <string name="server_health_reconnects">再接続</string>
     <string name="server_health_reconnects_detail">中央値 %1$s で復帰</string>
@@ -190,7 +190,7 @@
     <string name="server_health_status_auth_failed">認証失敗</string>
     <string name="server_health_status_stopped">計測停止中</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="other">稼働率 %1$s · 本日の再接続 %2$d回</item>
+        <item quantity="other">稼働時間 %1$s · 本日の再接続 %2$d回</item>
     </plurals>
     <string name="server_health_quick_view_measuring">計測中…</string>
     <string name="server_health_details">詳細</string>
@@ -324,7 +324,7 @@
     </plurals>
     <string name="add_project_in_folder">%1$s内</string>
     <string name="add_project_root_home">ホーム</string>
-    <string name="add_project_error_add_failed">このディレクトリを追加できません</string>
+    <string name="add_project_error_add_failed">このフォルダを追加できません</string>
     <string name="worktree_new_row">新しいworktree…</string>
     <string name="worktree_run_in_subtitle">チェックアウトを作成してそこで開始</string>
     <string name="worktree_move_subtitle">チェックアウトを作成してそこへ移動</string>
@@ -480,8 +480,8 @@
     <string name="session_chat_commands_undo_description">最後のメッセージを元に戻す</string>
     <string name="session_chat_commands_redo_label">やり直す</string>
     <string name="session_chat_commands_redo_description">元に戻したメッセージをやり直す</string>
-    <string name="session_chat_commands_compact_label">コンパクト</string>
-    <string name="session_chat_commands_compact_description">セッションのコンテキストをコンパクト化</string>
+    <string name="session_chat_commands_compact_label">圧縮</string>
+    <string name="session_chat_commands_compact_description">セッションのコンテキストを圧縮</string>
     <string name="session_chat_commands_terminal_label">ターミナル</string>
     <string name="session_chat_commands_terminal_description">プロジェクトのシェルを開く</string>
     <string name="session_chat_commands_files_label">ファイル</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_model_chip_loading">モデルを読み込み中…</string>
     <string name="session_chat_model_notice_load_failed">モデルを読み込めません。「モデル」をタップして再試行してください。</string>
     <string name="session_chat_model_notice_none_usable">使用できるモデルがありません。「モデル」をタップして再試行してください。</string>
-    <string name="session_chat_model_notice_variant_unavailable">記憶していたバリアントは使用できません。デフォルトを使用します。</string>
+    <string name="session_chat_model_notice_variant_unavailable">記憶していた推論レベルは使用できません。デフォルトを使用します。</string>
     <string name="session_chat_model_notice_model_unavailable">選択したモデルは使用できません。%1$sを使用します。</string>
     <string name="session_chat_side_question_unsupported">/btw には、サイド質問に対応したopencode v2サーバーが必要です。このサーバーでは、会話に追加せずに回答することはできません。</string>
     <string name="session_chat_side_question_unavailable">/btw には、より新しいopencodeサーバーが必要です。</string>
@@ -594,7 +594,7 @@
     <string name="new_session_discard_draft">下書きを破棄</string>
     <string name="new_session_run_in_caption">セッションの実行先</string>
     <string name="new_session_project">プロジェクト</string>
-    <string name="new_session_worktree">Worktree</string>
+    <string name="new_session_worktree">worktree</string>
     <string name="new_session_starts_from">開始元</string>
     <string name="new_session_local">ローカル</string>
     <string name="new_session_new_worktree">新しいworktree</string>
@@ -606,7 +606,7 @@
     <string name="new_session_run_in_project">%1$sで実行</string>
     <string name="new_session_current_checkout">%1$s · 現在のチェックアウト</string>
     <string name="new_session_new_worktree_subtitle">独立したコピー、送信時に作成</string>
-    <string name="new_session_worktrees_section">Worktree</string>
+    <string name="new_session_worktrees_section">worktree</string>
     <string name="timeline_state_loading_title">メッセージを読み込み中</string>
     <string name="timeline_state_loading_subtitle">タイムラインを取得中…</string>
     <string name="timeline_state_error_title">メッセージを読み込めません</string>
@@ -795,24 +795,24 @@
     <string name="timeline_notice_agent_changed">エージェント変更</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
     <string name="timeline_notice_switched_to">切り替え先</string>
-    <string name="timeline_notice_variant_switched">バリアントの切り替え先</string>
-    <string name="timeline_notice_variant_default">バリアントをデフォルトに切り替えました</string>
+    <string name="timeline_notice_variant_switched">推論レベルの切り替え先</string>
+    <string name="timeline_notice_variant_default">推論レベルをデフォルトに切り替えました</string>
     <string name="timeline_notice_instructions_updated">指示が更新されました</string>
     <string name="timeline_notice_restart">再起動後に続行</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">コンテキストをコンパクト化しました</string>
+    <string name="timeline_compaction_title">コンテキストを圧縮しました</string>
     <string name="timeline_compaction_automatic">自動</string>
     <string name="timeline_syncing">同期中…</string>
     <string name="timeline_failure_session_work_failed">セッションの処理に失敗</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">モデルを選択</string>
-    <string name="timeline_failure_compact">コンパクト</string>
-    <string name="session_chat_compact_status">コンパクト化中…</string>
+    <string name="timeline_failure_compact">圧縮</string>
+    <string name="session_chat_compact_status">圧縮中…</string>
     <string name="session_chat_turn_sending">送信中…</string>
     <string name="session_chat_turn_sending_percent">送信中 %1$d%%</string>
-    <string name="session_chat_compact_success">セッションをコンパクト化しました。</string>
-    <string name="session_chat_compact_success_usage">コンテキストをコンパクト化しました · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">セッションのコンテキストをコンパクト化できませんでした。</string>
+    <string name="session_chat_compact_success">セッションを圧縮しました。</string>
+    <string name="session_chat_compact_success_usage">コンテキストを圧縮しました · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">セッションのコンテキストを圧縮できませんでした。</string>
     <string name="session_chat_revert_undo_failed">最後のメッセージを元に戻せませんでした。</string>
     <string name="session_chat_revert_failed">メッセージを取り消せませんでした。</string>
     <string name="session_chat_revert_redo_failed">やり直せませんでした。</string>
@@ -864,11 +864,11 @@
     <string name="session_chat_sheet_pending_prompts_clear_all">すべてクリア</string>
     <string name="session_chat_sheet_pending_prompts_sending">送信中…</string>
     <string name="session_chat_sheet_pending_prompts_move_to_queue">キューに移動</string>
-    <string name="session_chat_sheet_pending_prompts_steer_now">今すぐ方向を指示</string>
+    <string name="session_chat_sheet_pending_prompts_steer_now">今すぐ割り込む</string>
     <string name="session_chat_sheet_pending_prompts_delete">削除</string>
     <string name="session_chat_sheet_side_question_done">完了</string>
     <string name="session_chat_sheet_side_question_not_added">会話には追加されません</string>
-    <string name="session_chat_sheet_todos_title">セッションのTodo</string>
+    <string name="session_chat_sheet_todos_title">セッションのToDo</string>
     <string name="session_chat_sheet_todos_progress">%2$d件中%1$d件完了</string>
     <string name="session_chat_goal_pill">ゴール</string>
     <string name="session_chat_goal_pill_paused">ゴール一時停止中</string>
@@ -940,7 +940,7 @@
     <string name="session_chat_goal_clear_failed_reason">ゴールをクリアできませんでした: %1$s</string>
     <string name="session_chat_timeline_style_notice">タイムライン: %1$s。設定でいつでも変更できます。</string>
     <string name="session_chat_branch_copied">ブランチ名をコピーしました</string>
-    <string name="session_chat_follow_up_switched_steer">「方向を指示」に切り替えました</string>
+    <string name="session_chat_follow_up_switched_steer">「割り込み」に切り替えました</string>
     <string name="session_chat_follow_up_switched_queue">「キュー」に切り替えました</string>
     <string name="session_chat_failure_retry_after_seconds">%1$d秒後にもう一度お試しください</string>
     <string name="session_chat_failure_retry_after_minutes">%1$d分後にもう一度お試しください</string>
@@ -966,7 +966,7 @@
     <string name="session_chat_mcp_load_failed">MCPサーバーを読み込めませんでした。接続を確認して、もう一度お試しください。</string>
     <string name="session_chat_create_failed">セッションを作成できません</string>
     <string name="session_chat_send_timed_out">送信できませんでした。もう一度お試しください。</string>
-    <string name="session_chat_shell_cannot_queue">シェルコマンドはキューに入れられません。「方向を指示」に切り替えると今すぐ実行できます。</string>
+    <string name="session_chat_shell_cannot_queue">シェルコマンドはキューに入れられません。「割り込み」に切り替えると今すぐ実行できます。</string>
     <string name="session_chat_reply_error_permission">返信を送信できませんでした。もう一度お試しください。</string>
     <string name="session_chat_reply_error_permission_reason">返信を送信できませんでした。%1$s。</string>
     <string name="session_chat_reply_error_question">回答を送信できませんでした。もう一度お試しください。</string>
@@ -991,9 +991,9 @@
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">実行中のステップを1枚のカードにまとめ、完了後は要約に折りたたみ</string>
     <string name="session_chat_sheet_picker_model">モデル</string>
     <string name="session_chat_sheet_picker_agent_mode">エージェントモード</string>
-    <string name="session_chat_sheet_picker_variant">バリアント</string>
+    <string name="session_chat_sheet_picker_variant">推論レベル</string>
     <string name="session_chat_sheet_picker_back_to_providers">プロバイダーに戻る</string>
-    <string name="session_chat_sheet_picker_no_models_match">フィルターに一致するモデルがありません</string>
+    <string name="session_chat_sheet_picker_no_models_match">絞り込み条件に一致するモデルがありません</string>
     <string name="session_chat_sheet_picker_filter_models_hint">モデルを絞り込む...</string>
     <string name="session_chat_sheet_tool_detail_provider_response">プロバイダーの応答</string>
     <string name="session_chat_sheet_tool_detail_tool">ツール</string>
@@ -1107,12 +1107,12 @@
     <string name="settings_timeline_style_activity_card_title">アクティビティカード</string>
     <string name="settings_timeline_style_activity_card_subtitle">実行中のステップを1枚のカードにまとめ、完了後は要約に折りたたみ</string>
     <string name="settings_follow_up_title">追加メッセージの送信</string>
-    <string name="settings_follow_up_steer">方向を指示</string>
+    <string name="settings_follow_up_steer">割り込み</string>
     <string name="settings_follow_up_queue">キュー</string>
-    <string name="settings_follow_up_subtitle_steer">方向を指示 · V2サーバーのみ。V1は非対応です。</string>
+    <string name="settings_follow_up_subtitle_steer">割り込み · V2サーバーのみ。V1は非対応です。</string>
     <string name="settings_follow_up_subtitle_queue">キュー · V2サーバーのみ。V1は非対応です。</string>
     <string name="settings_follow_up_unsupported">V1では非対応です。このサーバーは常にすぐに送信します。</string>
-    <string name="settings_worktrees_title">Worktree</string>
+    <string name="settings_worktrees_title">worktree</string>
     <string name="settings_worktrees_subtitle">ホームに各プロジェクトのworktreeとブランチを表示し、「新しいセッション」を長押しするとworktreeを選べます。</string>
     <string name="settings_session_rows_title">セッションの行</string>
     <string name="settings_session_rows_compact_title">コンパクト</string>
@@ -1338,7 +1338,7 @@
     <string name="changes_source_menu_selected">%1$s、選択中</string>
     <string name="changes_source_working_tree_name">Gitの変更</string>
     <string name="changes_source_working_tree_empty_title">Gitの変更はありません</string>
-    <string name="changes_source_working_tree_empty_message">作業ツリーにコミットされていない変更はありません。</string>
+    <string name="changes_source_working_tree_empty_message">作業ツリーに未コミットの変更はありません。</string>
     <string name="changes_source_last_turn_name">直前のターンの変更</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="other">「Gitの変更」に%1$d件の変更ファイルがあります。</item>
@@ -1455,7 +1455,7 @@
     <string name="component_outgoing_message_shows_actions_hint">メッセージの操作を表示します</string>
     <string name="component_activity_status_stopped">停止済み</string>
     <string name="dictation_action_try_again">再試行</string>
-    <string name="component_composer_model_effort">モデル %1$s、エフォート %2$s</string>
+    <string name="component_composer_model_effort">モデル %1$s、推論レベル %2$s</string>
     <string name="component_activity_card_working">作業中</string>
     <string name="component_activity_card_opens_activity">%1$s、アクティビティを開く</string>
     <string name="component_image_loading_label">%1$s、読み込み中</string>
@@ -1557,7 +1557,7 @@
         <item quantity="other">他に%1$d件が実行中</item>
     </plurals>
     <plurals name="component_activity_card_agent_count">
-        <item quantity="other">%1$dエージェント</item>
+        <item quantity="other">エージェント%1$d件</item>
     </plurals>
     <string name="theme_error_syntax_preset_not_found">シンタックスハイライトのプリセットが見つかりません</string>
     <string name="session_list_scope_load_slow">まだ読み込み中…</string>
@@ -1645,7 +1645,7 @@
     <string name="component_activity_sheet_working_count">作業中 %1$d</string>
     <string name="session_list_status_retrying">再試行中</string>
     <string name="component_attachment_remove">%1$sを削除</string>
-    <string name="component_composer_send_steer">「方向を指示」で送信</string>
+    <string name="component_composer_send_steer">「割り込み」で送信</string>
     <string name="component_composer_next_permission">次の権限リクエスト</string>
     <string name="session_list_dock_project_filter">プロジェクトの絞り込み</string>
     <string name="component_split_pane_resize_hint">ダブルタップでサイドバーを隠します</string>
@@ -1691,10 +1691,10 @@
     <string name="worktrees_remove_title">worktree「%1$s」を削除しますか？</string>
     <string name="worktrees_remove_message">サーバー上の%1$sを削除します。</string>
     <plurals name="worktrees_remove_changes">
-        <item quantity="other">コミットされていない%1$d件の変更が失われます。</item>
+        <item quantity="other">未コミットの変更%1$d件が失われます。</item>
     </plurals>
-    <string name="worktrees_remove_changes_unknown">コミットされていない変更が失われます。</string>
-    <string name="worktrees_remove_changes_unchecked">コミットされていない変更を確認できませんでした。ある場合は失われます。</string>
+    <string name="worktrees_remove_changes_unknown">未コミットの変更が失われます。</string>
+    <string name="worktrees_remove_changes_unchecked">未コミットの変更を確認できませんでした。ある場合は失われます。</string>
     <string name="worktrees_remove_sessions_stay">このworktreeを使うセッションはホームに残りますが、ここでは再び実行できません。</string>
     <string name="worktrees_remove_confirm_anyway">このまま削除</string>
     <string name="worktrees_blocked_title">「%1$s」はまだ削除できません</string>

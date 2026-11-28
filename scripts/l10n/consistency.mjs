@@ -22,6 +22,7 @@ const TERMS = [
   "skill", "prompt", "context", "token", "usage", "connection profile", "app lock", "dictation",
   "server health", "side question", "notification", "theme", "appearance", "allow", "deny",
   "reject", "always allow", "clear", "remove", "delete", "stop", "send", "share", "copy", "settings",
+  "folder", "file", "path", "directory", "log", "line", "step", "dictation",
 ];
 const PER_TERM = 30;
 

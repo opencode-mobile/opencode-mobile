@@ -12,17 +12,17 @@
     <string name="common_loading_sessions">Nalaganje sej</string>
     <string name="common_checking_server">Preverjanje strežnika …</string>
     <string name="connection_setup_title_first">Povezava s strežnikom</string>
-    <string name="connection_setup_title_add">Dodaj strežnik</string>
+    <string name="connection_setup_title_add">Dodajte strežnik</string>
     <string name="connection_setup_title_edit">Uredi strežnik</string>
     <string name="connection_setup_action_connect">Povežite se</string>
     <string name="connection_setup_action_connecting">Povezovanje …</string>
     <string name="connection_setup_action_save">Shrani</string>
     <string name="connection_setup_action_saving">Shranjevanje …</string>
-    <string name="connection_setup_action_scan_qr">Skeniraj QR</string>
-    <string name="connection_setup_action_scan_new_qr">Skeniraj novo kodo QR</string>
-    <string name="connection_setup_action_enter_pairing_code">Vnesi kodo za seznanitev</string>
-    <string name="connection_setup_action_use_host_password">Uporabi gostitelja in geslo</string>
-    <string name="connection_setup_action_scan_qr_instead">Raje skeniraj QR</string>
+    <string name="connection_setup_action_scan_qr">Skenirajte QR</string>
+    <string name="connection_setup_action_scan_new_qr">Skenirajte novo kodo QR</string>
+    <string name="connection_setup_action_enter_pairing_code">Vnesite kodo za seznanitev</string>
+    <string name="connection_setup_action_use_host_password">Uporabite gostitelja in geslo</string>
+    <string name="connection_setup_action_scan_qr_instead">Raje skenirajte QR</string>
     <string name="connection_setup_scan_qr_instead_hint">Iz ukaza opencode pair</string>
     <string name="connection_setup_remove_server">Odstrani strežnik</string>
     <string name="connection_setup_remove_dialog_title_unnamed">Odstranim »strežnik«?</string>
@@ -56,7 +56,7 @@
     <string name="connection_cleartext_message_one_host">%1$s uporablja navaden http zunaj vašega lokalnega omrežja ali Tailscala. Geslo strežnika in vse v vaših sejah bi potovalo nešifrirano. Raje uporabite https, VPN ali tunel.</string>
     <string name="connection_cleartext_message_hosts">%1$s uporabljajo navaden http zunaj vašega lokalnega omrežja ali Tailscala. Geslo strežnika in vse v vaših sejah bi potovalo nešifrirano. Raje uporabite https, VPN ali tunel.</string>
     <string name="connection_cleartext_message_this_address">Ta naslov uporablja navaden http zunaj vašega lokalnega omrežja ali Tailscala. Geslo strežnika in vse v vaših sejah bi potovalo nešifrirano. Raje uporabite https, VPN ali tunel.</string>
-    <string name="connection_cleartext_connect_anyway">Vseeno poveži</string>
+    <string name="connection_cleartext_connect_anyway">Vseeno povežite</string>
     <string name="connection_error_invalid_qr">To ni koda QR za seznanitev z OpenCode 2</string>
     <string name="connection_error_localhost_qr">Ta koda QR vsebuje samo naslov localhost</string>
     <string name="connection_error_camera_denied">Dovolite dostop do kamere za skeniranje kode QR</string>
@@ -74,7 +74,7 @@
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Preverjanje pristnosti ni uspelo</string>
     <string name="connection_error_unhealthy">Strežnik sporoča, da ni v redu</string>
-    <string name="connection_scanner_title">Skeniraj QR za seznanitev</string>
+    <string name="connection_scanner_title">Skenirajte QR za seznanitev</string>
     <string name="connection_scanner_card_title">QR za seznanitev z OpenCode</string>
     <string name="connection_scanner_card_body">Iz ukaza opencode pair --remote. Navaden pair prikaže kodo QR le, ko je strežnik dosegljiv tudi zunaj localhosta.</string>
     <string name="connection_onboarding_title">Povežite se s strežnikom</string>
@@ -93,7 +93,7 @@
     <string name="onboarding_features_sessions_title">Seje</string>
     <string name="onboarding_features_sessions_detail">Prikaz, odpiranje, ustvarjanje, preimenovanje, razvejanje, arhiviranje, brisanje</string>
     <string name="onboarding_features_chat_title">Klepet in prekinitev</string>
-    <string name="onboarding_features_chat_detail">Pošiljajte ukaze in ustavite delo, ki je v teku</string>
+    <string name="onboarding_features_chat_detail">Pošiljajte pozive in ustavite delo, ki je v teku</string>
     <string name="onboarding_features_permissions_title">Dovoljenja</string>
     <string name="onboarding_features_permissions_detail">Odobrite ali zavrnite zahteve (brez trajnega pomnjenja)</string>
     <string name="onboarding_features_changes_title">Spremembe</string>
@@ -110,17 +110,17 @@
     <string name="onboarding_setup_step3_title">Dosezite ga s telefona</string>
     <string name="onboarding_setup_step3_body">Priporočeno: Tailscale – namestite Tailscale v računalnik in telefon, nato kot URL strežnika uporabite Tailscale IP ali ime MagicDNS računalnika.\n\nPrimerno je tudi isto lokalno omrežje, VPN, HTTPS ali drug tunel, ki ga upravljate sami. Aplikacija ne ustvari posrednika.</string>
     <string name="onboarding_setup_step4_title">Povežite se v aplikaciji</string>
-    <string name="onboarding_setup_step4_body">Vnesite osnovni URL in geslo. Aplikacija preveri GET /global/health, nato v tej napravi shrani povezavo s strežnikom.</string>
-    <string name="onboarding_setup_open_docs">Odpri dokumentacijo strežnika</string>
+    <string name="onboarding_setup_step4_body">Vnesite osnovni URL in geslo. Aplikacija preveri GET /global/health, nato v tej napravi ustvari shranjeno povezavo s strežnikom.</string>
+    <string name="onboarding_setup_open_docs">Odprite dokumentacijo strežnika</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile je zaklenjen</string>
     <string name="privacy_cover_unlock">Odkleni</string>
     <string name="servers_title">Strežniki</string>
     <plurals name="servers_profile_count">
-        <item quantity="one">%1$d povezava s strežnikom</item>
-        <item quantity="two">%1$d povezavi s strežnikom</item>
-        <item quantity="few">%1$d povezave s strežnikom</item>
-        <item quantity="other">%1$d povezav s strežnikom</item>
+        <item quantity="one">%1$d shranjena povezava s strežnikom</item>
+        <item quantity="two">%1$d shranjeni povezavi s strežnikom</item>
+        <item quantity="few">%1$d shranjene povezave s strežnikom</item>
+        <item quantity="other">%1$d shranjenih povezav s strežnikom</item>
     </plurals>
     <string name="servers_saved">Shranjeni</string>
     <string name="server_health_title">Stanje strežnika</string>
@@ -132,7 +132,7 @@
     <string name="server_health_range_hour">1 h</string>
     <string name="server_health_range_day">24 h</string>
     <string name="server_health_range_week">7 d</string>
-    <string name="server_health_uptime">Razpoložljivost</string>
+    <string name="server_health_uptime">Čas delovanja</string>
     <string name="server_health_uptime_detail">od %1$s izmerjenega</string>
     <string name="server_health_reconnects">Ponovne povezave</string>
     <string name="server_health_reconnects_detail">povezava nazaj v %1$s (mediana)</string>
@@ -196,29 +196,29 @@
     <string name="server_health_status_auth_failed">Prijava ni uspela</string>
     <string name="server_health_status_stopped">Brez merjenja</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Razpoložljivost %1$s · %2$d ponovna povezava danes</item>
-        <item quantity="two">Razpoložljivost %1$s · %2$d ponovni povezavi danes</item>
-        <item quantity="few">Razpoložljivost %1$s · %2$d ponovne povezave danes</item>
-        <item quantity="other">Razpoložljivost %1$s · %2$d ponovnih povezav danes</item>
+        <item quantity="one">Čas delovanja %1$s · %2$d ponovna povezava danes</item>
+        <item quantity="two">Čas delovanja %1$s · %2$d ponovni povezavi danes</item>
+        <item quantity="few">Čas delovanja %1$s · %2$d ponovne povezave danes</item>
+        <item quantity="other">Čas delovanja %1$s · %2$d ponovnih povezav danes</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Merjenje …</string>
     <string name="server_health_details">Podrobnosti</string>
-    <string name="server_health_open_details">Odpri stanje strežnika</string>
+    <string name="server_health_open_details">Odprite stanje strežnika</string>
     <string name="server_health_unknown_value">—</string>
     <string name="server_health_axis_ago">pred %1$s</string>
     <string name="server_health_hero_streams">%1$d od %2$d tokov dogodkov v živo</string>
     <string name="servers_status_active">Aktiven</string>
-    <string name="servers_add">Dodaj strežnik</string>
+    <string name="servers_add">Dodajte strežnik</string>
     <string name="servers_edit_profile">Uredi %1$s</string>
     <string name="servers_remove_dialog_title_named">Odstranim »%1$s«?</string>
     <string name="servers_remove_dialog_message">Ta naprava pozabi shranjeno povezavo s strežnikom. Seje ostanejo na tistem strežniku. Če je to aktivni strežnik, boste izbrali drugega – ali pa se vrnili na zaslon za povezavo, če ne ostane noben.</string>
-    <string name="common_retry">Poskusi znova</string>
+    <string name="common_retry">Poskusite znova</string>
     <string name="common_save">Shrani</string>
     <string name="common_delete">Izbriši</string>
     <string name="common_edit">Uredi</string>
     <string name="common_done">Končano</string>
     <string name="common_new">Novo</string>
-    <string name="common_open">Odpri</string>
+    <string name="common_open">Odprite</string>
     <string name="common_settings">Nastavitve</string>
     <string name="common_terminal">Terminal</string>
     <string name="common_selected">Izbrano</string>
@@ -276,8 +276,8 @@
         <item quantity="other">Pokaži vse (%1$d)</item>
     </plurals>
     <string name="home_show_fewer">Pokaži manj</string>
-    <string name="home_show_worktrees">Pokaži worktree za %1$s</string>
-    <string name="home_hide_worktrees">Skrij worktree za %1$s</string>
+    <string name="home_show_worktrees">Pokaži worktree-e za %1$s</string>
+    <string name="home_hide_worktrees">Skrij worktree-e za %1$s</string>
     <string name="home_reorder_note">Povlecite za preurejanje. Worktree-i ostanejo pri svojem projektu.</string>
     <string name="home_session_actions_title">Dejanja seje</string>
     <string name="home_session_actions_rename">Preimenuj sejo</string>
@@ -316,7 +316,7 @@
     <string name="archived_sessions_load_failed">Arhiviranih sej ni bilo mogoče naložiti.</string>
     <string name="archived_sessions_unarchive_failed">Seje ni bilo mogoče odarhivirati.</string>
     <string name="session_chat_archived_banner">Arhivirano %1$s</string>
-    <string name="add_project_title">Dodaj projekt</string>
+    <string name="add_project_title">Dodajte projekt</string>
     <string name="add_project_browse_folders">Prebrskaj mape</string>
     <string name="add_project_browse_folders_subtitle">Izberite katero koli mapo na tem strežniku</string>
     <string name="add_project_on_this_server">Na tem strežniku</string>
@@ -331,8 +331,8 @@
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Izberite mapo</string>
     <string name="add_project_already_on_home">Že na začetnem zaslonu</string>
-    <string name="add_project_add_home_folder">Dodaj domačo mapo</string>
-    <string name="add_project_add_this_folder">Dodaj to mapo</string>
+    <string name="add_project_add_home_folder">Dodajte domačo mapo</string>
+    <string name="add_project_add_this_folder">Dodajte to mapo</string>
     <string name="add_project_path_not_found">Poti ni mogoče najti</string>
     <string name="add_project_no_folder_named">Ni mape z imenom »%1$s«</string>
     <string name="add_project_on_home">Na začetnem zaslonu</string>
@@ -359,7 +359,7 @@
     <string name="worktree_run_in_subtitle">Ustvari checkout in začni tam</string>
     <string name="worktree_move_subtitle">Ustvari checkout in se premakni tja</string>
     <string name="worktree_needs_v2">Potreben je strežnik opencode v2</string>
-    <string name="worktree_turn_on">Vklopite worktree-je v nastavitvah</string>
+    <string name="worktree_turn_on">Vklopite worktree-e v nastavitvah</string>
     <string name="worktree_not_git">Potreben je repozitorij git</string>
     <string name="worktree_no_commit">Potreben je repozitorij git z vsaj enim commitom</string>
     <string name="worktree_unsupported">Ta strežnik ne more ustvarjati worktree-ov</string>
@@ -400,7 +400,7 @@
     <string name="files_loading_title">Nalaganje datotek</string>
     <string name="files_loading_subtitle">Pridobivanje mape …</string>
     <string name="files_folder_error">Mape ni bilo mogoče naložiti</string>
-    <string name="files_retry">Poskusi znova</string>
+    <string name="files_retry">Poskusite znova</string>
     <string name="files_empty_folder">Prazna mapa</string>
     <string name="files_empty_project">Ta projekt nima datotek za prikaz.</string>
     <string name="files_ignored">prezrto</string>
@@ -470,7 +470,7 @@
     <string name="terminal_connect_failed_title">Povezava ni uspela</string>
     <string name="terminal_connect_failed_message">Shella za ta projekt ni bilo mogoče zagnati.</string>
     <string name="terminal_exited">Shell se je končal</string>
-    <string name="terminal_retry">Poskusi znova</string>
+    <string name="terminal_retry">Poskusite znova</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
     <string name="terminal_key_tab">Tab</string>
@@ -501,9 +501,9 @@
     <string name="session_chat_fork_dialog_error_failed">Seje ni bilo mogoče razvejiti.</string>
     <string name="session_chat_fork_result_title">Seja razvejena</string>
     <string name="session_chat_fork_result_message_ready">»%1$s« je pripravljena.</string>
-    <string name="session_chat_fork_result_open">Odpri</string>
+    <string name="session_chat_fork_result_open">Odprite</string>
     <string name="session_chat_fork_result_stay_here">Ostani tukaj</string>
-    <string name="session_chat_attachment_source_title">Dodaj prilogo</string>
+    <string name="session_chat_attachment_source_title">Dodajte prilogo</string>
     <string name="session_chat_attachment_source_photos">Fotografije</string>
     <string name="session_chat_attachment_source_media">Predstavnost</string>
     <string name="session_chat_attachment_source_files">Datoteke</string>
@@ -519,10 +519,10 @@
     <string name="session_chat_commands_undo_description">Razveljavi zadnje sporočilo</string>
     <string name="session_chat_commands_redo_label">Ponovi</string>
     <string name="session_chat_commands_redo_description">Ponovi razveljavljeno sporočilo</string>
-    <string name="session_chat_commands_compact_label">Kompaktno</string>
+    <string name="session_chat_commands_compact_label">Strni</string>
     <string name="session_chat_commands_compact_description">Strni kontekst seje</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
-    <string name="session_chat_commands_terminal_description">Odpri shell projekta</string>
+    <string name="session_chat_commands_terminal_description">Odprite shell projekta</string>
     <string name="session_chat_commands_files_label">Datoteke</string>
     <string name="session_chat_commands_files_description">Prebrskaj datoteke projekta</string>
     <string name="session_chat_commands_mcp_label">Strežniki MCP</string>
@@ -538,7 +538,7 @@
     <string name="session_chat_move_worktree_menu_title">Premakni v worktree …</string>
     <string name="session_chat_move_worktree_sheet_title">Premakni v worktree</string>
     <string name="session_chat_move_worktree_no_other">Ta projekt nima drugih worktree-ov</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Po tem odgovoru se seja premakne v %1$s.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Po tem obratu se seja premakne v %1$s.</string>
     <string name="session_chat_move_worktree_failed">Seje ni bilo mogoče premakniti: %1$s</string>
     <string name="session_chat_variant_default">Privzeto</string>
     <string name="session_chat_model_chip_placeholder">Model</string>
@@ -627,12 +627,12 @@
         <item quantity="other">%1$d stranskih vprašanj teče</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
-    <string name="session_chat_activity_action_open_request">Odpri zahtevo</string>
-    <string name="session_chat_activity_action_open_background_work">Odpri delo v ozadju</string>
+    <string name="session_chat_activity_action_open_request">Odprite zahtevo</string>
+    <string name="session_chat_activity_action_open_background_work">Odprite delo v ozadju</string>
     <string name="session_chat_activity_action_show_in_chat">Pokaži v klepetu</string>
-    <string name="session_chat_activity_action_retry">Poskusi znova</string>
-    <string name="session_chat_activity_action_open">Odpri</string>
-    <string name="session_chat_activity_action_open_up_next">Odpri Naslednje</string>
+    <string name="session_chat_activity_action_retry">Poskusite znova</string>
+    <string name="session_chat_activity_action_open">Odprite</string>
+    <string name="session_chat_activity_action_open_up_next">Odprite Naslednje</string>
     <string name="session_chat_activity_action_show_thought">Pokaži misel</string>
     <plurals name="session_chat_activity_collapsed_show_count">
         <item quantity="one">Pokaži %1$d dejavnost</item>
@@ -667,7 +667,7 @@
     <string name="new_session_title">Nova seja</string>
     <string name="new_session_draft_subtitle">Osnutek · ustvarjen ob pošiljanju</string>
     <string name="new_session_discard_draft">Zavrzi osnutek</string>
-    <string name="new_session_run_in_caption">Zaženi sejo v</string>
+    <string name="new_session_run_in_caption">Zaženite sejo v</string>
     <string name="new_session_project">Projekt</string>
     <string name="new_session_worktree">Worktree</string>
     <string name="new_session_starts_from">Izhodišče</string>
@@ -677,8 +677,8 @@
     <string name="new_session_created_on_send">Ustvarjeno ob pošiljanju</string>
     <string name="new_session_search_projects">Išči projekte</string>
     <string name="new_session_no_project_matches">Ni ujemajočih se projektov</string>
-    <string name="new_session_add_project">Dodaj projekt …</string>
-    <string name="new_session_run_in_project">Zaženi v %1$s</string>
+    <string name="new_session_add_project">Dodajte projekt …</string>
+    <string name="new_session_run_in_project">Zaženite v %1$s</string>
     <string name="new_session_current_checkout">%1$s · trenutni checkout</string>
     <string name="new_session_new_worktree_subtitle">Izolirana kopija, ustvarjena ob pošiljanju</string>
     <string name="new_session_worktrees_section">Worktree-i</string>
@@ -686,7 +686,7 @@
     <string name="timeline_state_loading_subtitle">Pridobivanje časovnice …</string>
     <string name="timeline_state_error_title">Sporočil ni mogoče naložiti</string>
     <string name="timeline_state_error_fallback">Časovnica se ni naložila.</string>
-    <string name="timeline_state_retry">Poskusi znova</string>
+    <string name="timeline_state_retry">Poskusite znova</string>
     <string name="timeline_state_empty">Še ni sporočil. Pošljite poziv za začetek.</string>
     <string name="timeline_state_refreshing">Osveževanje sporočil</string>
     <string name="timeline_message_assistant">Sporočilo pomočnika</string>
@@ -976,7 +976,7 @@
     <string name="timeline_syncing">Sinhronizacija …</string>
     <string name="timeline_failure_session_work_failed">Delo seje ni uspelo</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
-    <string name="timeline_failure_pick_model">Izberi model</string>
+    <string name="timeline_failure_pick_model">Izberite model</string>
     <string name="timeline_failure_compact">Strni</string>
     <string name="session_chat_compact_status">Strnjevanje …</string>
     <string name="session_chat_turn_sending">Pošiljanje …</string>
@@ -1008,8 +1008,8 @@
     <string name="session_chat_sheet_message_actions_fork">Razveji od tu</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Kopiraj blok kode</string>
     <string name="session_chat_sheet_message_actions_copy_message">Kopiraj sporočilo</string>
-    <string name="session_chat_sheet_message_actions_select_text">Izberi besedilo</string>
-    <string name="session_chat_sheet_select_text_title">Izberi besedilo</string>
+    <string name="session_chat_sheet_message_actions_select_text">Izberite besedilo</string>
+    <string name="session_chat_sheet_select_text_title">Izberite besedilo</string>
     <string name="session_chat_sheet_select_text_copy_all">Kopiraj vse</string>
     <string name="session_chat_sheet_select_text_full_message_title">Celotno sporočilo</string>
     <string name="session_chat_copy_too_long">Predolgo za kopiranje. Namesto tega izberite del besedila.</string>
@@ -1136,10 +1136,10 @@
         <item quantity="other">%1$d datotek</item>
     </plurals>
     <plurals name="component_branch_pill_uncommitted_files">
-        <item quantity="one">%1$d neshranjena datoteka</item>
-        <item quantity="two">%1$d neshranjeni datoteki</item>
-        <item quantity="few">%1$d neshranjene datoteke</item>
-        <item quantity="other">%1$d neshranjenih datotek</item>
+        <item quantity="one">%1$d nepotrjena datoteka</item>
+        <item quantity="two">%1$d nepotrjeni datoteki</item>
+        <item quantity="few">%1$d nepotrjene datoteke</item>
+        <item quantity="other">%1$d nepotrjenih datotek</item>
     </plurals>
     <string name="component_branch_pill_a11y_branch">Veja %1$s</string>
     <string name="component_branch_pill_a11y_worktree_branch">Veja worktree %1$s</string>
@@ -1166,7 +1166,7 @@
     <string name="session_chat_sheet_timeline_style_picker_title">Novo: izberite svojo časovnico</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Ta posodobitev prinaša nove načine spremljanja dela agenta.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">To lahko kadar koli spremenite v Nastavitve → Slog časovnice.</string>
-    <string name="session_chat_sheet_timeline_style_picker_use">Uporabi %1$s</string>
+    <string name="session_chat_sheet_timeline_style_picker_use">Uporabite %1$s</string>
     <string name="session_chat_sheet_timeline_style_picker_recommended">Priporočeno</string>
     <string name="session_chat_sheet_timeline_style_picker_current">Trenutno</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_title">Standardno</string>
@@ -1177,7 +1177,7 @@
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Koraki v teku na eni živi kartici, ki se strne v povzetek</string>
     <string name="session_chat_sheet_picker_model">Model</string>
     <string name="session_chat_sheet_picker_agent_mode">Način agenta</string>
-    <string name="session_chat_sheet_picker_variant">Različica</string>
+    <string name="session_chat_sheet_picker_variant">Varianta</string>
     <string name="session_chat_sheet_picker_back_to_providers">Nazaj na ponudnike</string>
     <string name="session_chat_sheet_picker_no_models_match">Noben model ne ustreza filtru</string>
     <string name="session_chat_sheet_picker_filter_models_hint">Filtriraj modele ...</string>
@@ -1254,7 +1254,7 @@
     <string name="session_context_load_failed_message">Kontekst se ni naložil.</string>
     <string name="session_context_refresh_failed">Konteksta seje ni mogoče osvežiti</string>
     <string name="session_context_refreshing">Osveževanje konteksta seje</string>
-    <string name="session_context_retry">Poskusi znova</string>
+    <string name="session_context_retry">Poskusite znova</string>
     <string name="session_context_stat_session">Seja</string>
     <string name="session_context_stat_messages">Sporočila</string>
     <string name="session_context_stat_provider">Ponudnik</string>
@@ -1284,7 +1284,7 @@
     <string name="settings_section_help_feedback">Pomoč in povratne informacije</string>
     <string name="settings_section_appearance">Videz</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Domov</string>
+    <string name="settings_section_home">Začetni zaslon</string>
     <string name="settings_section_session_cache">Predpomnilnik sej</string>
     <string name="settings_section_privacy">Zasebnost</string>
     <string name="settings_section_about">O aplikaciji</string>
@@ -1304,7 +1304,7 @@
     <string name="settings_send_feedback_title">Pošlji povratne informacije</string>
     <string name="settings_send_feedback_subtitle">Prijavite napako ali delite idejo</string>
     <string name="settings_hide_user_directory_title">Skrij uporabniško mapo</string>
-    <string name="settings_hide_user_directory_subtitle">Pokaži ~/Projects/… namesto /Users/you/Projects/…</string>
+    <string name="settings_hide_user_directory_subtitle">Pokažite ~/Projects/… namesto /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">Okno nedavnih</string>
     <string name="settings_recent_window_message">Seje ostanejo med nedavnimi, dokler se izvajajo ali so pripravljene, ali če so bile posodobljene v tem oknu.</string>
     <plurals name="settings_recent_window_hours">
@@ -1328,8 +1328,8 @@
     <string name="settings_follow_up_subtitle_steer">Usmeri · samo strežniki V2. V1 tega ne podpira.</string>
     <string name="settings_follow_up_subtitle_queue">Čakalna vrsta · samo strežniki V2. V1 tega ne podpira.</string>
     <string name="settings_follow_up_unsupported">V1 tega ne podpira. Ta strežnik vedno pošlje takoj.</string>
-    <string name="settings_worktrees_title">Worktrees</string>
-    <string name="settings_worktrees_subtitle">Pokaži worktrees in veje vsakega projekta na začetnem zaslonu ter pri novi seji omogoči izbiro worktree z dolgim pritiskom.</string>
+    <string name="settings_worktrees_title">Worktree-i</string>
+    <string name="settings_worktrees_subtitle">Prikažite worktree-e in veje vsakega projekta na začetnem zaslonu ter pri novi seji omogočite izbiro worktree-a z dolgim pritiskom.</string>
     <string name="settings_session_rows_title">Vrstice sej</string>
     <string name="settings_session_rows_compact_title">Kompaktno</string>
     <string name="settings_session_rows_compact_subtitle">Dve vrstici: naslov in čas, nato projekt / worktree</string>
@@ -1591,7 +1591,7 @@
     <string name="changes_source_working_tree_name">Spremembe v Gitu</string>
     <string name="changes_source_working_tree_empty_title">Ni sprememb v Gitu</string>
     <string name="changes_source_working_tree_empty_message">Delovno drevo nima nepotrjenih sprememb.</string>
-    <string name="changes_source_last_turn_name">Spremembe zadnjega koraka</string>
+    <string name="changes_source_last_turn_name">Spremembe zadnjega obrata</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">V Gitu je %1$d spremenjena datoteka.</item>
         <item quantity="two">V Gitu sta %1$d spremenjeni datoteki.</item>
@@ -1599,23 +1599,23 @@
         <item quantity="other">V Gitu je %1$d spremenjenih datotek.</item>
     </plurals>
     <plurals name="changes_other_source_last_turn">
-        <item quantity="one">Zadnji korak je spremenil %1$d datoteko.</item>
-        <item quantity="two">Zadnji korak je spremenil %1$d datoteki.</item>
-        <item quantity="few">Zadnji korak je spremenil %1$d datoteke.</item>
-        <item quantity="other">Zadnji korak je spremenil %1$d datotek.</item>
+        <item quantity="one">Zadnji obrat je spremenil %1$d datoteko.</item>
+        <item quantity="two">Zadnji obrat je spremenil %1$d datoteki.</item>
+        <item quantity="few">Zadnji obrat je spremenil %1$d datoteke.</item>
+        <item quantity="other">Zadnji obrat je spremenil %1$d datotek.</item>
     </plurals>
     <string name="changes_other_source_show">Pokaži: %1$s</string>
     <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
     <string name="changes_source_last_turn_empty_title">Ni sprememb</string>
-    <string name="changes_source_last_turn_empty_message">Zadnji dokončani korak ni spremenil nobene datoteke.</string>
+    <string name="changes_source_last_turn_empty_message">Zadnji dokončani obrat ni spremenil nobene datoteke.</string>
     <string name="changes_loading_title">Nalaganje sprememb</string>
     <string name="changes_loading_message">Pridobivanje razlik …</string>
-    <string name="changes_no_turn_title">Ni dokončanega koraka</string>
+    <string name="changes_no_turn_title">Ni dokončanega obrata</string>
     <string name="changes_no_turn_message">Pošljite poziv, počakajte, da se dokonča, in poskusite znova.</string>
     <string name="changes_error_title">Sprememb ni mogoče naložiti</string>
     <string name="changes_error_fallback">Sprememb ni bilo mogoče naložiti.</string>
     <string name="changes_error_request_failed">Zahteva ni uspela</string>
-    <string name="changes_error_turn_moved_folders">Ta korak je premaknil mape, zato sprememb ni mogoče prikazati skupaj.</string>
+    <string name="changes_error_turn_moved_folders">Ta obrat je premaknil mape, zato sprememb ni mogoče prikazati skupaj.</string>
     <string name="changes_refresh_failed">Osvežitev ni uspela: %1$s</string>
     <string name="changes_filter_hint">Filtriraj</string>
     <string name="changes_filter_accessibility_label">Filtriraj spremenjene datoteke</string>
@@ -1686,7 +1686,7 @@
     <string name="component_floating_pill_state_error">Napaka</string>
     <string name="component_floating_pill_state_done">Opravljeno</string>
     <string name="component_floating_pill_accessibility_label">%1$s, %2$s</string>
-    <string name="component_floating_pill_dismiss">Zapri: %1$s</string>
+    <string name="component_floating_pill_dismiss">Zavrzi: %1$s</string>
     <string name="common_expanded">Razširjeno</string>
     <string name="common_collapsed">Strnjeno</string>
     <string name="component_tree_row_loading">Nalaganje</string>
@@ -1700,14 +1700,14 @@
     <string name="component_filter_tabs_unseen">novo</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Včeraj</string>
-    <string name="component_composer_reverting_title">Razveljavljanje tega sporočila</string>
+    <string name="component_composer_reverting_title">Povračanje tega sporočila</string>
     <string name="session_new_title">Nova seja</string>
     <string name="session_list_dock_add_project">Dodaj projekt</string>
     <string name="theme_error_preset_not_found">Predloga teme ni najdena</string>
     <string name="component_composer_submit">Pošlji</string>
     <string name="component_composer_select_all_that_apply">Izberite vse, kar velja</string>
     <string name="component_unified_diff_summary_modified">Spremenjena datoteka %1$s, %2$s, %3$s</string>
-    <string name="component_hunk_navigation_collapse_context">Strni kontekst</string>
+    <string name="component_hunk_navigation_collapse_context">Skrči kontekst</string>
     <string name="component_top_bar_project_subtitle">Projekt %1$s %2$s</string>
     <string name="component_composer_dismiss">Zavrzi</string>
     <string name="dictation_model_downloading_detail">To je sistemski prenos. Nadaljuje se, tudi če zaprete to kartico.</string>
@@ -1765,7 +1765,7 @@
     <string name="component_image_could_not_load_label">%1$s, nalaganje ni uspelo</string>
     <string name="component_composer_question">Vprašanje</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Počistite filter, da vidite seje v drugih worktreejih.</string>
+    <string name="session_list_worktree_empty_other_worktrees">Počistite filter, da vidite seje v drugih worktree-ih.</string>
     <string name="component_composer_side_question_mode">Način stranskega vprašanja</string>
     <string name="component_page_indicator_label">Stran %1$d od %2$d</string>
     <string name="component_composer_next">Naprej</string>
@@ -1793,7 +1793,7 @@
     <string name="session_list_scope_load_failed_title">Nalaganje ni uspelo: %1$s</string>
     <string name="dictation_status_listening">Poslušanje</string>
     <string name="dictation_downloading_model">Prenašanje govornega modela</string>
-    <string name="session_list_worktree_empty_every_worktree">Počistite filter, da vidite vse worktreeje.</string>
+    <string name="session_list_worktree_empty_every_worktree">Počistite filter, da vidite vse worktree-e.</string>
     <string name="component_overflow_menu_more_options">Več možnosti</string>
     <string name="session_list_status_retrying_attempt">Ponovni poskus · %1$d</string>
     <string name="live_updates_status_offline">brez povezave</string>
@@ -1831,7 +1831,7 @@
     <string name="component_composer_child_lockout">Podrejenim sejam ni mogoče poslati poziva.</string>
     <string name="component_attachment_uploading_percent">Nalaganje %1$d %%</string>
     <string name="component_composer_custom_answer_hint">Vpišite odgovor po meri</string>
-    <string name="component_composer_cancel_revert">Prekliči razveljavitev</string>
+    <string name="component_composer_cancel_revert">Prekliči povrnitev</string>
     <string name="session_list_scope_load_slow_caption">Še vedno se nalaga — veliki projekti lahko trajajo malo dlje</string>
     <string name="component_outgoing_message_label_with_actions">Odhodno sporočilo. Prikaže dejanja sporočila</string>
     <string name="session_list_scope_load_failed_subtitle">Sej ni bilo mogoče naložiti</string>
@@ -1860,7 +1860,7 @@
     <string name="component_attachment_kind_pdf">PDF</string>
     <string name="session_list_dock_next_project">Naslednji projekt</string>
     <string name="component_composer_allow_once">Dovoli enkrat</string>
-    <string name="session_list_worktree_empty_title">V tem worktreeju ni sej</string>
+    <string name="session_list_worktree_empty_title">V tem worktree-ju ni sej</string>
     <string name="component_activity_card_opens_activity_hint">Odpre aktivnost</string>
     <string name="dictation_speech_model">govorni model</string>
     <string name="session_list_dock_previous_project">Prejšnji projekt</string>
@@ -1891,7 +1891,7 @@
     <string name="session_list_section_week_of">Teden %1$s – %2$s</string>
     <string name="dictation_model_download_failed_title">%1$s ni mogel prenesti: %2$s</string>
     <string name="component_activity_status_pending">čaka</string>
-    <string name="component_composer_revert_tag">Razveljavi</string>
+    <string name="component_composer_revert_tag">Povrni</string>
     <string name="component_composer_model">Model %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
         <item quantity="one">%1$d prejšnji korak</item>
@@ -1985,7 +1985,7 @@
         <item quantity="other">Sprememb: %1$d</item>
     </plurals>
     <string name="worktrees_none_in_project">Ni worktreejev. Ustvarite ga z možnostjo Nova seja → Izberi projekt ali worktree.</string>
-    <string name="worktrees_footer">Z odstranitvijo worktreeja se izbriše njegova mapa na strežniku. Seje ostanejo, a se v njem ne morejo več izvajati.</string>
+    <string name="worktrees_footer">Z odstranitvijo worktree-a se izbriše njegova mapa na strežniku. Seje ostanejo, a se v njem ne morejo več izvajati.</string>
     <string name="worktrees_more">Več dejanj za %1$s</string>
     <string name="worktrees_removing">Odstranjevanje …</string>
     <string name="worktrees_actions_show_on_home">Pokaži seje na začetnem zaslonu</string>
@@ -2004,7 +2004,7 @@
     <string name="worktrees_remove_sessions_stay">Seje, ki uporabljajo ta worktree, ostanejo na začetnem zaslonu, a se tukaj ne morejo več izvajati.</string>
     <string name="worktrees_remove_confirm_anyway">Vseeno odstrani</string>
     <string name="worktrees_blocked_title">„%1$s“ še ni mogoče odstraniti</string>
-    <string name="worktrees_blocked_message">V tem worktreeju teče seja. Ustavite jo, nato odstranite worktree.</string>
+    <string name="worktrees_blocked_message">V tem worktree-ju teče seja. Ustavite jo, nato odstranite worktree.</string>
     <string name="worktrees_blocked_ok">V redu</string>
     <string name="worktrees_blocked_show_session">Pokaži sejo</string>
     <string name="worktrees_removed">Worktree „%1$s“ odstranjen</string>

@@ -8,9 +8,9 @@
     <string name="bottom_sheet_expand">बड़ा करें</string>
     <string name="top_bar_back">वापस</string>
     <string name="common_cancel">रद्द करें</string>
-    <string name="common_remove">हटाएं</string>
+    <string name="common_remove">हटाएँ</string>
     <string name="common_loading_sessions">सेशन लोड हो रहे हैं</string>
-    <string name="common_checking_server">सर्वर जांचा जा रहा है…</string>
+    <string name="common_checking_server">सर्वर जाँचा जा रहा है…</string>
     <string name="connection_setup_title_first">सर्वर से कनेक्ट करें</string>
     <string name="connection_setup_title_add">सर्वर जोड़ें</string>
     <string name="connection_setup_title_edit">सर्वर संपादित करें</string>
@@ -20,16 +20,16 @@
     <string name="connection_setup_action_saving">सहेजा जा रहा है…</string>
     <string name="connection_setup_action_scan_qr">QR स्कैन करें</string>
     <string name="connection_setup_action_scan_new_qr">नया QR स्कैन करें</string>
-    <string name="connection_setup_action_enter_pairing_code">पेयरिंग कोड डालें</string>
+    <string name="connection_setup_action_enter_pairing_code">पेयरिंग कोड दर्ज करें</string>
     <string name="connection_setup_action_use_host_password">होस्ट और पासवर्ड इस्तेमाल करें</string>
     <string name="connection_setup_action_scan_qr_instead">इसके बजाय QR स्कैन करें</string>
     <string name="connection_setup_scan_qr_instead_hint">opencode pair से</string>
-    <string name="connection_setup_remove_server">सर्वर हटाएं</string>
-    <string name="connection_setup_remove_dialog_title_unnamed">“सर्वर” हटाएं?</string>
-    <string name="connection_setup_instructions_run">अपने कंप्यूटर पर यह चलाएं, फिर QR स्कैन करें।</string>
+    <string name="connection_setup_remove_server">सर्वर हटाएँ</string>
+    <string name="connection_setup_remove_dialog_title_unnamed">“सर्वर” हटाएँ?</string>
+    <string name="connection_setup_instructions_run">अपने कंप्यूटर पर यह चलाएँ, फिर QR स्कैन करें।</string>
     <string name="connection_setup_instructions_first_run">पहली बार चलाने में करीब एक मिनट लगता है। इसके लिए OpenCode 2.0.25 या उसके बाद का वर्शन चाहिए। सेवा चालू न हो तो अपने आप शुरू हो जाती है।</string>
     <string name="connection_setup_instructions_same_wifi_title">इसके बजाय वही Wi-Fi</string>
-    <string name="connection_setup_instructions_same_wifi_body">सादा pair तभी QR दिखाता है, जब सर्वर localhost के बाहर से पहुंच में हो।</string>
+    <string name="connection_setup_instructions_same_wifi_body">सादा pair तभी QR दिखाता है, जब सर्वर localhost के बाहर से पहुँच में हो।</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">होस्ट</string>
     <string name="connection_setup_host_help">LAN, Tailscale MagicDNS या टनल — फ़ोन पर localhost नहीं चलेगा।</string>
@@ -50,7 +50,7 @@
     <string name="connection_setup_address_not_reachable">%1$s · पहुंच से बाहर</string>
     <string name="connection_setup_address_using_now">अभी उपयोग में</string>
     <string name="connection_setup_address_saved">सहेजा गया</string>
-    <string name="connection_setup_pair_again_unreachable">सहेजे गए पते तक नहीं पहुंच सकते। फिर से पेयर करें।</string>
+    <string name="connection_setup_pair_again_unreachable">सहेजे गए पते तक नहीं पहुँच सकते। फिर से पेयर करें।</string>
     <string name="connection_setup_pair_again_unauthorized">इस सर्वर ने सहेजा गया साइन-इन अस्वीकार कर दिया। फिर से पेयर करें। नया पासवर्ड बनने पर सभी डिवाइस लॉग आउट हो जाते हैं।</string>
     <string name="connection_cleartext_title">कनेक्शन एन्क्रिप्टेड नहीं है</string>
     <string name="connection_cleartext_message_one_host">%1$s आपके लोकल नेटवर्क या Tailscale के बाहर सादा http इस्तेमाल करता है। आपका सर्वर पासवर्ड और सेशन की सारी सामग्री बिना एन्क्रिप्शन के जाएगी। https, VPN या टनल को प्राथमिकता दें।</string>
@@ -61,12 +61,12 @@
     <string name="connection_error_localhost_qr">उस QR में सिर्फ़ localhost पता है</string>
     <string name="connection_error_camera_denied">पेयरिंग QR स्कैन करने के लिए कैमरा एक्सेस दें</string>
     <string name="connection_error_camera_unavailable">इस डिवाइस पर कैमरा उपलब्ध नहीं है</string>
-    <string name="connection_error_enter_host">होस्ट डालें</string>
-    <string name="connection_error_enter_pairing_code">पेयरिंग कोड डालें</string>
+    <string name="connection_error_enter_host">होस्ट दर्ज करें</string>
+    <string name="connection_error_enter_pairing_code">पेयरिंग कोड दर्ज करें</string>
     <string name="connection_error_pairing_link_expired">यह पेयरिंग लिंक एक्सपायर हो गया है या पहले ही इस्तेमाल हो चुका है</string>
     <string name="connection_error_duplicate_profile">इस होस्ट और उपयोगकर्ता नाम वाला सर्वर पहले से सहेजा हुआ है</string>
     <string name="connection_error_qr_scan_failed">QR से कनेक्ट नहीं हुआ। OpenCode 2 का पेयरिंग API अभी बदल रहा है, इसलिए ऐप ठीक होने पर भी स्कैन विफल हो सकता है। होस्ट दर्ज करके कनेक्ट करें। पासवर्ड वैकल्पिक है। पेयरिंग कोड भी काम करता है।</string>
-    <string name="connection_error_unreachable">सर्वर तक पहुंच नहीं हो पाई</string>
+    <string name="connection_error_unreachable">सर्वर तक पहुँच नहीं हो पाई</string>
     <string name="server_error_pairing_expired">पेयरिंग की समय-सीमा खत्म हो गई, दोबारा पेयर करें</string>
     <string name="server_error_not_found">फ़ोल्डर या फ़ाइल नहीं मिली</string>
     <string name="server_error_not_found_path">फ़ोल्डर या फ़ाइल नहीं मिली · %1$s</string>
@@ -91,7 +91,7 @@
     <string name="onboarding_connect_page_setup_link">पहले सर्वर चाहिए?</string>
     <string name="onboarding_features_title">यहाँ से आप\nक्या कर सकते हैं</string>
     <string name="onboarding_features_sessions_title">सेशन</string>
-    <string name="onboarding_features_sessions_detail">देखें, खोलें, बनाएँ, नाम बदलें, फ़ॉर्क करें, संग्रहित करें, हटाएँ</string>
+    <string name="onboarding_features_sessions_detail">देखें, खोलें, बनाएँ, नाम बदलें, फ़ोर्क करें, संग्रहित करें, हटाएँ</string>
     <string name="onboarding_features_chat_title">चैट और रोकना</string>
     <string name="onboarding_features_chat_detail">प्रॉम्प्ट भेजें और चल रहा काम रोकें</string>
     <string name="onboarding_features_permissions_title">अनुमतियाँ</string>
@@ -110,15 +110,15 @@
     <string name="onboarding_setup_step3_title">फ़ोन से उस तक पहुँचें</string>
     <string name="onboarding_setup_step3_body">सुझाव: Tailscale — मशीन और फ़ोन दोनों पर Tailscale इंस्टॉल करें, फिर मशीन के Tailscale IP या MagicDNS नाम को सर्वर URL के रूप में इस्तेमाल करें।\n\nये भी चलेंगे: वही LAN, VPN, HTTPS या आपका अपना कोई और टनल। ऐप आपके लिए रिले नहीं बनाता।</string>
     <string name="onboarding_setup_step4_title">ऐप में कनेक्ट करें</string>
-    <string name="onboarding_setup_step4_body">बेस URL + पासवर्ड दर्ज करें। ऐप GET /global/health जाँचता है, फिर इस डिवाइस पर सर्वर कनेक्शन सेव कर लेता है।</string>
+    <string name="onboarding_setup_step4_body">बेस URL + पासवर्ड दर्ज करें। ऐप GET /global/health जाँचता है, फिर इस डिवाइस पर सर्वर कनेक्शन सहेज लेता है।</string>
     <string name="onboarding_setup_open_docs">सर्वर डॉक्स खोलें</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile लॉक है</string>
     <string name="privacy_cover_unlock">अनलॉक करें</string>
     <string name="servers_title">सर्वर</string>
     <plurals name="servers_profile_count">
-        <item quantity="one">%1$d कनेक्शन प्रोफ़ाइल</item>
-        <item quantity="other">%1$d कनेक्शन प्रोफ़ाइल</item>
+        <item quantity="one">%1$d सहेजा गया सर्वर कनेक्शन</item>
+        <item quantity="other">%1$d सहेजे गए सर्वर कनेक्शन</item>
     </plurals>
     <string name="servers_saved">सहेजे गए</string>
     <string name="server_health_title">सर्वर हेल्थ</string>
@@ -187,7 +187,7 @@
     <string name="server_health_empty_message">सर्वर हेल्थ तभी मापी जाती है, जब ऐप खुला हो और इस सर्वर से कनेक्टेड हो।</string>
     <string name="server_health_status_live">लाइव</string>
     <string name="server_health_status_connecting">कनेक्ट हो रहा है</string>
-    <string name="server_health_status_reconnecting">फिर से कनेक्ट हो रहा है</string>
+    <string name="server_health_status_reconnecting">रीकनेक्ट हो रहा है</string>
     <string name="server_health_status_offline">ऑफ़लाइन</string>
     <string name="server_health_status_auth_failed">प्रमाणीकरण विफल</string>
     <string name="server_health_status_stopped">माप बंद है</string>
@@ -296,7 +296,7 @@
     <string name="archived_sessions_empty_title">कोई संग्रहित सेशन नहीं</string>
     <string name="archived_sessions_empty_message">%1$s में आप जो सेशन संग्रहित करेंगे, वे यहाँ दिखेंगे।</string>
     <string name="archived_sessions_show_all_projects">सभी प्रोजेक्ट दिखाएँ</string>
-    <string name="archived_sessions_footer">ज़्यादा विकल्पों के लिए किसी सेशन पर टैप करें। संग्रह से हटाने पर वह वापस होम में आ जाता है।</string>
+    <string name="archived_sessions_footer">ज़्यादा विकल्पों के लिए किसी सेशन पर टैप करें। संग्रह से बाहर करने पर वह वापस होम में आ जाता है।</string>
     <string name="archived_sessions_load_failed">संग्रहित सेशन लोड नहीं हो सके।</string>
     <string name="archived_sessions_unarchive_failed">सेशन को संग्रह से नहीं हटाया जा सका।</string>
     <string name="session_chat_archived_banner">%1$s संग्रहित किया गया</string>
@@ -339,7 +339,7 @@
     <string name="worktree_run_in_subtitle">चेकआउट बनाएँ और वहीं शुरू करें</string>
     <string name="worktree_move_subtitle">चेकआउट बनाएँ और वहाँ जाएँ</string>
     <string name="worktree_needs_v2">opencode v2 सर्वर चाहिए</string>
-    <string name="worktree_turn_on">सेटिंग्स में Worktrees चालू करें</string>
+    <string name="worktree_turn_on">सेटिंग्स में Worktree चालू करें</string>
     <string name="worktree_not_git">git रिपॉज़िटरी चाहिए</string>
     <string name="worktree_no_commit">कम से कम एक कमिट वाली git रिपॉज़िटरी चाहिए</string>
     <string name="worktree_unsupported">यह सर्वर worktree नहीं बना सकता</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_suggestion_file">फ़ाइल</string>
     <string name="session_chat_suggestion_no_matches">कोई मिलान नहीं मिला</string>
     <string name="session_chat_suggestion_no_commands">कोई कमांड नहीं</string>
-    <string name="session_chat_suggestion_badge_skill">कौशल</string>
+    <string name="session_chat_suggestion_badge_skill">स्किल</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
     <string name="session_chat_move_worktree_current">मौजूदा worktree</string>
     <string name="session_chat_move_worktree_menu_title">worktree में ले जाएँ…</string>
@@ -611,7 +611,7 @@
         <item quantity="one">अंत तक स्क्रोल करें, %1$d नया संदेश</item>
         <item quantity="other">अंत तक स्क्रोल करें, %1$d नए संदेश</item>
     </plurals>
-    <string name="home_error_reconnect_to_create">सेशन बनाने के लिए फिर से कनेक्ट करें</string>
+    <string name="home_error_reconnect_to_create">सेशन बनाने के लिए रीकनेक्ट करें</string>
     <string name="timeline_state_creating_title">सेशन शुरू हो रहा है…</string>
     <string name="timeline_state_creating_subtitle">सर्वर पर बनाया जा रहा है…</string>
     <string name="new_session_title">नया सेशन</string>
@@ -644,8 +644,8 @@
     <string name="timeline_message_actions_hint">संदेश के विकल्प दिखाता है</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
     <string name="timeline_failure_copy">कॉपी करें</string>
-    <string name="timeline_retry_retrying_in">%1$d सेकंड में दोबारा कोशिश</string>
-    <string name="timeline_retry_attempt_retrying_in">प्रयास %1$d, %2$d सेकंड में दोबारा कोशिश</string>
+    <string name="timeline_retry_retrying_in">%1$d सेकंड में पुनः प्रयास</string>
+    <string name="timeline_retry_attempt_retrying_in">प्रयास %1$d, %2$d सेकंड में पुनः प्रयास</string>
     <plurals name="timeline_background_work_subagent_count">
         <item quantity="one">%1$d सबएजेंट</item>
         <item quantity="other">%1$d सबएजेंट</item>
@@ -687,7 +687,7 @@
     <string name="tool_title_plan">योजना</string>
     <string name="tool_title_edit">संपादित करें</string>
     <string name="tool_title_write">लिखें</string>
-    <string name="tool_title_skill">कौशल</string>
+    <string name="tool_title_skill">स्किल</string>
     <string name="tool_title_patch">पैच</string>
     <string name="tool_title_get_issue">इश्यू लें</string>
     <string name="tool_title_save_issue">इश्यू सहेजें</string>
@@ -743,8 +743,8 @@
         <item quantity="other">%1$d राइट</item>
     </plurals>
     <plurals name="tool_count_skill">
-        <item quantity="one">%1$d कौशल</item>
-        <item quantity="other">%1$d कौशल</item>
+        <item quantity="one">%1$d स्किल</item>
+        <item quantity="other">%1$d स्किल</item>
     </plurals>
     <plurals name="tool_count_patch">
         <item quantity="one">%1$d पैच</item>
@@ -815,9 +815,9 @@
     <string name="timeline_step_running_named">%1$s चल रहा है</string>
     <string name="timeline_step_ran_named">%1$s चलाया गया</string>
     <string name="timeline_step_ran_command">कमांड चलाई गई</string>
-    <string name="timeline_step_loading_skill">कौशल लोड हो रहा है…</string>
-    <string name="timeline_step_loading_skill_named">कौशल %1$s लोड हो रहा है</string>
-    <string name="timeline_step_skill_named">कौशल %1$s</string>
+    <string name="timeline_step_loading_skill">स्किल लोड हो रहा है…</string>
+    <string name="timeline_step_loading_skill_named">स्किल %1$s लोड हो रहा है</string>
+    <string name="timeline_step_skill_named">स्किल %1$s</string>
     <string name="timeline_step_thought_duration">विचार · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">खोजबीन की — %1$s</string>
@@ -875,7 +875,7 @@
     <string name="session_chat_revert_redo_failed">फिर से नहीं किया जा सका।</string>
     <string name="session_chat_revert_cancel_failed">रिवर्ट रद्द नहीं हो सका।</string>
     <string name="session_chat_revert_commit_failed">रिवर्ट कमिट नहीं हो सका।</string>
-    <string name="session_chat_fork_rename_failed">फ़ॉर्क बन गया, लेकिन उसका नाम नहीं बदला जा सका।</string>
+    <string name="session_chat_fork_rename_failed">फ़ोर्क बन गया, लेकिन उसका नाम नहीं बदला जा सका।</string>
     <string name="session_chat_pending_prompt_update_failed">लंबित प्रॉम्प्ट अपडेट नहीं हो सका</string>
     <string name="session_chat_shell_stop_failed">शेल नहीं रोका जा सका। फिर से कोशिश करें।</string>
     <string name="session_chat_shell_status_running">चल रहा है</string>
@@ -891,7 +891,7 @@
     <string name="session_chat_sheet_copy_output">आउटपुट कॉपी करें</string>
     <string name="session_chat_sheet_message_actions_title">संदेश</string>
     <string name="session_chat_sheet_message_actions_revert">संदेश रिवर्ट करें</string>
-    <string name="session_chat_sheet_message_actions_fork">यहाँ से फ़ॉर्क करें</string>
+    <string name="session_chat_sheet_message_actions_fork">यहाँ से फ़ोर्क करें</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">कोड ब्लॉक कॉपी करें</string>
     <string name="session_chat_sheet_message_actions_copy_message">संदेश कॉपी करें</string>
     <string name="session_chat_sheet_message_actions_select_text">टेक्स्ट चुनें</string>
@@ -958,9 +958,9 @@
     <string name="session_chat_goal_waiting_subagent">सबएजेंट के खत्म होने की प्रतीक्षा। %1$d मिनट तक कुछ न चले तो रुक जाएगा।</string>
     <string name="session_chat_goal_waiting_on_you">आपकी प्रतीक्षा में</string>
     <string name="session_chat_goal_waiting_permission">एक अनुमति अनुरोध खुला है। आपके जवाब देने के बाद लक्ष्य आगे बढ़ेगा।</string>
-    <string name="session_chat_goal_waiting_question">एक सवाल खुला है। आपके जवाब देने के बाद लक्ष्य आगे बढ़ेगा।</string>
+    <string name="session_chat_goal_waiting_question">एक प्रश्न खुला है। आपके जवाब देने के बाद लक्ष्य आगे बढ़ेगा।</string>
     <string name="session_chat_goal_evidence">प्रमाण</string>
-    <string name="session_chat_goal_reconnecting">दोबारा कनेक्ट हो रहा है। आखिरी बार का लक्ष्य दिखाया जा रहा है।</string>
+    <string name="session_chat_goal_reconnecting">रीकनेक्ट हो रहा है। आखिरी बार का लक्ष्य दिखाया जा रहा है।</string>
     <string name="session_chat_goal_pause">रोकें</string>
     <string name="session_chat_goal_pausing">रोका जा रहा है…</string>
     <string name="session_chat_goal_resume">फिर शुरू करें</string>
@@ -1023,7 +1023,7 @@
     <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
     <string name="component_branch_pill_a11y_added">%1$s, %2$d जोड़े गए</string>
     <string name="component_branch_pill_a11y_removed">%1$s, %2$d हटाए गए</string>
-    <string name="session_chat_archive_failed">सेशन संग्रहित नहीं किया जा सका।</string>
+    <string name="session_chat_archive_failed">सेशन संग्रहित नहीं हो सका।</string>
     <string name="session_chat_delete_failed">सेशन हटाया नहीं जा सका।</string>
     <string name="session_chat_mcp_load_failed">MCP सर्वर लोड नहीं हो सके। कनेक्शन जाँचें और फिर कोशिश करें।</string>
     <string name="session_chat_create_failed">सेशन बनाया नहीं जा सका</string>
@@ -1033,16 +1033,16 @@
     <string name="session_chat_reply_error_permission_reason">आपका जवाब भेजा नहीं जा सका। %1$s।</string>
     <string name="session_chat_reply_error_question">आपका जवाब भेजा नहीं जा सका। फिर कोशिश करें।</string>
     <string name="session_chat_reply_error_question_reason">आपका जवाब भेजा नहीं जा सका। %1$s।</string>
-    <string name="session_chat_reply_error_dismiss">सवाल खारिज नहीं किया जा सका। फिर कोशिश करें।</string>
-    <string name="session_chat_reply_error_dismiss_reason">सवाल खारिज नहीं किया जा सका। %1$s।</string>
+    <string name="session_chat_reply_error_dismiss">प्रश्न खारिज नहीं किया जा सका। फिर कोशिश करें।</string>
+    <string name="session_chat_reply_error_dismiss_reason">प्रश्न खारिज नहीं किया जा सका। %1$s।</string>
     <string name="session_chat_permission_unavailable">अनुमति अनुरोध अब उपलब्ध नहीं है</string>
-    <string name="session_chat_question_unavailable">सवाल का अनुरोध अब उपलब्ध नहीं है</string>
+    <string name="session_chat_question_unavailable">प्रश्न का अनुरोध अब उपलब्ध नहीं है</string>
     <string name="session_chat_permission_tree_failed">अनुमति वाला सेशन ट्री रिफ़्रेश नहीं किया जा सका</string>
-    <string name="session_chat_question_tree_failed">सवाल वाला सेशन ट्री रिफ़्रेश नहीं किया जा सका</string>
+    <string name="session_chat_question_tree_failed">प्रश्न वाला सेशन ट्री रिफ़्रेश नहीं किया जा सका</string>
     <string name="session_chat_sheet_timeline_style_picker_title">नया: अपनी टाइमलाइन चुनें</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">इस अपडेट में एजेंट के काम को फ़ॉलो करने के नए तरीके जुड़े हैं।</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">आप इसे कभी भी सेटिंग्स → टाइमलाइन स्टाइल में बदल सकते हैं।</string>
-    <string name="session_chat_sheet_timeline_style_picker_use">%1$s उपयोग करें</string>
+    <string name="session_chat_sheet_timeline_style_picker_use">%1$s इस्तेमाल करें</string>
     <string name="session_chat_sheet_timeline_style_picker_recommended">सुझाया गया</string>
     <string name="session_chat_sheet_timeline_style_picker_current">मौजूदा</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_title">स्टैंडर्ड</string>
@@ -1053,7 +1053,7 @@
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">चल रहे चरण एक लाइव कार्ड पर, जो बाद में सारांश में सिमट जाता है</string>
     <string name="session_chat_sheet_picker_model">मॉडल</string>
     <string name="session_chat_sheet_picker_agent_mode">एजेंट मोड</string>
-    <string name="session_chat_sheet_picker_variant">वेरिएंट</string>
+    <string name="session_chat_sheet_picker_variant">वैरिएंट</string>
     <string name="session_chat_sheet_picker_back_to_providers">प्रोवाइडर पर वापस जाएँ</string>
     <string name="session_chat_sheet_picker_no_models_match">आपके फ़िल्टर से कोई मॉडल मेल नहीं खाता</string>
     <string name="session_chat_sheet_picker_filter_models_hint">मॉडल फ़िल्टर करें...</string>
@@ -1069,12 +1069,12 @@
         <item quantity="other">%1$d फ़ाइलें</item>
     </plurals>
     <plurals name="session_chat_sheet_tool_result_lines">
-        <item quantity="one">%1$d लाइन</item>
-        <item quantity="other">%1$d लाइनें</item>
+        <item quantity="one">%1$d पंक्ति</item>
+        <item quantity="other">%1$d पंक्तियाँ</item>
     </plurals>
     <string name="session_chat_sheet_tool_result_copy_link">%1$s कॉपी करें</string>
     <string name="session_chat_sheet_tool_result_copies_link_hint">लिंक कॉपी करता है</string>
-    <string name="session_chat_sheet_tool_result_line_accessibility">लाइन %1$d, %2$s</string>
+    <string name="session_chat_sheet_tool_result_line_accessibility">पंक्ति %1$d, %2$s</string>
     <string name="session_chat_sheet_shell_title">शेल</string>
     <string name="session_chat_sheet_shell_command_accessibility">कमांड, %1$s</string>
     <string name="session_chat_sheet_shell_no_output">अभी तक कोई आउटपुट नहीं</string>
@@ -1126,7 +1126,7 @@
     <string name="session_context_stat_usage">उपयोग</string>
     <string name="session_context_stat_input_tokens">इनपुट टोकन</string>
     <string name="session_context_stat_output_tokens">आउटपुट टोकन</string>
-    <string name="session_context_stat_reasoning_tokens">तर्क टोकन</string>
+    <string name="session_context_stat_reasoning_tokens">रीज़निंग टोकन</string>
     <string name="session_context_stat_cache_tokens">कैश टोकन (रीड/राइट)</string>
     <string name="session_context_stat_user_messages">यूज़र संदेश</string>
     <string name="session_context_stat_assistant_messages">असिस्टेंट संदेश</string>
@@ -1144,7 +1144,7 @@
     <string name="settings_title">सेटिंग्स</string>
     <string name="settings_section_server">सर्वर</string>
     <string name="settings_section_help_feedback">सहायता और फ़ीडबैक</string>
-    <string name="settings_section_appearance">उपस्थिति</string>
+    <string name="settings_section_appearance">दिखावट</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
     <string name="settings_section_home">होम</string>
     <string name="settings_section_session_cache">सेशन कैश</string>
@@ -1161,7 +1161,7 @@
     </plurals>
     <string name="settings_send_feedback_title">फ़ीडबैक भेजें</string>
     <string name="settings_send_feedback_subtitle">बग की रिपोर्ट करें या कोई सुझाव दें</string>
-    <string name="settings_hide_user_directory_title">यूज़र डायरेक्टरी छिपाएँ</string>
+    <string name="settings_hide_user_directory_title">उपयोगकर्ता डायरेक्टरी छिपाएँ</string>
     <string name="settings_hide_user_directory_subtitle">/Users/you/Projects/… की जगह ~/Projects/… दिखाएँ</string>
     <string name="settings_recent_window_title">हाल की अवधि</string>
     <string name="settings_recent_window_message">सेशन \"हाल के\" में तब तक रहते हैं जब तक वे चल रहे हों या तैयार हों, या इस अवधि में अपडेट हुए हों।</string>
@@ -1255,9 +1255,9 @@
     <string name="diagnostics_clear_dialog_title">डायग्नोस्टिक लॉग साफ़ करें?</string>
     <string name="diagnostics_clear_dialog_message">इससे सहेजा गया डायग्नोस्टिक लॉग हट जाएगा।</string>
     <string name="diagnostics_error_share">साझा करने के लिए डायग्नोस्टिक लॉग तैयार नहीं हो सका।</string>
-    <string name="diagnostics_error_save">डायग्नोस्टिक लॉग सेव नहीं हो सका।</string>
-    <string name="diagnostics_saved">डायग्नोस्टिक लॉग सेव हो गया।</string>
-    <string name="appearance_title">उपस्थिति</string>
+    <string name="diagnostics_error_save">डायग्नोस्टिक लॉग सहेजा नहीं जा सका।</string>
+    <string name="diagnostics_saved">डायग्नोस्टिक लॉग सहेज लिया गया।</string>
+    <string name="appearance_title">दिखावट</string>
     <string name="appearance_theme_title">थीम</string>
     <string name="appearance_theme_subtitle">%1$s · %2$s</string>
     <string name="appearance_code_highlight_title">कोड हाइलाइट</string>
@@ -1275,10 +1275,10 @@
     <string name="appearance_preview_light">लाइट</string>
     <string name="appearance_preview_dark">डार्क</string>
     <string name="appearance_preview_sample_message">टोकन स्टोर को देखें।</string>
-    <string name="appearance_preview_sample_reply">एक बार रीफ़्रेश करके, फिर पुनः प्रयास करें।</string>
+    <string name="appearance_preview_sample_reply">एक बार रीफ़्रेश करके, पुनः प्रयास करें।</string>
     <string name="appearance_more_options">और विकल्प</string>
     <string name="appearance_reset_text_sizes">टेक्स्ट आकार रीसेट करें</string>
-    <string name="appearance_reset_all">उपस्थिति की सभी सेटिंग्स रीसेट करें</string>
+    <string name="appearance_reset_all">दिखावट की सभी सेटिंग्स रीसेट करें</string>
     <string name="appearance_mode_title">मोड</string>
     <string name="appearance_mode_system">सिस्टम</string>
     <string name="appearance_mode_light">लाइट</string>
@@ -1365,7 +1365,7 @@
         <item quantity="other">पिछले %1$d मिनट · अपलोड पर gzip किया जाता है। संवेदनशील जानकारी इस फ़ोन पर छिपाई गई।</item>
     </plurals>
     <string name="feedback_log_preview_loading">लोड हो रहा है…</string>
-    <string name="feedback_log_preview_empty_title">कोई लॉग लाइन नहीं</string>
+    <string name="feedback_log_preview_empty_title">कोई लॉग पंक्ति नहीं</string>
     <plurals name="feedback_log_preview_empty_message">
         <item quantity="one">पिछले %1$d मिनट में कुछ भी लॉग नहीं हुआ।</item>
         <item quantity="other">पिछले %1$d मिनट में कुछ भी लॉग नहीं हुआ।</item>
@@ -1409,9 +1409,9 @@
     <string name="keyboard_shortcuts_deny">अस्वीकार करें</string>
     <string name="keyboard_shortcuts_deny_with_note">नोट के साथ अस्वीकार करें</string>
     <string name="keyboard_shortcuts_send_note">नोट भेजें</string>
-    <string name="keyboard_shortcuts_next_question">अगला सवाल</string>
+    <string name="keyboard_shortcuts_next_question">अगला प्रश्न</string>
     <string name="keyboard_shortcuts_submit_answers">जवाब जमा करें</string>
-    <string name="keyboard_shortcuts_dismiss_question">सवाल खारिज करें</string>
+    <string name="keyboard_shortcuts_dismiss_question">प्रश्न खारिज करें</string>
     <string name="keyboard_shortcuts_toggle_sidebar">साइडबार टॉगल करें</string>
     <string name="keyboard_shortcuts_next_session">अगला सेशन</string>
     <string name="keyboard_shortcuts_previous_session">पिछला सेशन</string>
@@ -1498,15 +1498,15 @@
     <string name="component_unified_diff_row_kind_context">कॉन्टेक्स्ट</string>
     <string name="component_unified_diff_row_kind_addition">जोड़ा गया</string>
     <string name="component_unified_diff_row_kind_deletion">हटाया गया</string>
-    <string name="component_unified_diff_old_line">पुरानी लाइन %1$d</string>
-    <string name="component_unified_diff_new_line">नई लाइन %1$d</string>
+    <string name="component_unified_diff_old_line">पुरानी पंक्ति %1$d</string>
+    <string name="component_unified_diff_new_line">नई पंक्ति %1$d</string>
     <string name="component_floating_pill_state_live">जारी है</string>
     <string name="component_floating_pill_state_ready">तैयार</string>
     <string name="component_floating_pill_state_needs_attention">ध्यान चाहिए</string>
     <string name="component_floating_pill_state_error">त्रुटि</string>
     <string name="component_floating_pill_state_done">हो गया</string>
     <string name="component_floating_pill_accessibility_label">%1$s, %2$s</string>
-    <string name="component_floating_pill_dismiss">%1$s बंद करें</string>
+    <string name="component_floating_pill_dismiss">%1$s खारिज करें</string>
     <string name="common_expanded">फैला हुआ</string>
     <string name="common_collapsed">सिमटा हुआ</string>
     <string name="component_tree_row_loading">लोड हो रहा है</string>
@@ -1529,7 +1529,7 @@
     <string name="component_unified_diff_summary_modified">बदली गई फ़ाइल %1$s, %2$s, %3$s</string>
     <string name="component_hunk_navigation_collapse_context">कॉन्टेक्स्ट समेटें</string>
     <string name="component_top_bar_project_subtitle">प्रोजेक्ट %1$s %2$s</string>
-    <string name="component_composer_dismiss">बंद करें</string>
+    <string name="component_composer_dismiss">खारिज करें</string>
     <string name="dictation_model_downloading_detail">यह सिस्टम डाउनलोड है। इस कार्ड को बंद करने पर भी यह चलता रहेगा।</string>
     <string name="session_list_scope_load_loading">सेशन लोड हो रहे हैं…</string>
     <string name="dictation_insert">डालें</string>
@@ -1538,20 +1538,20 @@
     <string name="component_list_item_show_actions">कार्रवाइयाँ दिखाएँ</string>
     <string name="dictation_status_line">%1$s · %2$s</string>
     <string name="component_attachment_kind_image">इमेज</string>
-    <string name="component_composer_hide_question">सवाल छिपाएँ</string>
+    <string name="component_composer_hide_question">प्रश्न छिपाएँ</string>
     <string name="live_updates_status_connecting">कनेक्ट हो रहा है</string>
     <string name="dictation_model_queued_detail">%1$s ने डाउनलोड को कतारबद्ध कर दिया है। यह Wi-Fi, चार्जिंग या खाली स्टोरेज का इंतज़ार कर सकता है। कुछ मिनट बाद फिर जाँचें।</string>
     <string name="dictation_model_not_installed_detail">डिक्टेशन इसी डिवाइस पर चलता है, इसलिए आपकी आवाज़ कभी अपलोड नहीं होती। %1$s मॉडल को एक बार डाउनलोड करके सभी ऐप के लिए रखता है।</string>
     <string name="component_outgoing_message_shows_actions_hint">संदेश के विकल्प दिखाता है</string>
     <string name="component_activity_status_stopped">रुका हुआ</string>
     <string name="dictation_action_try_again">फिर कोशिश करें</string>
-    <string name="component_composer_model_effort">मॉडल %1$s, एफ़र्ट %2$s</string>
+    <string name="component_composer_model_effort">मॉडल %1$s, रीज़निंग स्तर %2$s</string>
     <string name="component_activity_card_working">काम कर रहा है</string>
     <string name="component_activity_card_opens_activity">%1$s, गतिविधि खोलता है</string>
     <string name="component_image_loading_label">%1$s, लोड हो रहा है</string>
     <string name="session_list_dock_new_session">नया सेशन</string>
     <string name="component_composer_always_allows">हमेशा अनुमति: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">साइड सवाल मोड से बाहर निकलें</string>
+    <string name="component_composer_leave_side_question_mode">साइड प्रश्न मोड से बाहर निकलें</string>
     <string name="session_list_worktree_empty_other_projects">दूसरे प्रोजेक्ट के सेशन देखने के लिए फ़िल्टर हटाएँ।</string>
     <string name="component_attachment_uploading">अपलोड हो रहा है…</string>
     <string name="component_composer_deny">अस्वीकार करें</string>
@@ -1581,10 +1581,10 @@
     <string name="session_list_dock_choose_project_or_worktree">प्रोजेक्ट या worktree चुनें</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
     <string name="component_image_could_not_load_label">%1$s, लोड नहीं हो सका</string>
-    <string name="component_composer_question">सवाल</string>
+    <string name="component_composer_question">प्रश्न</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">दूसरे worktree के सेशन देखने के लिए फ़िल्टर हटाएँ।</string>
-    <string name="component_composer_side_question_mode">साइड सवाल मोड</string>
+    <string name="component_composer_side_question_mode">साइड प्रश्न मोड</string>
     <string name="component_page_indicator_label">पेज %1$d / %2$d</string>
     <string name="component_composer_next">आगे</string>
     <string name="component_message_image_label">इमेज %1$s</string>
@@ -1594,7 +1594,7 @@
     <string name="session_list_status_failed">विफल</string>
     <string name="component_composer_custom_answer_title">अपना जवाब लिखें</string>
     <string name="component_composer_always">हमेशा</string>
-    <string name="component_composer_send_side_question">साइड सवाल पूछें</string>
+    <string name="component_composer_send_side_question">साइड प्रश्न पूछें</string>
     <string name="component_composer_select_exactly">%1$d चुनें</string>
     <string name="dictation_action_open_settings">सेटिंग्स खोलें</string>
     <string name="component_composer_open_commands">कमांड खोलें</string>
@@ -1611,10 +1611,10 @@
     <string name="dictation_downloading_model">स्पीच मॉडल डाउनलोड हो रहा है</string>
     <string name="session_list_worktree_empty_every_worktree">सभी worktree देखने के लिए फ़िल्टर हटाएँ।</string>
     <string name="component_overflow_menu_more_options">और विकल्प</string>
-    <string name="session_list_status_retrying_attempt">फिर कोशिश की जा रही है · %1$d</string>
+    <string name="session_list_status_retrying_attempt">पुनः प्रयास हो रहा है · %1$d</string>
     <string name="live_updates_status_offline">ऑफ़लाइन</string>
     <string name="component_attachment_kind_text">टेक्स्ट</string>
-    <string name="component_composer_next_question">अगला सवाल</string>
+    <string name="component_composer_next_question">अगला प्रश्न</string>
     <string name="component_split_pane_show_sidebar">साइडबार दिखाएँ</string>
     <string name="component_composer_placeholder">कुछ भी पूछें...</string>
     <string name="component_server_address_host">होस्ट</string>
@@ -1637,7 +1637,7 @@
     <string name="component_image_could_not_load">लोड नहीं हो सका</string>
     <string name="component_outgoing_message_show_actions">संदेश के विकल्प दिखाएँ</string>
     <string name="live_updates_accessibility_label">लाइव अपडेट %1$s</string>
-    <string name="component_composer_previous_question">पिछला सवाल</string>
+    <string name="component_composer_previous_question">पिछला प्रश्न</string>
     <string name="component_activity_card_agent">एजेंट</string>
     <string name="session_list_section_today">आज</string>
     <string name="component_composer_child_lockout">चाइल्ड सेशन में प्रॉम्प्ट नहीं भेजा जा सकता।</string>
@@ -1677,7 +1677,7 @@
         <item quantity="other">%1$d मिनट पहले</item>
     </plurals>
     <string name="component_composer_request_position">%1$d / %2$d</string>
-    <string name="component_composer_side_question_placeholder">साइड सवाल, चैट में नहीं जुड़ेगा</string>
+    <string name="component_composer_side_question_placeholder">साइड प्रश्न, चैट में नहीं जुड़ेगा</string>
     <string name="session_list_worktree_empty_every_project">सभी प्रोजेक्ट देखने के लिए फ़िल्टर हटाएँ।</string>
     <string name="component_image_viewer_could_not_load_named">%1$s लोड नहीं हो सका</string>
     <string name="component_composer_select_up_to">अधिकतम %1$d चुनें</string>
@@ -1691,7 +1691,7 @@
     <string name="component_composer_send_queue">कतार में भेजें</string>
     <string name="session_list_dock_new_session_hint">कहीं और शुरू करने के लिए \"प्रोजेक्ट या worktree चुनें\" का उपयोग करें।</string>
     <string name="session_list_section_yesterday">कल</string>
-    <string name="component_code_file_line_label">लाइन %1$d, %2$s</string>
+    <string name="component_code_file_line_label">पंक्ति %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">OpenCode Mobile आइडिया रिपोर्ट</string>
     <string name="component_hunk_navigation_previous">पिछला hunk</string>
     <string name="session_list_section_week_of">%1$s – %2$s का सप्ताह</string>
@@ -1730,7 +1730,7 @@
     <string name="relative_time_now">अभी</string>
     <string name="component_composer_previous_permission">पिछला अनुमति अनुरोध</string>
     <string name="component_composer_dictate">बोलकर लिखें</string>
-    <string name="component_composer_side_question_mode_description">साइड सवाल मोड। साइड सवाल मोड से बाहर निकलें</string>
+    <string name="component_composer_side_question_mode_description">साइड प्रश्न मोड। साइड प्रश्न मोड से बाहर निकलें</string>
     <string name="component_composer_abort">चल रहा काम रोकें</string>
     <string name="component_server_address_scheme_button">स्कीम %1$s</string>
     <string name="component_composer_open_subagent_session">सबएजेंट सेशन खोलें</string>
@@ -1741,7 +1741,7 @@
     <string name="dictation_model_not_installed_title">%1$s को अपना %2$s चाहिए</string>
     <string name="component_composer_back_to_main_session">मुख्य सेशन पर वापस जाएँ</string>
     <string name="component_activity_sheet_working_count">काम जारी है %1$d</string>
-    <string name="session_list_status_retrying">फिर कोशिश की जा रही है</string>
+    <string name="session_list_status_retrying">पुनः प्रयास हो रहा है</string>
     <string name="component_attachment_remove">%1$s हटाएँ</string>
     <string name="component_composer_send_steer">दिशा देकर भेजें</string>
     <string name="component_composer_next_permission">अगला अनुमति अनुरोध</string>

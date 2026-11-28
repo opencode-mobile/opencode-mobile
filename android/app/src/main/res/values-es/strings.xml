@@ -26,7 +26,7 @@
     <string name="connection_setup_scan_qr_instead_hint">Desde opencode pair</string>
     <string name="connection_setup_remove_server">Quitar servidor</string>
     <string name="connection_setup_remove_dialog_title_unnamed">¿Quitar «servidor»?</string>
-    <string name="connection_setup_instructions_run">En tu ordenador, ejecuta esto y escanea el QR.</string>
+    <string name="connection_setup_instructions_run">En tu equipo, ejecuta esto y escanea el QR.</string>
     <string name="connection_setup_instructions_first_run">La primera vez tarda cerca de un minuto. Requiere OpenCode 2.0.25 o posterior. El servicio se inicia si aún no está en marcha.</string>
     <string name="connection_setup_instructions_same_wifi_title">Misma red Wi-Fi</string>
     <string name="connection_setup_instructions_same_wifi_body">El comando pair normal solo muestra un QR cuando el servidor es accesible más allá de localhost.</string>
@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">Accede desde tu teléfono</string>
     <string name="onboarding_setup_step3_body">Recomendado: Tailscale. Instala Tailscale en el equipo y en el teléfono, y usa la IP de Tailscale del equipo o su nombre MagicDNS como URL del servidor.\n\nTambién sirve: la misma red local, una VPN, HTTPS u otro túnel que gestiones tú. La app no crea un relé por ti.</string>
     <string name="onboarding_setup_step4_title">Conéctate en la app</string>
-    <string name="onboarding_setup_step4_body">Introduce la URL base y la contraseña. La app comprueba GET /global/health y luego guarda una conexión de servidor en este dispositivo.</string>
+    <string name="onboarding_setup_step4_body">Introduce la URL base y la contraseña. La app comprueba GET /global/health y luego guarda la conexión en este dispositivo.</string>
     <string name="onboarding_setup_open_docs">Abrir documentación del servidor</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile está bloqueada</string>
@@ -208,7 +208,7 @@
     <string name="servers_add">Añadir servidor</string>
     <string name="servers_edit_profile">Editar %1$s</string>
     <string name="servers_remove_dialog_title_named">¿Quitar «%1$s»?</string>
-    <string name="servers_remove_dialog_message">Este dispositivo olvidará la conexión de servidor guardada. Las sesiones permanecen en ese servidor. Si es el servidor activo, elegirás otro o irás a Conectar si no queda ninguno.</string>
+    <string name="servers_remove_dialog_message">Este dispositivo olvidará la conexión guardada. Las sesiones permanecen en ese servidor. Si es el servidor activo, elegirás otro o irás a Conectar si no queda ninguno.</string>
     <string name="common_retry">Reintentar</string>
     <string name="common_save">Guardar</string>
     <string name="common_delete">Eliminar</string>
@@ -358,7 +358,7 @@
     <string name="worktree_branch">Rama</string>
     <string name="worktree_base">Crear desde</string>
     <string name="worktree_v1_branch_note">opencode v1 usa el nombre del worktree</string>
-    <string name="worktree_v2_no_branch">Sin rama (detached)</string>
+    <string name="worktree_v2_no_branch">Sin rama (HEAD desacoplado)</string>
     <string name="worktree_v2_branch_note">Los checkouts de opencode v2 no tienen rama</string>
     <string name="worktree_current_checkout">Checkout actual</string>
     <string name="worktree_v1_base_note">opencode v1 usa el checkout actual</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_commands_undo_description">Deshacer el último mensaje</string>
     <string name="session_chat_commands_redo_label">Rehacer</string>
     <string name="session_chat_commands_redo_description">Rehacer el mensaje deshecho</string>
-    <string name="session_chat_commands_compact_label">Compacto</string>
+    <string name="session_chat_commands_compact_label">Compactar</string>
     <string name="session_chat_commands_compact_description">Compactar el contexto de la sesión</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">Abrir el shell del proyecto</string>
@@ -515,7 +515,7 @@
     <string name="session_chat_commands_mcp_label">Servidores MCP</string>
     <string name="session_chat_commands_mcp_description">Mostrar el estado de los servidores MCP</string>
     <string name="session_chat_commands_btw_label">Por cierto</string>
-    <string name="session_chat_commands_btw_description">Hacer una pregunta aparte</string>
+    <string name="session_chat_commands_btw_description">Hacer una pregunta paralela</string>
     <string name="session_chat_suggestion_file">Archivo</string>
     <string name="session_chat_suggestion_no_matches">Sin coincidencias</string>
     <string name="session_chat_suggestion_no_commands">Sin comandos</string>
@@ -534,7 +534,7 @@
     <string name="session_chat_model_notice_none_usable">No hay modelos disponibles para usar. Toca Modelo para reintentar.</string>
     <string name="session_chat_model_notice_variant_unavailable">La variante guardada no está disponible. Se usará la predeterminada.</string>
     <string name="session_chat_model_notice_model_unavailable">El modelo seleccionado no está disponible. Se usará %1$s.</string>
-    <string name="session_chat_side_question_unsupported">/btw requiere un servidor opencode v2 que responda preguntas secundarias. Este servidor no puede responder sin añadir la respuesta a la conversación.</string>
+    <string name="session_chat_side_question_unsupported">/btw requiere un servidor opencode v2 que responda preguntas paralelas. Este servidor no puede responder sin añadir la respuesta a la conversación.</string>
     <string name="session_chat_side_question_unavailable">/btw requiere un servidor opencode más reciente.</string>
     <string name="session_chat_side_question_copied">Respuesta copiada</string>
     <string name="session_chat_side_question_failed">/btw falló: «%1$s»</string>
@@ -587,23 +587,23 @@
         <item quantity="many">%1$d de prompts en cola</item>
         <item quantity="other">%1$d prompts en cola</item>
     </plurals>
-    <string name="session_chat_activity_side_question_failed">Pregunta secundaria fallida</string>
+    <string name="session_chat_activity_side_question_failed">Pregunta paralela fallida</string>
     <plurals name="session_chat_activity_side_questions_failed">
-        <item quantity="one">%1$d pregunta secundaria fallida</item>
-        <item quantity="many">%1$d de preguntas secundarias fallidas</item>
-        <item quantity="other">%1$d preguntas secundarias fallidas</item>
+        <item quantity="one">%1$d pregunta paralela fallida</item>
+        <item quantity="many">%1$d de preguntas paralelas fallidas</item>
+        <item quantity="other">%1$d preguntas paralelas fallidas</item>
     </plurals>
-    <string name="session_chat_activity_side_question_ready">Respuesta a pregunta secundaria lista</string>
+    <string name="session_chat_activity_side_question_ready">Respuesta a pregunta paralela lista</string>
     <plurals name="session_chat_activity_side_questions_ready">
-        <item quantity="one">%1$d respuesta a pregunta secundaria lista</item>
-        <item quantity="many">%1$d de respuestas a preguntas secundarias listas</item>
-        <item quantity="other">%1$d respuestas a preguntas secundarias listas</item>
+        <item quantity="one">%1$d respuesta a pregunta paralela lista</item>
+        <item quantity="many">%1$d de respuestas a preguntas paralelas listas</item>
+        <item quantity="other">%1$d respuestas a preguntas paralelas listas</item>
     </plurals>
-    <string name="session_chat_activity_side_question_running">Pregunta secundaria en curso</string>
+    <string name="session_chat_activity_side_question_running">Pregunta paralela en curso</string>
     <plurals name="session_chat_activity_side_questions_running">
-        <item quantity="one">%1$d pregunta secundaria en curso</item>
-        <item quantity="many">%1$d de preguntas secundarias en curso</item>
-        <item quantity="other">%1$d preguntas secundarias en curso</item>
+        <item quantity="one">%1$d pregunta paralela en curso</item>
+        <item quantity="many">%1$d de preguntas paralelas en curso</item>
+        <item quantity="other">%1$d preguntas paralelas en curso</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
     <string name="session_chat_activity_action_open_request">Abrir solicitud</string>
@@ -933,7 +933,7 @@
     <string name="session_chat_revert_cancel_failed">No se pudo cancelar la reversión.</string>
     <string name="session_chat_revert_commit_failed">No se pudo confirmar la reversión.</string>
     <string name="session_chat_fork_rename_failed">Se creó la bifurcación, pero no se pudo renombrar.</string>
-    <string name="session_chat_pending_prompt_update_failed">No se pudo actualizar el mensaje pendiente</string>
+    <string name="session_chat_pending_prompt_update_failed">No se pudo actualizar el prompt pendiente</string>
     <string name="session_chat_shell_stop_failed">No se pudo detener el shell. Inténtalo de nuevo.</string>
     <string name="session_chat_shell_status_running">En ejecución</string>
     <string name="session_chat_shell_status_exited">Finalizado</string>
@@ -982,7 +982,7 @@
     <string name="session_chat_sheet_pending_prompts_clear_all">Borrar todo</string>
     <string name="session_chat_sheet_pending_prompts_sending">Enviando…</string>
     <string name="session_chat_sheet_pending_prompts_move_to_queue">Mover a la cola</string>
-    <string name="session_chat_sheet_pending_prompts_steer_now">Orientar ahora</string>
+    <string name="session_chat_sheet_pending_prompts_steer_now">Redirigir ahora</string>
     <string name="session_chat_sheet_pending_prompts_delete">Eliminar</string>
     <string name="session_chat_sheet_side_question_done">Listo</string>
     <string name="session_chat_sheet_side_question_not_added">No se añadió a la conversación</string>
@@ -1060,7 +1060,7 @@
     <string name="session_chat_goal_clear_failed_reason">No se pudo borrar el objetivo: %1$s</string>
     <string name="session_chat_timeline_style_notice">Cronología: %1$s. Puedes cambiarla cuando quieras en Ajustes.</string>
     <string name="session_chat_branch_copied">Nombre de la rama copiado</string>
-    <string name="session_chat_follow_up_switched_steer">Cambiado a Orientar</string>
+    <string name="session_chat_follow_up_switched_steer">Cambiado a Redirigir</string>
     <string name="session_chat_follow_up_switched_queue">Cambiado a En cola</string>
     <string name="session_chat_failure_retry_after_seconds">Inténtalo de nuevo en %1$d s</string>
     <string name="session_chat_failure_retry_after_minutes">Inténtalo de nuevo en %1$d min</string>
@@ -1090,7 +1090,7 @@
     <string name="session_chat_mcp_load_failed">No se pudieron cargar los servidores MCP. Comprueba la conexión e inténtalo de nuevo.</string>
     <string name="session_chat_create_failed">No se pudo crear la sesión</string>
     <string name="session_chat_send_timed_out">No se pudo enviar. Inténtalo de nuevo.</string>
-    <string name="session_chat_shell_cannot_queue">Los comandos de shell no se pueden poner en cola. Cambia a Orientar para ejecutarlos ahora.</string>
+    <string name="session_chat_shell_cannot_queue">Los comandos de shell no se pueden poner en cola. Cambia a Redirigir para ejecutarlos ahora.</string>
     <string name="session_chat_reply_error_permission">No se pudo enviar tu respuesta. Inténtalo de nuevo.</string>
     <string name="session_chat_reply_error_permission_reason">No se pudo enviar tu respuesta. %1$s.</string>
     <string name="session_chat_reply_error_question">No se pudo enviar tu respuesta. Inténtalo de nuevo.</string>
@@ -1112,7 +1112,7 @@
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Carril de pasos</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Una línea por paso en un carril, en vivo mientras el agente trabaja</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Tarjeta de actividad</string>
-    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Los pasos en curso en una tarjeta en vivo que se resume al terminar</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Los pasos en curso en una tarjeta en vivo que se pliega en un resumen</string>
     <string name="session_chat_sheet_picker_model">Modelo</string>
     <string name="session_chat_sheet_picker_agent_mode">Modo del agente</string>
     <string name="session_chat_sheet_picker_variant">Variante</string>
@@ -1251,9 +1251,9 @@
     <string name="settings_timeline_style_activity_card_title">Tarjeta de actividad</string>
     <string name="settings_timeline_style_activity_card_subtitle">Los pasos en curso en una tarjeta en vivo que se pliega en un resumen</string>
     <string name="settings_follow_up_title">Envío de seguimiento</string>
-    <string name="settings_follow_up_steer">Orientar</string>
+    <string name="settings_follow_up_steer">Redirigir</string>
     <string name="settings_follow_up_queue">En cola</string>
-    <string name="settings_follow_up_subtitle_steer">Orientar · Solo servidores V2. V1 no lo admite.</string>
+    <string name="settings_follow_up_subtitle_steer">Redirigir · Solo servidores V2. V1 no lo admite.</string>
     <string name="settings_follow_up_subtitle_queue">En cola · Solo servidores V2. V1 no lo admite.</string>
     <string name="settings_follow_up_unsupported">No es compatible con V1. Este servidor siempre envía de inmediato.</string>
     <string name="settings_worktrees_title">Worktrees</string>
@@ -1583,7 +1583,7 @@
     <string name="component_reasoning_row_duration_minutes_seconds">%1$d min %2$d s</string>
     <string name="component_reasoning_row_duration_hours_minutes">%1$d h %2$d min</string>
     <string name="component_reasoning_row_shows_thought_hint">Muestra el pensamiento completo</string>
-    <string name="component_unified_diff_row_kind_hunk">fragmento</string>
+    <string name="component_unified_diff_row_kind_hunk">bloque de cambios</string>
     <string name="component_unified_diff_row_kind_metadata">metadatos</string>
     <string name="component_unified_diff_row_kind_context">contexto</string>
     <string name="component_unified_diff_row_kind_addition">adición</string>
@@ -1642,7 +1642,7 @@
     <string name="session_list_dock_new_session">Nueva sesión</string>
     <string name="component_composer_always_allows">Permite siempre: %1$s</string>
     <string name="component_composer_leave_side_question_mode">Salir del modo de pregunta paralela</string>
-    <string name="session_list_worktree_empty_other_projects">Quita el filtro para ver sesiones de otros proyectos.</string>
+    <string name="session_list_worktree_empty_other_projects">Borra el filtro para ver sesiones de otros proyectos.</string>
     <string name="component_attachment_uploading">Subiendo…</string>
     <string name="component_composer_deny">Denegar</string>
     <string name="component_composer_deny_options">Más opciones para denegar</string>
@@ -1674,7 +1674,7 @@
     <string name="component_image_could_not_load_label">%1$s, no se pudo cargar</string>
     <string name="component_composer_question">Pregunta</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Quita el filtro para ver sesiones de otros worktrees.</string>
+    <string name="session_list_worktree_empty_other_worktrees">Borra el filtro para ver sesiones de otros worktrees.</string>
     <string name="component_composer_side_question_mode">Modo de pregunta paralela</string>
     <string name="component_page_indicator_label">Página %1$d de %2$d</string>
     <string name="component_composer_next">Siguiente</string>
@@ -1701,7 +1701,7 @@
     <string name="session_list_scope_load_failed_title">No se pudo cargar %1$s</string>
     <string name="dictation_status_listening">Escuchando</string>
     <string name="dictation_downloading_model">Descargando modelo de voz</string>
-    <string name="session_list_worktree_empty_every_worktree">Quita el filtro para ver todos los worktrees.</string>
+    <string name="session_list_worktree_empty_every_worktree">Borra el filtro para ver todos los worktrees.</string>
     <string name="component_overflow_menu_more_options">Más opciones</string>
     <string name="session_list_status_retrying_attempt">Reintentando · %1$d</string>
     <string name="live_updates_status_offline">sin conexión</string>
@@ -1774,8 +1774,8 @@
         <item quantity="other">hace %1$d min</item>
     </plurals>
     <string name="component_composer_request_position">%1$d de %2$d</string>
-    <string name="component_composer_side_question_placeholder">Pregunta aparte, no se añade al chat</string>
-    <string name="session_list_worktree_empty_every_project">Quita el filtro para ver todos los proyectos.</string>
+    <string name="component_composer_side_question_placeholder">Pregunta paralela, no se añade al chat</string>
+    <string name="session_list_worktree_empty_every_project">Borra el filtro para ver todos los proyectos.</string>
     <string name="component_image_viewer_could_not_load_named">No se pudo cargar %1$s</string>
     <string name="component_composer_select_up_to">Selecciona hasta %1$d</string>
     <string name="live_updates_status_live">en vivo</string>
@@ -1790,7 +1790,7 @@
     <string name="session_list_section_yesterday">Ayer</string>
     <string name="component_code_file_line_label">Línea %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">Informe de idea de OpenCode Mobile</string>
-    <string name="component_hunk_navigation_previous">Bloque anterior</string>
+    <string name="component_hunk_navigation_previous">Bloque de cambios anterior</string>
     <string name="session_list_section_week_of">Semana del %1$s al %2$s</string>
     <string name="dictation_model_download_failed_title">%1$s no pudo descargar el %2$s</string>
     <string name="component_activity_status_pending">pendiente</string>
@@ -1841,7 +1841,7 @@
     <string name="component_activity_sheet_working_count">Trabajando %1$d</string>
     <string name="session_list_status_retrying">Reintentando</string>
     <string name="component_attachment_remove">Quitar %1$s</string>
-    <string name="component_composer_send_steer">Enviar para orientar</string>
+    <string name="component_composer_send_steer">Enviar para redirigir</string>
     <string name="component_composer_next_permission">Siguiente solicitud de permiso</string>
     <string name="session_list_dock_project_filter">Filtro de proyecto</string>
     <string name="component_split_pane_resize_hint">Toca dos veces para ocultar la barra lateral</string>

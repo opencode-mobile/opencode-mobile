@@ -93,8 +93,8 @@
     <string name="onboarding_features_sessions_title">Relácie</string>
     <string name="onboarding_features_sessions_detail">Zoznam, otvorenie, vytvorenie, premenovanie, rozvetvenie, archivácia, odstránenie</string>
     <string name="onboarding_features_chat_title">Chat a zastavenie</string>
-    <string name="onboarding_features_chat_detail">Odosielajte zadania a zastavte rozbehnutú prácu</string>
-    <string name="onboarding_features_permissions_title">Oprávnenia</string>
+    <string name="onboarding_features_chat_detail">Odosielajte výzvy a zastavujte rozbehnutú prácu</string>
+    <string name="onboarding_features_permissions_title">Povolenia</string>
     <string name="onboarding_features_permissions_detail">Schváľte alebo odmietnite žiadosti (bez trvalého zapamätania)</string>
     <string name="onboarding_features_changes_title">Zmeny</string>
     <string name="onboarding_features_changes_detail">Prezerajte diffy relácií</string>
@@ -161,7 +161,7 @@
     </plurals>
     <string name="server_health_errors">Chyby</string>
     <string name="server_health_errors_empty">V tomto období nie sú žiadne chyby.</string>
-    <string name="server_health_error_log">Záznam chýb</string>
+    <string name="server_health_error_log">Log chýb</string>
     <string name="server_health_error_log_check">Kontrola stavu</string>
     <string name="server_health_error_log_stream">Živé pripojenie</string>
     <string name="server_health_error_log_repeated">%1$d× za sebou počas %2$s</string>
@@ -507,7 +507,7 @@
     <string name="session_chat_attachment_source_photos">Fotografie</string>
     <string name="session_chat_attachment_source_media">Médiá</string>
     <string name="session_chat_attachment_source_files">Súbory</string>
-    <string name="session_chat_attachment_source_log_file">Súbor denníka</string>
+    <string name="session_chat_attachment_source_log_file">Súbor logu</string>
     <string name="session_chat_commands_title">Príkazy</string>
     <string name="session_chat_commands_mcp_title">Servery MCP</string>
     <string name="session_chat_commands_back">Späť na príkazy</string>
@@ -585,8 +585,8 @@
     </plurals>
     <string name="attachment_drop_some_skipped">Niektoré sa preskočia</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
-    <string name="session_chat_activity_review_permission">Skontrolovať oprávnenie</string>
-    <string name="session_chat_activity_review_permission_request">Skontrolovať žiadosť o oprávnenie</string>
+    <string name="session_chat_activity_review_permission">Skontrolovať povolenie</string>
+    <string name="session_chat_activity_review_permission_request">Skontrolovať žiadosť o povolenie</string>
     <string name="session_chat_activity_answer_question">Odpovedať na otázku</string>
     <string name="session_chat_activity_request_failed">Požiadavka zlyhala</string>
     <string name="session_chat_activity_btw_failed">/btw zlyhalo · Skúste znova</string>
@@ -971,19 +971,19 @@
     <string name="timeline_notice_instructions_updated">Pokyny aktualizované</string>
     <string name="timeline_notice_restart">Pokračuje sa po reštarte</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">Kontext skompaktnený</string>
+    <string name="timeline_compaction_title">Kontext zhustený</string>
     <string name="timeline_compaction_automatic">Automaticky</string>
     <string name="timeline_syncing">Synchronizuje sa…</string>
     <string name="timeline_failure_session_work_failed">Práca relácie zlyhala</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Vybrať model</string>
-    <string name="timeline_failure_compact">Kompaktovať</string>
-    <string name="session_chat_compact_status">Kompaktuje sa…</string>
+    <string name="timeline_failure_compact">Zhustiť</string>
+    <string name="session_chat_compact_status">Zhusťuje sa…</string>
     <string name="session_chat_turn_sending">Odosiela sa…</string>
     <string name="session_chat_turn_sending_percent">Odosiela sa %1$d %%</string>
-    <string name="session_chat_compact_success">Relácia skompaktnená.</string>
-    <string name="session_chat_compact_success_usage">Kontext skompaktnený · %1$d %% → %2$d %%</string>
-    <string name="session_chat_compact_failure">Kontext relácie sa nepodarilo skompaktniť.</string>
+    <string name="session_chat_compact_success">Relácia zhustená.</string>
+    <string name="session_chat_compact_success_usage">Kontext zhustený · %1$d %% → %2$d %%</string>
+    <string name="session_chat_compact_failure">Kontext relácie sa nepodarilo zhustiť.</string>
     <string name="session_chat_revert_undo_failed">Poslednú správu sa nepodarilo vrátiť späť.</string>
     <string name="session_chat_revert_failed">Správu sa nepodarilo vrátiť.</string>
     <string name="session_chat_revert_redo_failed">Nepodarilo sa to urobiť znovu.</string>
@@ -1077,8 +1077,8 @@
     <string name="session_chat_goal_waiting_shell">Na dokončenie shellu na pozadí: %1$s. Pozastaví sa, ak nič nebeží %2$d min.</string>
     <string name="session_chat_goal_waiting_subagent">Na dokončenie subagenta. Pozastaví sa, ak nič nebeží %1$d min.</string>
     <string name="session_chat_goal_waiting_on_you">Čaká sa na vás</string>
-    <string name="session_chat_goal_waiting_permission">Čaká sa na vaše povolenie. Cieľ bude pokračovať po vašej odpovedi.</string>
-    <string name="session_chat_goal_waiting_question">Čaká sa na vašu odpoveď na otázku. Cieľ bude pokračovať po vašej odpovedi.</string>
+    <string name="session_chat_goal_waiting_permission">Je otvorená žiadosť o povolenie. Cieľ bude pokračovať po vašej odpovedi.</string>
+    <string name="session_chat_goal_waiting_question">Je otvorená otázka. Cieľ bude pokračovať po vašej odpovedi.</string>
     <string name="session_chat_goal_evidence">Dôkaz</string>
     <string name="session_chat_goal_reconnecting">Pripája sa znova. Zobrazuje sa posledný známy cieľ.</string>
     <string name="session_chat_goal_pause">Pozastaviť</string>
@@ -1086,7 +1086,7 @@
     <string name="session_chat_goal_resume">Pokračovať</string>
     <string name="session_chat_goal_resuming">Pokračuje sa…</string>
     <string name="session_chat_goal_clear">Vymazať</string>
-    <string name="session_chat_goal_clearing">Maže sa…</string>
+    <string name="session_chat_goal_clearing">Vymazáva sa…</string>
     <string name="session_chat_goal_new">Nový cieľ…</string>
     <string name="session_chat_goal_footnote_active">Po každom ťahu recenzent skontroluje prácu voči cieľu. Agent pokračuje, kým nie je cieľ splnený, nepotrebuje vás alebo nedosiahne limit kôl (%1$d).</string>
     <string name="session_chat_goal_footnote_paused">Pokračovaním sa začne nový rozpočet kôl: %1$d.</string>
@@ -1136,10 +1136,10 @@
         <item quantity="other">%1$d súborov</item>
     </plurals>
     <plurals name="component_branch_pill_uncommitted_files">
-        <item quantity="one">%1$d nezapísaný súbor</item>
-        <item quantity="few">%1$d nezapísané súbory</item>
-        <item quantity="many">%1$d nezapísaného súboru</item>
-        <item quantity="other">%1$d nezapísaných súborov</item>
+        <item quantity="one">%1$d necommitnutý súbor</item>
+        <item quantity="few">%1$d necommitnuté súbory</item>
+        <item quantity="many">%1$d necommitnutého súboru</item>
+        <item quantity="other">%1$d necommitnutých súborov</item>
     </plurals>
     <string name="component_branch_pill_a11y_branch">Vetva %1$s</string>
     <string name="component_branch_pill_a11y_worktree_branch">Vetva worktree %1$s</string>
@@ -1152,7 +1152,7 @@
     <string name="session_chat_mcp_load_failed">Servery MCP sa nepodarilo načítať. Skontrolujte pripojenie a skúste to znova.</string>
     <string name="session_chat_create_failed">Reláciu sa nepodarilo vytvoriť</string>
     <string name="session_chat_send_timed_out">Odoslanie zlyhalo. Skúste to znova.</string>
-    <string name="session_chat_shell_cannot_queue">Shell príkazy sa nedajú zaradiť do frontu. Prepnite na Usmerniť, aby sa spustili hneď.</string>
+    <string name="session_chat_shell_cannot_queue">Príkazy shellu sa nedajú zaradiť do frontu. Prepnite na Usmerniť, aby sa spustili hneď.</string>
     <string name="session_chat_reply_error_permission">Odpoveď sa nepodarilo odoslať. Skúste to znova.</string>
     <string name="session_chat_reply_error_permission_reason">Odpoveď sa nepodarilo odoslať. %1$s.</string>
     <string name="session_chat_reply_error_question">Odpoveď sa nepodarilo odoslať. Skúste to znova.</string>
@@ -1303,7 +1303,7 @@
     </plurals>
     <string name="settings_send_feedback_title">Odoslať spätnú väzbu</string>
     <string name="settings_send_feedback_subtitle">Nahláste chybu alebo sa podeľte o nápad</string>
-    <string name="settings_hide_user_directory_title">Skryť používateľský adresár</string>
+    <string name="settings_hide_user_directory_title">Skryť používateľský priečinok</string>
     <string name="settings_hide_user_directory_subtitle">Zobraziť ~/Projects/… namiesto /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">Okno nedávnych</string>
     <string name="settings_recent_window_message">Relácie zostanú v Nedávnych, kým bežia alebo sú pripravené, alebo ak boli aktualizované v tomto okne.</string>
@@ -1324,12 +1324,12 @@
     <string name="settings_timeline_style_activity_card_subtitle">Bežiace kroky na jednej živej karte, ktorá sa zloží do súhrnu</string>
     <string name="settings_follow_up_title">Odoslanie nadväzujúcej správy</string>
     <string name="settings_follow_up_steer">Usmerniť</string>
-    <string name="settings_follow_up_queue">Front</string>
+    <string name="settings_follow_up_queue">Fronta</string>
     <string name="settings_follow_up_subtitle_steer">Usmerniť · iba servery V2. V1 to nepodporuje.</string>
-    <string name="settings_follow_up_subtitle_queue">Front · iba servery V2. V1 to nepodporuje.</string>
+    <string name="settings_follow_up_subtitle_queue">Fronta · iba servery V2. V1 to nepodporuje.</string>
     <string name="settings_follow_up_unsupported">V1 to nepodporuje. Tento server vždy odosiela okamžite.</string>
-    <string name="settings_worktrees_title">Worktrees</string>
-    <string name="settings_worktrees_subtitle">Zobrazí worktrees a vetvy každého projektu na Domove a pri podržaní tlačidla Nová relácia umožní vybrať worktree.</string>
+    <string name="settings_worktrees_title">Worktree</string>
+    <string name="settings_worktrees_subtitle">Zobrazí worktree a vetvy každého projektu na Domove a pri podržaní tlačidla Nová relácia umožní vybrať worktree.</string>
     <string name="settings_session_rows_title">Riadky relácií</string>
     <string name="settings_session_rows_compact_title">Kompaktné</string>
     <string name="settings_session_rows_compact_subtitle">Dva riadky: názov a čas, potom projekt / worktree</string>
@@ -1591,7 +1591,7 @@
     <string name="changes_source_working_tree_name">Zmeny v Gite</string>
     <string name="changes_source_working_tree_empty_title">Žiadne zmeny v Gite</string>
     <string name="changes_source_working_tree_empty_message">Pracovný strom nemá žiadne necommitnuté zmeny.</string>
-    <string name="changes_source_last_turn_name">Zmeny z posledného kola</string>
+    <string name="changes_source_last_turn_name">Zmeny z posledného ťahu</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">Zmeny v Gite obsahujú %1$d zmenený súbor.</item>
         <item quantity="few">Zmeny v Gite obsahujú %1$d zmenené súbory.</item>
@@ -1615,7 +1615,7 @@
     <string name="changes_error_title">Zmeny sa nepodarilo načítať</string>
     <string name="changes_error_fallback">Zmeny sa nenačítali.</string>
     <string name="changes_error_request_failed">Požiadavka zlyhala</string>
-    <string name="changes_error_turn_moved_folders">Toto kolo presunulo priečinky, takže jeho zmeny sa nedajú zobraziť spolu.</string>
+    <string name="changes_error_turn_moved_folders">Tento ťah presunul priečinky, takže jeho zmeny sa nedajú zobraziť spolu.</string>
     <string name="changes_refresh_failed">Obnovenie zlyhalo: %1$s</string>
     <string name="changes_filter_hint">Filtrovať</string>
     <string name="changes_filter_accessibility_label">Filtrovať zmenené súbory</string>
@@ -1765,7 +1765,7 @@
     <string name="component_image_could_not_load_label">%1$s, nepodarilo sa načítať</string>
     <string name="component_composer_question">Otázka</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Zrušte filter a zobrazia sa relácie z iných worktrees.</string>
+    <string name="session_list_worktree_empty_other_worktrees">Zrušte filter a zobrazia sa relácie z iných worktree.</string>
     <string name="component_composer_side_question_mode">Režim vedľajšej otázky</string>
     <string name="component_page_indicator_label">Strana %1$d z %2$d</string>
     <string name="component_composer_next">Ďalej</string>
@@ -1793,7 +1793,7 @@
     <string name="session_list_scope_load_failed_title">Nepodarilo sa načítať: %1$s</string>
     <string name="dictation_status_listening">Počúva sa</string>
     <string name="dictation_downloading_model">Sťahuje sa model rozpoznávania reči</string>
-    <string name="session_list_worktree_empty_every_worktree">Zrušte filter a zobrazia sa všetky worktrees.</string>
+    <string name="session_list_worktree_empty_every_worktree">Zrušte filter a zobrazia sa všetky worktree.</string>
     <string name="component_overflow_menu_more_options">Ďalšie možnosti</string>
     <string name="session_list_status_retrying_attempt">Opakuje sa · %1$d</string>
     <string name="live_updates_status_offline">offline</string>
@@ -1929,7 +1929,7 @@
     <string name="component_composer_side_question_mode_description">Režim vedľajšej otázky. Opustiť režim vedľajšej otázky</string>
     <string name="component_composer_abort">Prerušiť prebiehajúcu prácu</string>
     <string name="component_server_address_scheme_button">Schéma %1$s</string>
-    <string name="component_composer_open_subagent_session">Otvoriť reláciu podagenta</string>
+    <string name="component_composer_open_subagent_session">Otvoriť reláciu subagenta</string>
     <string name="component_composer_question_step">Krok %1$d z %2$d</string>
     <string name="share_feedback_subject_bug">Hlásenie chyby v aplikácii OpenCode Mobile</string>
     <string name="component_activity_card_opens_child_session_hint">Otvorí podreláciu</string>
@@ -1985,14 +1985,14 @@
         <item quantity="other">%1$d zmenených</item>
     </plurals>
     <string name="worktrees_none_in_project">Žiadne worktrees. Nová relácia → Vybrať projekt alebo worktree ho vytvorí.</string>
-    <string name="worktrees_footer">Odstránením worktree sa na serveri zmaže jeho priečinok. Relácie zostanú, ale už v ňom nebudú môcť bežať.</string>
+    <string name="worktrees_footer">Odstránením worktree sa na serveri odstráni aj jeho priečinok. Relácie zostanú, ale už v ňom nebudú môcť bežať.</string>
     <string name="worktrees_more">Ďalšie akcie pre %1$s</string>
     <string name="worktrees_removing">Odstraňuje sa…</string>
     <string name="worktrees_actions_show_on_home">Zobraziť relácie na domovskej obrazovke</string>
     <string name="worktrees_actions_new_session">Nová relácia tu</string>
     <string name="worktrees_actions_remove">Odstrániť worktree…</string>
     <string name="worktrees_remove_title">Odstrániť worktree „%1$s“?</string>
-    <string name="worktrees_remove_message">Zmaže %1$s na serveri.</string>
+    <string name="worktrees_remove_message">Odstráni %1$s na serveri.</string>
     <plurals name="worktrees_remove_changes">
         <item quantity="one">Stratí sa %1$d necommitnutá zmena.</item>
         <item quantity="few">Stratia sa %1$d necommitnuté zmeny.</item>

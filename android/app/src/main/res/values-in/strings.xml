@@ -21,7 +21,7 @@
     <string name="connection_setup_action_scan_qr">Pindai QR</string>
     <string name="connection_setup_action_scan_new_qr">Pindai QR baru</string>
     <string name="connection_setup_action_enter_pairing_code">Masukkan kode pemasangan</string>
-    <string name="connection_setup_action_use_host_password">Pakai host dan kata sandi</string>
+    <string name="connection_setup_action_use_host_password">Gunakan host dan kata sandi</string>
     <string name="connection_setup_action_scan_qr_instead">Pindai QR saja</string>
     <string name="connection_setup_scan_qr_instead_hint">Dari opencode pair</string>
     <string name="connection_setup_remove_server">Hapus server</string>
@@ -51,11 +51,11 @@
     <string name="connection_setup_address_using_now">Sedang dipakai</string>
     <string name="connection_setup_address_saved">Tersimpan</string>
     <string name="connection_setup_pair_again_unreachable">Alamat tersimpan tidak terjangkau. Pasangkan ulang.</string>
-    <string name="connection_setup_pair_again_unauthorized">Server ini menolak kredensial masuk yang tersimpan. Pasangkan ulang. Kata sandi baru akan mengeluarkan semua perangkat dari akun.</string>
+    <string name="connection_setup_pair_again_unauthorized">Server ini menolak login yang tersimpan. Pasangkan ulang. Kata sandi baru akan membuat semua perangkat keluar.</string>
     <string name="connection_cleartext_title">Koneksi tidak terenkripsi</string>
-    <string name="connection_cleartext_message_one_host">%1$s memakai http biasa di luar jaringan lokal atau Tailscale. Kata sandi server dan semua isi sesi Anda akan dikirim tanpa enkripsi. Sebaiknya pakai https, VPN, atau tunnel.</string>
-    <string name="connection_cleartext_message_hosts">%1$s memakai http biasa di luar jaringan lokal atau Tailscale. Kata sandi server dan semua isi sesi Anda akan dikirim tanpa enkripsi. Sebaiknya pakai https, VPN, atau tunnel.</string>
-    <string name="connection_cleartext_message_this_address">Alamat ini memakai http biasa di luar jaringan lokal atau Tailscale. Kata sandi server dan semua isi sesi Anda akan dikirim tanpa enkripsi. Sebaiknya pakai https, VPN, atau tunnel.</string>
+    <string name="connection_cleartext_message_one_host">%1$s memakai http biasa di luar jaringan lokal atau Tailscale. Kata sandi server dan semua isi sesi Anda akan dikirim tanpa enkripsi. Sebaiknya gunakan https, VPN, atau tunnel.</string>
+    <string name="connection_cleartext_message_hosts">%1$s memakai http biasa di luar jaringan lokal atau Tailscale. Kata sandi server dan semua isi sesi Anda akan dikirim tanpa enkripsi. Sebaiknya gunakan https, VPN, atau tunnel.</string>
+    <string name="connection_cleartext_message_this_address">Alamat ini memakai http biasa di luar jaringan lokal atau Tailscale. Kata sandi server dan semua isi sesi Anda akan dikirim tanpa enkripsi. Sebaiknya gunakan https, VPN, atau tunnel.</string>
     <string name="connection_cleartext_connect_anyway">Tetap hubungkan</string>
     <string name="connection_error_invalid_qr">Ini bukan QR pemasangan OpenCode 2</string>
     <string name="connection_error_localhost_qr">QR itu hanya berisi alamat localhost</string>
@@ -89,7 +89,7 @@
     <string name="onboarding_connect_page_title">Hubungkan ke\nserver Anda</string>
     <string name="onboarding_connect_page_body">Arahkan aplikasi ke server opencode di mesin Anda. Kami sarankan Tailscale agar ponsel Anda dapat menjangkaunya dengan aman dari mana saja.</string>
     <string name="onboarding_connect_page_setup_link">Belum punya server?</string>
-    <string name="onboarding_features_title">Yang bisa Anda\nlakukan di sini</string>
+    <string name="onboarding_features_title">Yang dapat Anda\nlakukan di sini</string>
     <string name="onboarding_features_sessions_title">Sesi</string>
     <string name="onboarding_features_sessions_detail">Lihat daftar, buka, buat, ganti nama, fork, arsipkan, hapus</string>
     <string name="onboarding_features_chat_title">Obrolan &amp; hentikan</string>
@@ -99,7 +99,7 @@
     <string name="onboarding_features_changes_title">Perubahan</string>
     <string name="onboarding_features_changes_detail">Periksa diff sesi</string>
     <string name="onboarding_features_live_title">Langsung saat dibuka</string>
-    <string name="onboarding_features_live_detail">Aliran event saat di latar depan; muat ulang setelah tersambung kembali</string>
+    <string name="onboarding_features_live_detail">Aliran event saat di latar depan; muat ulang setelah tersambung ulang</string>
     <string name="onboarding_setup_title">Siapkan opencode serve</string>
     <string name="onboarding_setup_intro">Aplikasi ini terhubung ke server opencode yang Anda jalankan. Jalur singkatnya di bawah — detail lengkap ada di dokumentasi resmi.</string>
     <string name="onboarding_setup_step_number">Langkah %1$d</string>
@@ -108,7 +108,7 @@
     <string name="onboarding_setup_step2_title">Wajibkan kata sandi</string>
     <string name="onboarding_setup_step2_body">Setel OPENCODE_SERVER_PASSWORD. Nama pengguna default-nya opencode kecuali Anda menyetel OPENCODE_SERVER_USERNAME.</string>
     <string name="onboarding_setup_step3_title">Jangkau dari ponsel Anda</string>
-    <string name="onboarding_setup_step3_body">Disarankan: Tailscale — pasang Tailscale di mesin dan ponsel, lalu pakai IP Tailscale atau nama MagicDNS mesin sebagai URL server.\n\nBoleh juga: LAN yang sama, VPN, HTTPS, atau tunnel lain yang Anda kelola. Aplikasi tidak membuatkan relay untuk Anda.</string>
+    <string name="onboarding_setup_step3_body">Disarankan: Tailscale — pasang Tailscale di mesin dan ponsel, lalu gunakan IP Tailscale atau nama MagicDNS mesin sebagai URL server.\n\nBoleh juga: LAN yang sama, VPN, HTTPS, atau tunnel lain yang Anda kelola. Aplikasi tidak membuatkan relay untuk Anda.</string>
     <string name="onboarding_setup_step4_title">Hubungkan di aplikasi</string>
     <string name="onboarding_setup_step4_body">Masukkan URL dasar + kata sandi. Aplikasi memeriksa GET /global/health, lalu menyimpan koneksi server di perangkat ini.</string>
     <string name="onboarding_setup_open_docs">Buka dokumentasi server</string>
@@ -203,7 +203,7 @@
     <string name="servers_edit_profile">Edit %1$s</string>
     <string name="servers_remove_dialog_title_named">Hapus “%1$s”?</string>
     <string name="servers_remove_dialog_message">Perangkat ini akan melupakan koneksi server tersebut. Sesi tetap ada di server itu. Jika itu server aktif, Anda akan memilih yang lain — atau diarahkan ke layar Hubungkan jika tidak ada lagi.</string>
-    <string name="common_retry">Mencoba kembali</string>
+    <string name="common_retry">Coba lagi</string>
     <string name="common_save">Simpan</string>
     <string name="common_delete">Hapus</string>
     <string name="common_edit">Edit</string>
@@ -269,7 +269,7 @@
     <string name="home_delete_title">Hapus sesi</string>
     <string name="home_delete_message">Hapus sesi “%1$s”?</string>
     <string name="home_session_error_empty_title">Masukkan judul sesi</string>
-    <string name="home_session_error_nothing_to_fork">Belum ada yang bisa di-fork</string>
+    <string name="home_session_error_nothing_to_fork">Belum ada yang dapat di-fork</string>
     <string name="home_session_error_archive_failed">Tidak dapat mengarsipkan sesi.</string>
     <string name="home_session_error_delete_failed">Tidak dapat menghapus sesi.</string>
     <string name="home_session_error_request_failed">Permintaan gagal</string>
@@ -367,7 +367,7 @@
     <string name="files_loading_title">Memuat berkas</string>
     <string name="files_loading_subtitle">Mengambil folder…</string>
     <string name="files_folder_error">Tidak dapat memuat folder</string>
-    <string name="files_retry">Mencoba kembali</string>
+    <string name="files_retry">Coba lagi</string>
     <string name="files_empty_folder">Folder kosong</string>
     <string name="files_empty_project">Proyek ini tidak punya berkas untuk ditampilkan.</string>
     <string name="files_ignored">diabaikan</string>
@@ -431,7 +431,7 @@
     <string name="terminal_connect_failed_title">Gagal terhubung</string>
     <string name="terminal_connect_failed_message">Tidak dapat memulai shell untuk proyek ini.</string>
     <string name="terminal_exited">Shell berakhir</string>
-    <string name="terminal_retry">Mencoba kembali</string>
+    <string name="terminal_retry">Coba lagi</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
     <string name="terminal_key_tab">Tab</string>
@@ -480,7 +480,7 @@
     <string name="session_chat_commands_undo_description">Urungkan pesan terakhir</string>
     <string name="session_chat_commands_redo_label">Ulangi</string>
     <string name="session_chat_commands_redo_description">Ulangi pesan yang diurungkan</string>
-    <string name="session_chat_commands_compact_label">Kompak</string>
+    <string name="session_chat_commands_compact_label">Padatkan</string>
     <string name="session_chat_commands_compact_description">Kompakkan konteks sesi</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">Buka shell proyek</string>
@@ -541,8 +541,8 @@
     <string name="session_chat_activity_review_permission_request">Tinjau permintaan izin</string>
     <string name="session_chat_activity_answer_question">Jawab pertanyaan</string>
     <string name="session_chat_activity_request_failed">Permintaan gagal</string>
-    <string name="session_chat_activity_btw_failed">/btw gagal · Mencoba kembali</string>
-    <string name="session_chat_activity_btw_failed_count">/btw gagal ×%1$d · Mencoba kembali</string>
+    <string name="session_chat_activity_btw_failed">/btw gagal · Coba lagi</string>
+    <string name="session_chat_activity_btw_failed_count">/btw gagal ×%1$d · Coba lagi</string>
     <string name="session_chat_activity_btw_ready">Jawaban /btw siap</string>
     <string name="session_chat_activity_btw_ready_count">Jawaban /btw siap ×%1$d</string>
     <plurals name="session_chat_activity_queued">
@@ -567,7 +567,7 @@
     <string name="session_chat_activity_action_open_request">Buka permintaan</string>
     <string name="session_chat_activity_action_open_background_work">Buka pekerjaan latar belakang</string>
     <string name="session_chat_activity_action_show_in_chat">Tampilkan di obrolan</string>
-    <string name="session_chat_activity_action_retry">Mencoba kembali</string>
+    <string name="session_chat_activity_action_retry">Coba lagi</string>
     <string name="session_chat_activity_action_open">Buka</string>
     <string name="session_chat_activity_action_open_up_next">Buka Berikutnya</string>
     <string name="session_chat_activity_action_show_thought">Tampilkan pemikiran</string>
@@ -611,7 +611,7 @@
     <string name="timeline_state_loading_subtitle">Mengambil linimasa…</string>
     <string name="timeline_state_error_title">Tidak dapat memuat pesan</string>
     <string name="timeline_state_error_fallback">Linimasa tidak termuat.</string>
-    <string name="timeline_state_retry">Mencoba kembali</string>
+    <string name="timeline_state_retry">Coba lagi</string>
     <string name="timeline_state_empty">Belum ada pesan. Kirim prompt untuk memulai.</string>
     <string name="timeline_state_refreshing">Menyegarkan pesan</string>
     <string name="timeline_message_assistant">Pesan asisten</string>
@@ -622,7 +622,7 @@
     <string name="timeline_retry_retrying_in">mencoba lagi dalam %1$d dtk</string>
     <string name="timeline_retry_attempt_retrying_in">percobaan %1$d, mencoba lagi dalam %2$d dtk</string>
     <plurals name="timeline_background_work_subagent_count">
-        <item quantity="other">%1$d subagent</item>
+        <item quantity="other">%1$d subagen</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
         <item quantity="other">%1$d shell</item>
@@ -632,7 +632,7 @@
     <string name="timeline_background_work_running_spoken">%1$s berjalan</string>
     <string name="timeline_background_work_agent_needs_input">%1$s butuh masukan</string>
     <plurals name="timeline_background_work_subagents_need_input">
-        <item quantity="other">%1$d subagent butuh masukan</item>
+        <item quantity="other">%1$d subagen butuh masukan</item>
     </plurals>
     <string name="timeline_background_work_needs_input_running">%1$s · %2$d berjalan</string>
     <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s berjalan</string>
@@ -721,7 +721,7 @@
         <item quantity="other">%1$d kecocokan</item>
     </plurals>
     <plurals name="tool_count_path">
-        <item quantity="other">%1$d jalur</item>
+        <item quantity="other">%1$d path</item>
     </plurals>
     <plurals name="tool_count_named">
         <item quantity="other">%1$d %2$s</item>
@@ -806,7 +806,7 @@
     <string name="timeline_failure_session_work_failed">Pekerjaan sesi gagal</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Pilih model</string>
-    <string name="timeline_failure_compact">Kompak</string>
+    <string name="timeline_failure_compact">Padatkan</string>
     <string name="session_chat_compact_status">Memadatkan…</string>
     <string name="session_chat_turn_sending">Mengirim…</string>
     <string name="session_chat_turn_sending_percent">Mengirim %1$d%%</string>
@@ -868,7 +868,7 @@
     <string name="session_chat_sheet_pending_prompts_delete">Hapus</string>
     <string name="session_chat_sheet_side_question_done">Selesai</string>
     <string name="session_chat_sheet_side_question_not_added">Tidak ditambahkan ke percakapan</string>
-    <string name="session_chat_sheet_todos_title">Todo sesi</string>
+    <string name="session_chat_sheet_todos_title">Tugas sesi</string>
     <string name="session_chat_sheet_todos_progress">%1$d dari %2$d selesai</string>
     <string name="session_chat_goal_pill">Tujuan</string>
     <string name="session_chat_goal_pill_paused">Tujuan dijeda</string>
@@ -895,12 +895,12 @@
     </plurals>
     <string name="session_chat_goal_waiting">Menunggu</string>
     <string name="session_chat_goal_waiting_shell">Menunggu shell latar belakang selesai: %1$s. Dijeda jika tidak ada yang berjalan selama %2$d menit.</string>
-    <string name="session_chat_goal_waiting_subagent">Menunggu subagent selesai. Dijeda jika tidak ada yang berjalan selama %1$d menit.</string>
+    <string name="session_chat_goal_waiting_subagent">Menunggu subagen selesai. Dijeda jika tidak ada yang berjalan selama %1$d menit.</string>
     <string name="session_chat_goal_waiting_on_you">Menunggu Anda</string>
     <string name="session_chat_goal_waiting_permission">Ada permintaan izin yang terbuka. Tujuan berlanjut setelah Anda menjawabnya.</string>
     <string name="session_chat_goal_waiting_question">Ada pertanyaan yang terbuka. Tujuan berlanjut setelah Anda menjawabnya.</string>
     <string name="session_chat_goal_evidence">Bukti</string>
-    <string name="session_chat_goal_reconnecting">Menyambungkan ulang. Menampilkan tujuan terakhir yang diketahui.</string>
+    <string name="session_chat_goal_reconnecting">Menyambung ulang. Menampilkan tujuan terakhir yang diketahui.</string>
     <string name="session_chat_goal_pause">Jeda</string>
     <string name="session_chat_goal_pausing">Menjeda…</string>
     <string name="session_chat_goal_resume">Lanjutkan</string>
@@ -1047,7 +1047,7 @@
     <string name="session_context_load_failed_message">Konteks tidak termuat.</string>
     <string name="session_context_refresh_failed">Tidak dapat menyegarkan konteks sesi</string>
     <string name="session_context_refreshing">Menyegarkan konteks sesi</string>
-    <string name="session_context_retry">Mencoba kembali</string>
+    <string name="session_context_retry">Coba lagi</string>
     <string name="session_context_stat_session">Sesi</string>
     <string name="session_context_stat_messages">Pesan</string>
     <string name="session_context_stat_provider">Penyedia</string>
@@ -1192,7 +1192,7 @@
     <string name="appearance_theme_blurb_hotline">Antarmuka netral, merah muda mencolok</string>
     <string name="appearance_theme_blurb_phosphor">Antarmuka netral, hijau CRT</string>
     <string name="appearance_syntax_name_match">Sesuai tema</string>
-    <string name="appearance_syntax_blurb_match">Pakai token bawaan tema UI</string>
+    <string name="appearance_syntax_blurb_match">Gunakan token bawaan tema UI</string>
     <string name="appearance_syntax_blurb_nocturne">Keluarga One Dark</string>
     <string name="appearance_syntax_blurb_citrus">Keluarga Solarized</string>
     <string name="appearance_syntax_blurb_paper">Keluarga GitHub</string>
@@ -1243,7 +1243,7 @@
     <string name="feedback_kind_bug">Bug</string>
     <string name="feedback_kind_idea">Ide</string>
     <string name="feedback_placeholder_bug">Apa yang terjadi? Apa yang Anda harapkan?</string>
-    <string name="feedback_placeholder_idea">Apa yang bisa membuat OpenCode lebih baik untuk Anda?</string>
+    <string name="feedback_placeholder_idea">Apa yang dapat membuat OpenCode lebih baik untuk Anda?</string>
     <string name="feedback_privacy_note">Hanya dikirim ke tim OpenCode Mobile. Tidak pernah menyertakan alamat server, nama pengguna, atau kata sandi Anda. Log disamarkan di ponsel ini.</string>
     <string name="feedback_error_offline">Anda sedang offline. Laporan Anda disimpan di sini — coba lagi saat sudah terhubung.</string>
     <plurals name="feedback_error_rate_limited">
@@ -1357,7 +1357,7 @@
     <string name="changes_error_title">Tidak dapat memuat perubahan</string>
     <string name="changes_error_fallback">Perubahan tidak berhasil dimuat.</string>
     <string name="changes_error_request_failed">Permintaan gagal</string>
-    <string name="changes_error_turn_moved_folders">Giliran ini berpindah folder, jadi perubahannya tidak bisa ditampilkan bersamaan.</string>
+    <string name="changes_error_turn_moved_folders">Giliran ini berpindah folder, jadi perubahannya tidak dapat ditampilkan bersamaan.</string>
     <string name="changes_refresh_failed">Gagal menyegarkan: %1$s</string>
     <string name="changes_filter_hint">Filter</string>
     <string name="changes_filter_accessibility_label">Filter berkas yang berubah</string>
@@ -1395,8 +1395,8 @@
     <string name="component_todo_item_status_in_progress">sedang berjalan</string>
     <string name="component_todo_item_status_completed">selesai</string>
     <string name="component_todo_item_status_cancelled">dibatalkan</string>
-    <string name="component_todos_pill_accessibility_label">Todo sesi, %1$d dari %2$d selesai</string>
-    <string name="component_todos_pill_accessibility_label_active">Todo sesi, %1$d dari %2$d selesai, %3$s</string>
+    <string name="component_todos_pill_accessibility_label">Tugas sesi, %1$d dari %2$d selesai</string>
+    <string name="component_todos_pill_accessibility_label_active">Tugas sesi, %1$d dari %2$d selesai, %3$s</string>
     <string name="component_reasoning_row_thought_duration">Berpikir · %1$s</string>
     <string name="component_reasoning_row_duration_seconds">%1$s dtk</string>
     <string name="component_reasoning_row_duration_ms">%1$d ms</string>
@@ -1430,7 +1430,7 @@
     <string name="component_filter_tabs_unseen">baru</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Kemarin</string>
-    <string name="component_composer_reverting_title">Memulihkan pesan ini</string>
+    <string name="component_composer_reverting_title">Mengembalikan pesan ini</string>
     <string name="session_new_title">Sesi Baru</string>
     <string name="session_list_dock_add_project">Tambah proyek</string>
     <string name="theme_error_preset_not_found">Preset tema tidak ditemukan</string>
@@ -1549,7 +1549,7 @@
     <string name="component_composer_child_lockout">Sesi anak tidak dapat diberi prompt.</string>
     <string name="component_attachment_uploading_percent">Mengunggah %1$d%%</string>
     <string name="component_composer_custom_answer_hint">Masukkan jawaban kustom</string>
-    <string name="component_composer_cancel_revert">Batalkan pemulihan</string>
+    <string name="component_composer_cancel_revert">Batalkan pengembalian</string>
     <string name="session_list_scope_load_slow_caption">Masih memuat — proyek besar bisa butuh waktu</string>
     <string name="component_outgoing_message_label_with_actions">Pesan keluar. Menampilkan aksi pesan</string>
     <string name="session_list_scope_load_failed_subtitle">Tidak dapat memuat sesi</string>
@@ -1587,7 +1587,7 @@
     <string name="live_updates_status_live">langsung</string>
     <string name="component_image_viewer_could_not_load_this">Tidak dapat memuat gambar ini</string>
     <string name="component_image_viewer_could_not_load_full">Tidak dapat memuat gambar penuh</string>
-    <string name="component_image_viewer_retry">Mencoba kembali</string>
+    <string name="component_image_viewer_retry">Coba lagi</string>
     <string name="component_image_viewer_loading_full">Memuat gambar penuh</string>
     <string name="session_list_worktree_empty_action">Hapus filter</string>
     <string name="dictation_model_download_failed_detail">Periksa koneksi dan ruang penyimpanan kosong di perangkat ini, lalu coba lagi.</string>
@@ -1600,7 +1600,7 @@
     <string name="session_list_section_week_of">Pekan %1$s – %2$s</string>
     <string name="dictation_model_download_failed_title">%1$s tidak dapat mengunduh %2$s</string>
     <string name="component_activity_status_pending">tertunda</string>
-    <string name="component_composer_revert_tag">Pulihkan</string>
+    <string name="component_composer_revert_tag">Kembalikan</string>
     <string name="component_composer_model">Model %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
         <item quantity="other">%1$d langkah sebelumnya</item>
@@ -1645,7 +1645,7 @@
     <string name="component_activity_sheet_working_count">Bekerja %1$d</string>
     <string name="session_list_status_retrying">Mencoba lagi</string>
     <string name="component_attachment_remove">Hapus %1$s</string>
-    <string name="component_composer_send_steer">Kirim sebagai Arahan</string>
+    <string name="component_composer_send_steer">Kirim sebagai Arahkan</string>
     <string name="component_composer_next_permission">Permintaan izin berikutnya</string>
     <string name="session_list_dock_project_filter">Filter proyek</string>
     <string name="component_split_pane_resize_hint">Ketuk dua kali untuk menyembunyikan bilah samping</string>

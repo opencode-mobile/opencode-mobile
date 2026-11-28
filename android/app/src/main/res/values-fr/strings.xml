@@ -14,7 +14,7 @@
     <string name="connection_setup_title_first">Se connecter au serveur</string>
     <string name="connection_setup_title_add">Ajouter un serveur</string>
     <string name="connection_setup_title_edit">Modifier le serveur</string>
-    <string name="connection_setup_action_connect">Connecter</string>
+    <string name="connection_setup_action_connect">Se connecter</string>
     <string name="connection_setup_action_connecting">Connexion…</string>
     <string name="connection_setup_action_save">Enregistrer</string>
     <string name="connection_setup_action_saving">Enregistrement…</string>
@@ -51,7 +51,7 @@
     <string name="connection_setup_address_using_now">Utilisée</string>
     <string name="connection_setup_address_saved">Enregistrée</string>
     <string name="connection_setup_pair_again_unreachable">Adresse enregistrée injoignable. Associez à nouveau.</string>
-    <string name="connection_setup_pair_again_unauthorized">Ce serveur a rejeté la connexion enregistrée. Associez à nouveau. Un nouveau mot de passe déconnecte tous les appareils.</string>
+    <string name="connection_setup_pair_again_unauthorized">Ce serveur a rejeté les identifiants enregistrés. Associez à nouveau. Un nouveau mot de passe déconnecte tous les appareils.</string>
     <string name="connection_cleartext_title">La connexion n\'est pas chiffrée</string>
     <string name="connection_cleartext_message_one_host">%1$s utilise du http simple en dehors de votre réseau local ou de Tailscale. Le mot de passe de votre serveur et tout le contenu de vos sessions circuleraient sans chiffrement. Privilégiez https, un VPN ou un tunnel.</string>
     <string name="connection_cleartext_message_hosts">%1$s utilisent du http simple en dehors de votre réseau local ou de Tailscale. Le mot de passe de votre serveur et tout le contenu de vos sessions circuleraient sans chiffrement. Privilégiez https, un VPN ou un tunnel.</string>
@@ -67,7 +67,7 @@
     <string name="connection_error_duplicate_profile">Un serveur avec cet hôte et ce nom d’utilisateur est déjà enregistré</string>
     <string name="connection_error_qr_scan_failed">Le QR n\'a pas permis de se connecter. L\'API d\'association d\'OpenCode 2 évolue encore, un scan peut donc échouer alors que l\'app fonctionne. Saisissez l\'hôte et connectez-vous. Le mot de passe est optionnel. Un code d\'association fonctionne aussi.</string>
     <string name="connection_error_unreachable">Serveur inaccessible</string>
-    <string name="server_error_pairing_expired">Association expirée, recommencez</string>
+    <string name="server_error_pairing_expired">Association expirée, associez à nouveau</string>
     <string name="server_error_not_found">Dossier ou fichier introuvable</string>
     <string name="server_error_not_found_path">Dossier ou fichier introuvable · %1$s</string>
     <string name="server_error_session_busy">La session est occupée</string>
@@ -76,7 +76,7 @@
     <string name="connection_error_unhealthy">Le serveur signale un état défaillant</string>
     <string name="connection_scanner_title">Scanner le QR d’association</string>
     <string name="connection_scanner_card_title">QR d’association OpenCode</string>
-    <string name="connection_scanner_card_body">Depuis opencode pair --remote. Un simple opencode pair n’affiche un QR que si le serveur est accessible au-delà de localhost.</string>
+    <string name="connection_scanner_card_body">Depuis opencode pair --remote. Un simple opencode pair n’affiche un QR que si le serveur est joignable au-delà de localhost.</string>
     <string name="connection_onboarding_title">Connectez-vous à votre serveur</string>
     <string name="connection_onboarding_body">OpenCode Mobile pilote les sessions d’un serveur opencode exécuté sur votre machine de développement.</string>
     <string name="connection_onboarding_connect">Se connecter au serveur</string>
@@ -93,9 +93,9 @@
     <string name="onboarding_features_sessions_title">Sessions</string>
     <string name="onboarding_features_sessions_detail">Lister, ouvrir, créer, renommer, dupliquer, archiver, supprimer</string>
     <string name="onboarding_features_chat_title">Chat et arrêt</string>
-    <string name="onboarding_features_chat_detail">Envoyez des prompts et arrêtez le travail en cours</string>
+    <string name="onboarding_features_chat_detail">Envoyez des invites et arrêtez le travail en cours</string>
     <string name="onboarding_features_permissions_title">Autorisations</string>
-    <string name="onboarding_features_permissions_detail">Acceptez ou refusez les demandes (sans mémorisation durable)</string>
+    <string name="onboarding_features_permissions_detail">Autorisez ou refusez les demandes (sans mémorisation durable)</string>
     <string name="onboarding_features_changes_title">Modifications</string>
     <string name="onboarding_features_changes_detail">Examiner les diffs des sessions</string>
     <string name="onboarding_features_live_title">En direct quand l’app est ouverte</string>
@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">Y accéder depuis votre téléphone</string>
     <string name="onboarding_setup_step3_body">Recommandé : Tailscale — installez Tailscale sur la machine et sur le téléphone, puis utilisez l’IP Tailscale ou le nom MagicDNS de la machine comme URL du serveur.\n\nVous pouvez aussi utiliser le même réseau local, un VPN, HTTPS ou un autre tunnel que vous gérez. L’app ne crée aucun relais pour vous.</string>
     <string name="onboarding_setup_step4_title">Connectez-vous dans l’app</string>
-    <string name="onboarding_setup_step4_body">Saisissez l’URL de base et le mot de passe. L’app vérifie GET /global/health, puis enregistre une connexion serveur sur cet appareil.</string>
+    <string name="onboarding_setup_step4_body">Saisissez l’URL de base et le mot de passe. L’app vérifie GET /global/health, puis enregistre la connexion sur cet appareil.</string>
     <string name="onboarding_setup_open_docs">Ouvrir la doc du serveur</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile est verrouillé</string>
@@ -238,7 +238,7 @@
     <string name="home_remove_project_message">Retirer « %1$s » de l’accueil ? Ses sessions restent sur le serveur.</string>
     <string name="home_snackbar_removed">« %1$s » retiré de l’accueil</string>
     <string name="home_snackbar_already_on_home">« %1$s » est déjà sur l’accueil</string>
-    <string name="home_snackbar_joined_project">Même dépôt que %1$s. Affiché ici comme worktree.</string>
+    <string name="home_snackbar_joined_project">Même dépôt que %1$s. Affiché comme worktree dans ce projet.</string>
     <string name="home_all">Tous</string>
     <string name="home_all_projects">Tous les projets</string>
     <plurals name="home_project_count">
@@ -515,7 +515,7 @@
     <string name="session_chat_commands_mcp_label">Serveurs MCP</string>
     <string name="session_chat_commands_mcp_description">Afficher l’état des serveurs MCP</string>
     <string name="session_chat_commands_btw_label">Btw</string>
-    <string name="session_chat_commands_btw_description">Poser une question à part</string>
+    <string name="session_chat_commands_btw_description">Poser une question annexe</string>
     <string name="session_chat_suggestion_file">Fichier</string>
     <string name="session_chat_suggestion_no_matches">Aucun résultat</string>
     <string name="session_chat_suggestion_no_commands">Aucune commande</string>
@@ -1099,8 +1099,8 @@
     <string name="session_chat_reply_error_dismiss_reason">Impossible d’ignorer la question. %1$s.</string>
     <string name="session_chat_permission_unavailable">La demande d’autorisation n’est plus disponible</string>
     <string name="session_chat_question_unavailable">La question n’est plus disponible</string>
-    <string name="session_chat_permission_tree_failed">Impossible d’actualiser l’arborescence des sessions d’autorisation</string>
-    <string name="session_chat_question_tree_failed">Impossible d’actualiser l’arborescence des sessions de questions</string>
+    <string name="session_chat_permission_tree_failed">Impossible d’actualiser l’arborescence des sessions pour les autorisations</string>
+    <string name="session_chat_question_tree_failed">Impossible d’actualiser l’arborescence des sessions pour les questions</string>
     <string name="session_chat_sheet_timeline_style_picker_title">Nouveau : choisissez votre chronologie</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Cette mise à jour propose de nouvelles façons de suivre ce que fait l’agent.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">Modifiable à tout moment dans Paramètres → Style de chronologie.</string>
@@ -1540,7 +1540,7 @@
     <string name="changes_select_file_message">Choisissez un fichier modifié pour voir le diff.</string>
     <string name="changes_preview_unavailable_title">Aperçu indisponible</string>
     <string name="changes_preview_unavailable_message">Aucun aperçu texte n’est disponible pour ce fichier.</string>
-    <string name="changes_file_viewer_truncated">Seul 1 MB des modifications de ce fichier est affiché.</string>
+    <string name="changes_file_viewer_truncated">Seul le premier Mo des modifications de ce fichier est affiché.</string>
     <plurals name="changes_summary_changed_files">
         <item quantity="one">%1$d fichier modifié</item>
         <item quantity="many">%1$d fichiers modifiés</item>

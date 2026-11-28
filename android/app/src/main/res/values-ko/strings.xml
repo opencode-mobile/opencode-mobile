@@ -8,7 +8,7 @@
     <string name="bottom_sheet_expand">펼치기</string>
     <string name="top_bar_back">뒤로</string>
     <string name="common_cancel">취소</string>
-    <string name="common_remove">삭제</string>
+    <string name="common_remove">제거</string>
     <string name="common_loading_sessions">세션 불러오는 중</string>
     <string name="common_checking_server">서버 확인 중…</string>
     <string name="connection_setup_title_first">서버에 연결</string>
@@ -24,8 +24,8 @@
     <string name="connection_setup_action_use_host_password">호스트와 비밀번호 사용</string>
     <string name="connection_setup_action_scan_qr_instead">대신 QR 스캔</string>
     <string name="connection_setup_scan_qr_instead_hint">opencode pair에서 생성</string>
-    <string name="connection_setup_remove_server">서버 삭제</string>
-    <string name="connection_setup_remove_dialog_title_unnamed">“서버”를 삭제할까요?</string>
+    <string name="connection_setup_remove_server">서버 제거</string>
+    <string name="connection_setup_remove_dialog_title_unnamed">“서버”를 제거할까요?</string>
     <string name="connection_setup_instructions_run">컴퓨터에서 이 명령을 실행한 뒤 QR을 스캔하세요.</string>
     <string name="connection_setup_instructions_first_run">처음 실행에는 약 1분이 걸립니다. OpenCode 2.0.25 이상이 필요합니다. 서비스가 실행 중이 아니면 자동으로 시작됩니다.</string>
     <string name="connection_setup_instructions_same_wifi_title">같은 Wi-Fi를 쓰는 경우</string>
@@ -41,7 +41,7 @@
     <string name="connection_setup_pairing_code_help">페어링 링크에서 확인하세요. 한 번만 사용할 수 있고 5분 후 만료됩니다.</string>
     <string name="connection_setup_segment_password">비밀번호</string>
     <string name="connection_setup_segment_pairing_code">페어링 코드</string>
-    <string name="connection_setup_addresses_hint_tunnel_only">원격 터널이 저장되었습니다. 선택할 항목이 없으며, 원격 접속을 끌 때까지 유지됩니다.</string>
+    <string name="connection_setup_addresses_hint_tunnel_only">원격 터널이 저장됐어요. 선택할 항목이 없고, 원격 접속을 끌 때까지 유지돼요.</string>
     <string name="connection_setup_addresses_hint_tailscale_fallback">Tailscale이 응답하면 우선 사용하고, 아니면 로컬 네트워크를 사용합니다.</string>
     <string name="connection_setup_addresses_hint_default">저장된 주소를 응답할 때까지 차례로 시도합니다. Tailscale이 응답하면 우선 사용합니다.</string>
     <string name="connection_setup_address_tailscale">Tailscale</string>
@@ -53,9 +53,9 @@
     <string name="connection_setup_pair_again_unreachable">저장된 주소에 연결할 수 없습니다. 다시 페어링하세요.</string>
     <string name="connection_setup_pair_again_unauthorized">서버가 저장된 로그인 정보를 거부했습니다. 다시 페어링하세요. 비밀번호를 새로 만들면 모든 기기가 로그아웃됩니다.</string>
     <string name="connection_cleartext_title">암호화되지 않은 연결</string>
-    <string name="connection_cleartext_message_one_host">%1$s 연결은 로컬 네트워크나 Tailscale 밖에서 암호화되지 않은 http를 사용합니다. 서버 비밀번호와 세션의 모든 내용이 암호화 없이 전송됩니다. https, VPN 또는 터널을 사용하세요.</string>
-    <string name="connection_cleartext_message_hosts">%1$s 연결은 로컬 네트워크나 Tailscale 밖에서 암호화되지 않은 http를 사용합니다. 서버 비밀번호와 세션의 모든 내용이 암호화 없이 전송됩니다. https, VPN 또는 터널을 사용하세요.</string>
-    <string name="connection_cleartext_message_this_address">이 주소는 로컬 네트워크나 Tailscale 밖에서 암호화되지 않은 http를 사용합니다. 서버 비밀번호와 세션의 모든 내용이 암호화 없이 전송됩니다. https, VPN 또는 터널을 사용하세요.</string>
+    <string name="connection_cleartext_message_one_host">%1$s 연결은 로컬 네트워크나 Tailscale 밖에서 암호화되지 않은 http를 사용해요. 서버 비밀번호와 세션의 모든 내용이 암호화 없이 전송돼요. https, VPN 또는 터널을 사용하세요.</string>
+    <string name="connection_cleartext_message_hosts">%1$s 연결은 로컬 네트워크나 Tailscale 밖에서 암호화되지 않은 http를 사용해요. 서버 비밀번호와 세션의 모든 내용이 암호화 없이 전송돼요. https, VPN 또는 터널을 사용하세요.</string>
+    <string name="connection_cleartext_message_this_address">이 주소는 로컬 네트워크나 Tailscale 밖에서 암호화되지 않은 http를 사용해요. 서버 비밀번호와 세션의 모든 내용이 암호화 없이 전송돼요. https, VPN 또는 터널을 사용하세요.</string>
     <string name="connection_cleartext_connect_anyway">그래도 연결</string>
     <string name="connection_error_invalid_qr">OpenCode 2 페어링 QR이 아닙니다</string>
     <string name="connection_error_localhost_qr">이 QR에는 localhost 주소만 있습니다</string>
@@ -78,7 +78,7 @@
     <string name="connection_scanner_card_title">OpenCode 페어링 QR</string>
     <string name="connection_scanner_card_body">opencode pair --remote로 생성하세요. 일반 pair는 서버가 localhost 밖에서 접근 가능할 때만 QR을 보여줍니다.</string>
     <string name="connection_onboarding_title">서버에 연결</string>
-    <string name="connection_onboarding_body">OpenCode Mobile은 개발 컴퓨터에서 실행 중인 opencode 서버의 세션을 제어합니다.</string>
+    <string name="connection_onboarding_body">OpenCode Mobile은 개발 컴퓨터에서 실행 중인 opencode 서버의 세션을 제어해요.</string>
     <string name="connection_onboarding_connect">서버에 연결</string>
     <string name="onboarding_skip">건너뛰기</string>
     <string name="onboarding_next">다음</string>
@@ -87,7 +87,7 @@
     <string name="onboarding_unofficial_body">OpenCode Mobile은 opencode 세션용 네이티브 클라이언트이며 아직 개발 중입니다. OpenCode의 공식 제품이 아닙니다.</string>
     <string name="onboarding_unofficial_badge">비공식</string>
     <string name="onboarding_connect_page_title">서버에\n연결하세요</string>
-    <string name="onboarding_connect_page_body">내 컴퓨터의 opencode 서버를 앱에 연결하세요. 어디서나 휴대폰으로 안전하게 접속할 수 있도록 Tailscale을 권장합니다.</string>
+    <string name="onboarding_connect_page_body">내 컴퓨터의 opencode 서버를 앱에 연결하세요. 어디서나 휴대폰으로 안전하게 접속할 수 있도록 Tailscale을 권장해요.</string>
     <string name="onboarding_connect_page_setup_link">서버부터 설정해야 하나요?</string>
     <string name="onboarding_features_title">여기서\n할 수 있는 일</string>
     <string name="onboarding_features_sessions_title">세션</string>
@@ -99,18 +99,18 @@
     <string name="onboarding_features_changes_title">변경 사항</string>
     <string name="onboarding_features_changes_detail">세션 diff 확인</string>
     <string name="onboarding_features_live_title">열려 있는 동안 실시간</string>
-    <string name="onboarding_features_live_detail">포그라운드 이벤트 스트림, 재연결 후 새로고침</string>
+    <string name="onboarding_features_live_detail">포그라운드 이벤트 스트림, 재연결 후 새로 고침</string>
     <string name="onboarding_setup_title">opencode serve 설정</string>
-    <string name="onboarding_setup_intro">앱은 직접 실행하는 opencode 서버와 통신합니다. 아래는 간단한 방법이며, 자세한 내용은 공식 문서를 확인하세요.</string>
+    <string name="onboarding_setup_intro">앱은 직접 실행하는 opencode 서버와 통신해요. 아래는 간단한 방법이고, 자세한 내용은 공식 문서를 확인하세요.</string>
     <string name="onboarding_setup_step_number">%1$d단계</string>
     <string name="onboarding_setup_step1_title">컴퓨터에서 서버 시작</string>
     <string name="onboarding_setup_step1_body">프로젝트 폴더에서 opencode 서버를 실행하세요(헤드리스). 휴대폰을 사용하는 동안 계속 실행해 두세요.</string>
     <string name="onboarding_setup_step2_title">비밀번호 요구</string>
     <string name="onboarding_setup_step2_body">OPENCODE_SERVER_PASSWORD를 설정하세요. 사용자 이름은 OPENCODE_SERVER_USERNAME을 설정하지 않으면 opencode입니다.</string>
     <string name="onboarding_setup_step3_title">휴대폰에서 접속</string>
-    <string name="onboarding_setup_step3_body">권장: Tailscale — 컴퓨터와 휴대폰에 Tailscale을 설치한 뒤, 컴퓨터의 Tailscale IP 또는 MagicDNS 이름을 서버 URL로 사용하세요.\n\nLAN, VPN, HTTPS 또는 직접 관리하는 다른 터널도 괜찮습니다. 앱이 릴레이를 대신 만들어 주지는 않습니다.</string>
+    <string name="onboarding_setup_step3_body">권장: Tailscale — 컴퓨터와 휴대폰에 Tailscale을 설치한 뒤, 컴퓨터의 Tailscale IP 또는 MagicDNS 이름을 서버 URL로 사용하세요.\n\nLAN, VPN, HTTPS 또는 직접 관리하는 다른 터널도 괜찮아요. 앱이 릴레이를 대신 만들어 주지는 않아요.</string>
     <string name="onboarding_setup_step4_title">앱에서 연결</string>
-    <string name="onboarding_setup_step4_body">기본 URL과 비밀번호를 입력하세요. 앱이 GET /global/health를 확인한 뒤 이 기기에 저장된 서버 연결을 만듭니다.</string>
+    <string name="onboarding_setup_step4_body">기본 URL과 비밀번호를 입력하세요. 앱이 GET /global/health를 확인한 뒤 이 기기에 저장된 서버 연결을 만들어요.</string>
     <string name="onboarding_setup_open_docs">서버 문서 열기</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile 잠김</string>
@@ -190,7 +190,7 @@
     <string name="server_health_status_auth_failed">인증 실패</string>
     <string name="server_health_status_stopped">측정 안 함</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="other">가동률 %1$s · 오늘 재연결 %2$d회</item>
+        <item quantity="other">가동 시간 %1$s · 오늘 재연결 %2$d회</item>
     </plurals>
     <string name="server_health_quick_view_measuring">측정 중…</string>
     <string name="server_health_details">자세히</string>
@@ -201,8 +201,8 @@
     <string name="servers_status_active">사용 중</string>
     <string name="servers_add">서버 추가</string>
     <string name="servers_edit_profile">%1$s 편집</string>
-    <string name="servers_remove_dialog_title_named">“%1$s” 서버를 삭제할까요?</string>
-    <string name="servers_remove_dialog_message">이 기기에서 저장된 서버 연결 정보가 삭제됩니다. 세션은 해당 서버에 그대로 남습니다. 현재 사용 중인 서버라면 다른 서버를 선택하게 되며, 남은 서버가 없으면 연결 화면으로 이동합니다.</string>
+    <string name="servers_remove_dialog_title_named">“%1$s” 서버를 제거할까요?</string>
+    <string name="servers_remove_dialog_message">이 기기에서 저장된 서버 연결이 제거돼요. 세션은 해당 서버에 그대로 남아요. 현재 사용 중인 서버라면 다른 서버를 선택하게 되고, 남은 서버가 없으면 연결 화면으로 이동해요.</string>
     <string name="common_retry">다시 시도</string>
     <string name="common_save">저장</string>
     <string name="common_delete">삭제</string>
@@ -286,9 +286,9 @@
     <string name="archived_sessions_unarchived">“%1$s” 보관을 해제했습니다</string>
     <string name="archived_sessions_undo">실행 취소</string>
     <string name="archived_sessions_empty_title">보관된 세션 없음</string>
-    <string name="archived_sessions_empty_message">%1$s에서 보관한 세션이 여기에 표시됩니다.</string>
+    <string name="archived_sessions_empty_message">%1$s에서 보관한 세션이 여기에 표시돼요.</string>
     <string name="archived_sessions_show_all_projects">모든 프로젝트 보기</string>
-    <string name="archived_sessions_footer">세션을 누르면 더 많은 옵션이 표시됩니다. 보관을 해제하면 홈으로 돌아갑니다.</string>
+    <string name="archived_sessions_footer">세션을 누르면 더 많은 옵션이 표시돼요. 보관을 해제하면 홈으로 돌아가요.</string>
     <string name="archived_sessions_load_failed">보관된 세션을 불러오지 못했습니다.</string>
     <string name="archived_sessions_unarchive_failed">세션 보관을 해제하지 못했습니다.</string>
     <string name="session_chat_archived_banner">%1$s 보관됨</string>
@@ -349,7 +349,7 @@
     <string name="worktree_name_empty">이름을 입력하세요</string>
     <string name="worktree_name_chars">영문자, 숫자, 점, 하이픈, 밑줄만 사용하세요</string>
     <plurals name="worktree_name_long">
-        <item quantity="other">최대 %1$d자까지 사용할 수 있습니다</item>
+        <item quantity="other">최대 %1$d자까지 사용할 수 있어요</item>
     </plurals>
     <string name="worktree_submit_run_in">만들고 시작</string>
     <string name="worktree_submit_move">만들고 이동</string>
@@ -480,7 +480,7 @@
     <string name="session_chat_commands_undo_description">마지막 메시지 실행 취소</string>
     <string name="session_chat_commands_redo_label">다시 실행</string>
     <string name="session_chat_commands_redo_description">취소한 메시지 다시 실행</string>
-    <string name="session_chat_commands_compact_label">콤팩트</string>
+    <string name="session_chat_commands_compact_label">압축</string>
     <string name="session_chat_commands_compact_description">세션 컨텍스트 압축</string>
     <string name="session_chat_commands_terminal_label">터미널</string>
     <string name="session_chat_commands_terminal_description">프로젝트 셸 열기</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_model_chip_loading">모델 불러오는 중…</string>
     <string name="session_chat_model_notice_load_failed">모델을 불러올 수 없습니다. 모델을 눌러 다시 시도하세요.</string>
     <string name="session_chat_model_notice_none_usable">사용할 수 있는 모델이 없습니다. 모델을 눌러 다시 시도하세요.</string>
-    <string name="session_chat_model_notice_variant_unavailable">기억해 둔 변형을 사용할 수 없어 기본값을 사용합니다.</string>
+    <string name="session_chat_model_notice_variant_unavailable">기억해 둔 추론 강도를 사용할 수 없어 기본값을 사용합니다.</string>
     <string name="session_chat_model_notice_model_unavailable">선택한 모델을 사용할 수 없어 %1$s 모델을 사용합니다.</string>
     <string name="session_chat_side_question_unsupported">/btw를 쓰려면 부가 질문에 답할 수 있는 opencode v2 서버가 필요합니다. 이 서버는 대화에 내용을 추가하지 않고는 답할 수 없습니다.</string>
     <string name="session_chat_side_question_unavailable">/btw를 쓰려면 최신 버전의 opencode 서버가 필요합니다.</string>
@@ -586,7 +586,7 @@
     <plurals name="session_chat_navigation_scroll_to_end_new_messages">
         <item quantity="other">맨 아래로 스크롤, 새 메시지 %1$d개</item>
     </plurals>
-    <string name="home_error_reconnect_to_create">다시 연결해야 세션을 만들 수 있습니다</string>
+    <string name="home_error_reconnect_to_create">재연결해야 세션을 만들 수 있습니다</string>
     <string name="timeline_state_creating_title">세션 시작 중…</string>
     <string name="timeline_state_creating_subtitle">서버에서 만드는 중…</string>
     <string name="new_session_title">새 세션</string>
@@ -732,7 +732,7 @@
     <string name="tool_status_declined">거부됨</string>
     <string name="tool_user_note">내 메모: %1$s</string>
     <string name="tool_status_stopped">중지됨</string>
-    <string name="tool_placeholder_writing_command">명령 작성 중…</string>
+    <string name="tool_placeholder_writing_command">명령어 작성 중…</string>
     <string name="tool_placeholder_preparing_read">읽기 준비 중…</string>
     <string name="tool_placeholder_preparing_edit">수정 준비 중…</string>
     <string name="tool_placeholder_preparing_write">쓰기 준비 중…</string>
@@ -761,7 +761,7 @@
     <string name="timeline_step_running">실행 중…</string>
     <string name="timeline_step_running_named">%1$s 실행 중</string>
     <string name="timeline_step_ran_named">%1$s 실행함</string>
-    <string name="timeline_step_ran_command">명령 실행함</string>
+    <string name="timeline_step_ran_command">명령어 실행함</string>
     <string name="timeline_step_loading_skill">스킬 불러오는 중…</string>
     <string name="timeline_step_loading_skill_named">스킬 %1$s 불러오는 중</string>
     <string name="timeline_step_skill_named">스킬 %1$s</string>
@@ -795,24 +795,24 @@
     <string name="timeline_notice_agent_changed">에이전트 변경됨</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
     <string name="timeline_notice_switched_to">전환한 대상</string>
-    <string name="timeline_notice_variant_switched">변형 전환:</string>
-    <string name="timeline_notice_variant_default">변형을 기본값으로 전환함</string>
+    <string name="timeline_notice_variant_switched">추론 강도 전환:</string>
+    <string name="timeline_notice_variant_default">추론 강도를 기본값으로 전환함</string>
     <string name="timeline_notice_instructions_updated">지침 업데이트됨</string>
     <string name="timeline_notice_restart">재시작 후 이어서 진행</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">컨텍스트 콤팩트됨</string>
+    <string name="timeline_compaction_title">컨텍스트 압축됨</string>
     <string name="timeline_compaction_automatic">자동</string>
     <string name="timeline_syncing">동기화 중…</string>
     <string name="timeline_failure_session_work_failed">세션 작업 실패</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">모델 선택</string>
-    <string name="timeline_failure_compact">콤팩트</string>
-    <string name="session_chat_compact_status">콤팩트 중…</string>
+    <string name="timeline_failure_compact">압축</string>
+    <string name="session_chat_compact_status">압축 중…</string>
     <string name="session_chat_turn_sending">보내는 중…</string>
     <string name="session_chat_turn_sending_percent">%1$d%% 보내는 중</string>
-    <string name="session_chat_compact_success">세션을 콤팩트했습니다.</string>
-    <string name="session_chat_compact_success_usage">컨텍스트 콤팩트됨 · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">세션 컨텍스트를 콤팩트하지 못했습니다.</string>
+    <string name="session_chat_compact_success">세션을 압축했습니다.</string>
+    <string name="session_chat_compact_success_usage">컨텍스트 압축됨 · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">세션 컨텍스트를 압축하지 못했습니다.</string>
     <string name="session_chat_revert_undo_failed">마지막 메시지를 실행 취소하지 못했습니다.</string>
     <string name="session_chat_revert_failed">메시지를 되돌리지 못했습니다.</string>
     <string name="session_chat_revert_redo_failed">다시 실행하지 못했습니다.</string>
@@ -897,10 +897,10 @@
     <string name="session_chat_goal_waiting_shell">백그라운드 셸이 끝나길 기다리는 중: %1$s. %2$d분 동안 실행되는 것이 없으면 일시 중지됩니다.</string>
     <string name="session_chat_goal_waiting_subagent">서브에이전트가 끝나길 기다리는 중. %1$d분 동안 실행되는 것이 없으면 일시 중지됩니다.</string>
     <string name="session_chat_goal_waiting_on_you">내 응답 대기 중</string>
-    <string name="session_chat_goal_waiting_permission">권한 요청이 열려 있습니다. 응답하면 목표를 이어서 진행합니다.</string>
-    <string name="session_chat_goal_waiting_question">질문이 열려 있습니다. 응답하면 목표를 이어서 진행합니다.</string>
+    <string name="session_chat_goal_waiting_permission">권한 요청이 열려 있어요. 응답하면 목표를 이어서 진행해요.</string>
+    <string name="session_chat_goal_waiting_question">질문이 열려 있어요. 응답하면 목표를 이어서 진행해요.</string>
     <string name="session_chat_goal_evidence">근거</string>
-    <string name="session_chat_goal_reconnecting">다시 연결 중. 마지막으로 확인된 목표를 표시합니다.</string>
+    <string name="session_chat_goal_reconnecting">재연결 중. 마지막으로 확인된 목표를 표시합니다.</string>
     <string name="session_chat_goal_pause">일시 중지</string>
     <string name="session_chat_goal_pausing">일시 중지하는 중…</string>
     <string name="session_chat_goal_resume">재개</string>
@@ -908,12 +908,12 @@
     <string name="session_chat_goal_clear">지우기</string>
     <string name="session_chat_goal_clearing">지우는 중…</string>
     <string name="session_chat_goal_new">새 목표…</string>
-    <string name="session_chat_goal_footnote_active">턴이 끝날 때마다 리뷰어가 목표에 맞는지 작업을 확인합니다. 에이전트는 목표를 달성하거나, 내 응답이 필요하거나, %1$d라운드가 지날 때까지 계속 진행합니다.</string>
+    <string name="session_chat_goal_footnote_active">턴이 끝날 때마다 리뷰어가 목표에 맞는지 작업을 확인해요. 에이전트는 목표를 달성하거나, 내 응답이 필요하거나, %1$d라운드가 지날 때까지 계속 진행해요.</string>
     <string name="session_chat_goal_footnote_paused">재개하면 %1$d라운드를 새로 시작합니다.</string>
     <string name="session_chat_goal_footnote_met">새 목표를 설정하면 이 목표를 대체합니다.</string>
     <string name="session_chat_goal_paused">목표 일시 중지됨</string>
-    <string name="session_chat_goal_paused_by_user">목표를 일시 중지했습니다</string>
-    <string name="session_chat_goal_paused_stopped">턴을 중지해서 목표가 일시 중지되었습니다</string>
+    <string name="session_chat_goal_paused_by_user">목표를 일시 중지했어요</string>
+    <string name="session_chat_goal_paused_stopped">턴을 중지해서 목표가 일시 중지됐어요</string>
     <string name="session_chat_goal_paused_failed">오류로 목표가 일시 중지되었습니다</string>
     <string name="session_chat_goal_paused_no_progress">목표 일시 중지됨: %1$d라운드 동안 진전 없음</string>
     <string name="session_chat_goal_paused_round_limit">%1$d라운드 후 목표 일시 중지됨</string>
@@ -929,9 +929,9 @@
     <string name="session_chat_goal_resume_placeholder">답변한 뒤 목표 재개…</string>
     <string name="session_chat_goal_count">%1$s / %2$s자</string>
     <string name="session_chat_goal_count_over">%1$s / %2$s자 · 보내려면 목표를 줄이세요</string>
-    <string name="session_chat_goal_command_replaces">현재 목표를 대체합니다</string>
-    <string name="session_chat_goal_command_replaces_paused">현재 목표를 대체합니다 (일시 중지됨)</string>
-    <string name="session_chat_goal_command_replaces_met">현재 목표를 대체합니다 (달성됨)</string>
+    <string name="session_chat_goal_command_replaces">현재 목표를 대체해요</string>
+    <string name="session_chat_goal_command_replaces_paused">현재 목표를 대체해요 (일시 중지됨)</string>
+    <string name="session_chat_goal_command_replaces_met">현재 목표를 대체해요 (달성됨)</string>
     <string name="session_chat_goal_pause_failed">목표를 일시 중지하지 못했습니다</string>
     <string name="session_chat_goal_pause_failed_reason">목표를 일시 중지하지 못했습니다: %1$s</string>
     <string name="session_chat_goal_resume_failed">목표를 재개하지 못했습니다</string>
@@ -956,7 +956,7 @@
         <item quantity="other">커밋되지 않은 파일 %1$d개</item>
     </plurals>
     <string name="component_branch_pill_a11y_branch">브랜치 %1$s</string>
-    <string name="component_branch_pill_a11y_worktree_branch">Worktree 브랜치 %1$s</string>
+    <string name="component_branch_pill_a11y_worktree_branch">worktree 브랜치 %1$s</string>
     <string name="component_branch_pill_a11y_no_changes">%1$s, 변경 없음</string>
     <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
     <string name="component_branch_pill_a11y_added">%1$s, %2$d줄 추가됨</string>
@@ -966,7 +966,7 @@
     <string name="session_chat_mcp_load_failed">MCP 서버를 불러올 수 없어요. 연결을 확인하고 다시 시도해 주세요.</string>
     <string name="session_chat_create_failed">세션을 만들 수 없어요</string>
     <string name="session_chat_send_timed_out">보내지 못했어요. 다시 시도해 주세요.</string>
-    <string name="session_chat_shell_cannot_queue">셸 명령은 대기열에 추가할 수 없어요. 방향 지시로 전환해 지금 실행하세요.</string>
+    <string name="session_chat_shell_cannot_queue">셸 명령어는 대기열에 추가할 수 없어요. 방향 지시로 전환해 지금 실행하세요.</string>
     <string name="session_chat_reply_error_permission">응답을 보내지 못했어요. 다시 시도해 주세요.</string>
     <string name="session_chat_reply_error_permission_reason">응답을 보내지 못했어요. %1$s.</string>
     <string name="session_chat_reply_error_question">답변을 보내지 못했어요. 다시 시도해 주세요.</string>
@@ -991,11 +991,11 @@
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">실행 중인 단계를 한 장의 실시간 카드에 모았다가 요약으로 접기</string>
     <string name="session_chat_sheet_picker_model">모델</string>
     <string name="session_chat_sheet_picker_agent_mode">에이전트 모드</string>
-    <string name="session_chat_sheet_picker_variant">변형</string>
-    <string name="session_chat_sheet_picker_back_to_providers">공급자로 돌아가기</string>
+    <string name="session_chat_sheet_picker_variant">추론 강도</string>
+    <string name="session_chat_sheet_picker_back_to_providers">제공업체로 돌아가기</string>
     <string name="session_chat_sheet_picker_no_models_match">필터와 일치하는 모델이 없어요</string>
     <string name="session_chat_sheet_picker_filter_models_hint">모델 필터...</string>
-    <string name="session_chat_sheet_tool_detail_provider_response">공급자 응답</string>
+    <string name="session_chat_sheet_tool_detail_provider_response">제공업체 응답</string>
     <string name="session_chat_sheet_tool_detail_tool">도구</string>
     <string name="session_chat_sheet_tool_result_exit_code">종료 코드 %1$d</string>
     <plurals name="session_chat_sheet_tool_result_matches">
@@ -1011,7 +1011,7 @@
     <string name="session_chat_sheet_tool_result_copies_link_hint">링크를 복사해요</string>
     <string name="session_chat_sheet_tool_result_line_accessibility">%1$d번째 줄, %2$s</string>
     <string name="session_chat_sheet_shell_title">셸</string>
-    <string name="session_chat_sheet_shell_command_accessibility">명령, %1$s</string>
+    <string name="session_chat_sheet_shell_command_accessibility">명령어, %1$s</string>
     <string name="session_chat_sheet_shell_no_output">아직 출력 없음</string>
     <string name="session_chat_sheet_shell_truncated">최근 출력을 표시 중</string>
     <string name="session_chat_sheet_shell_stop">셸 중지</string>
@@ -1050,7 +1050,7 @@
     <string name="session_context_retry">다시 시도</string>
     <string name="session_context_stat_session">세션</string>
     <string name="session_context_stat_messages">메시지</string>
-    <string name="session_context_stat_provider">공급자</string>
+    <string name="session_context_stat_provider">제공업체</string>
     <string name="session_context_stat_model">모델</string>
     <string name="session_context_stat_context_limit">컨텍스트 한도</string>
     <string name="session_context_stat_total_tokens">전체 토큰</string>
@@ -1112,7 +1112,7 @@
     <string name="settings_follow_up_subtitle_steer">방향 지시 · V2 서버에서만 사용할 수 있어요. V1은 지원하지 않아요.</string>
     <string name="settings_follow_up_subtitle_queue">대기열 · V2 서버에서만 사용할 수 있어요. V1은 지원하지 않아요.</string>
     <string name="settings_follow_up_unsupported">V1에서는 지원하지 않아요. 이 서버는 항상 즉시 보내요.</string>
-    <string name="settings_worktrees_title">Worktree</string>
+    <string name="settings_worktrees_title">worktree</string>
     <string name="settings_worktrees_subtitle">홈에 프로젝트별 worktree와 브랜치를 표시하고, 새 세션을 길게 누르면 worktree를 고를 수 있어요.</string>
     <string name="settings_session_rows_title">세션 행</string>
     <string name="settings_session_rows_compact_title">간결하게</string>
@@ -1124,9 +1124,9 @@
     <string name="settings_session_cache_empty">비어 있음</string>
     <string name="settings_session_cache_bytes">%1$d B</string>
     <string name="settings_clear_session_cache_title">세션 캐시 지우기</string>
-    <string name="settings_clear_session_cache_subtitle">캐시된 세션과 메시지 삭제</string>
+    <string name="settings_clear_session_cache_subtitle">캐시된 세션과 메시지 제거</string>
     <string name="settings_clear_session_cache_dialog_title">세션 캐시를 지울까요?</string>
-    <string name="settings_clear_session_cache_dialog_message">캐시된 세션과 메시지를 삭제해요. 연결 정보와 자격 증명은 그대로 유지돼요.</string>
+    <string name="settings_clear_session_cache_dialog_message">캐시된 세션과 메시지를 제거해요. 연결 정보와 자격 증명은 그대로 유지돼요.</string>
     <string name="settings_clear">지우기</string>
     <string name="settings_app_lock_title">앱 잠금</string>
     <string name="settings_app_lock_subtitle_available">앱이 백그라운드에서 돌아올 때 지문, 얼굴 또는 화면 잠금을 요구해요</string>
@@ -1138,7 +1138,7 @@
     <string name="settings_analytics_label">제품 분석</string>
     <string name="settings_diagnostic_logs_subtitle">민감 정보를 가린 최근 실행 로그 공유</string>
     <string name="settings_clear_all_data_title">모든 데이터 지우기</string>
-    <string name="settings_clear_all_data_subtitle">연결 정보와 캐시 삭제</string>
+    <string name="settings_clear_all_data_subtitle">연결 정보와 캐시 제거</string>
     <string name="settings_clear_all_data_dialog_title">모든 데이터를 지울까요?</string>
     <string name="settings_clear_all_data_dialog_message">이 작업은 되돌릴 수 없어요.</string>
     <string name="settings_version">버전</string>
@@ -1178,7 +1178,7 @@
     <string name="diagnostics_share_via_apps">앱으로 공유</string>
     <string name="diagnostics_save_to_files">파일에 저장</string>
     <string name="diagnostics_clear_dialog_title">진단 로그를 지울까요?</string>
-    <string name="diagnostics_clear_dialog_message">저장된 진단 로그를 삭제해요.</string>
+    <string name="diagnostics_clear_dialog_message">저장된 진단 로그를 제거해요.</string>
     <string name="diagnostics_error_share">공유할 진단 로그를 준비하지 못했어요.</string>
     <string name="diagnostics_error_save">진단 로그를 저장하지 못했어요.</string>
     <string name="diagnostics_saved">진단 로그를 저장했어요.</string>
@@ -1249,16 +1249,16 @@
     <plurals name="feedback_error_rate_limited">
         <item quantity="other">방금 신고를 보냈어요. %1$d초 후에 다시 시도해 주세요.</item>
     </plurals>
-    <string name="feedback_error_unverified">이 앱을 확인할 수 없어요. App Store, TestFlight 또는 Google Play로 설치한 앱에서만 신고를 보낼 수 있어요.</string>
-    <string name="feedback_error_failed">신고를 보내지 못했어요.</string>
+    <string name="feedback_error_unverified">이 앱을 확인할 수 없어요. App Store, TestFlight 또는 Google Play로 설치한 앱에서만 보고서를 보낼 수 있어요.</string>
+    <string name="feedback_error_failed">보고서를 보내지 못했어요.</string>
     <string name="feedback_action_try_again">다시 시도</string>
     <string name="feedback_action_share_instead">대신 공유</string>
     <string name="feedback_undo">실행 취소</string>
     <string name="feedback_done">완료</string>
     <string name="feedback_add_attachment">첨부 추가</string>
     <string name="feedback_dictate">음성 입력</string>
-    <string name="feedback_send">신고 보내기</string>
-    <string name="feedback_sending">신고 보내는 중</string>
+    <string name="feedback_send">보고서 보내기</string>
+    <string name="feedback_sending">보고서 보내는 중</string>
     <string name="feedback_attachment_screenshot">스크린샷</string>
     <plurals name="feedback_attachment_screenshot_hidden">
         <item quantity="other">스크린샷 · %1$d곳 가림</item>
@@ -1291,7 +1291,7 @@
     <string name="feedback_sent_bug">팀에서 살펴볼게요.</string>
     <string name="feedback_sent_idea">아이디어 고마워요.</string>
     <string name="feedback_sent_reference">참조 %1$s</string>
-    <string name="feedback_share_chooser_title">신고 공유</string>
+    <string name="feedback_share_chooser_title">보고서 공유</string>
     <string name="feedback_dictation_microphone_off">마이크 접근 권한이 꺼져 있어요</string>
     <string name="feedback_dictation_listening">듣는 중 · %1$s</string>
     <string name="feedback_dictation_listening_on_device">듣는 중 · %1$s · 기기 내 처리</string>
@@ -1315,7 +1315,7 @@
     <string name="keyboard_shortcuts_group_prompt">프롬프트</string>
     <string name="keyboard_shortcuts_group_go">이동</string>
     <string name="keyboard_shortcuts_new_session">새 세션</string>
-    <string name="keyboard_shortcuts_command_palette">명령 팔레트</string>
+    <string name="keyboard_shortcuts_command_palette">명령어 팔레트</string>
     <string name="keyboard_shortcuts_choose_model">모델 선택</string>
     <string name="keyboard_shortcuts_settings">설정</string>
     <string name="keyboard_shortcuts_project">프로젝트 %1$d</string>
@@ -1451,7 +1451,7 @@
     <string name="component_composer_hide_question">질문 숨기기</string>
     <string name="live_updates_status_connecting">연결 중</string>
     <string name="dictation_model_queued_detail">%1$s가 다운로드를 대기열에 추가했어요. Wi-Fi 연결, 충전, 저장 공간 확보를 기다리는 중일 수 있어요. 몇 분 뒤에 다시 확인하세요.</string>
-    <string name="dictation_model_not_installed_detail">받아쓰기는 이 기기에서 실행되므로 음성이 업로드되지 않아요. %1$s가 모델을 한 번 다운로드해 모든 앱에서 함께 사용해요.</string>
+    <string name="dictation_model_not_installed_detail">받아쓰기는 이 기기에서 실행되므로 음성이 업로드되지 않아요. %1$s에서 모델을 한 번 다운로드해 모든 앱에서 함께 사용해요.</string>
     <string name="component_outgoing_message_shows_actions_hint">메시지 동작 보기</string>
     <string name="component_activity_status_stopped">중지됨</string>
     <string name="dictation_action_try_again">다시 시도</string>
@@ -1461,7 +1461,7 @@
     <string name="component_image_loading_label">%1$s, 불러오는 중</string>
     <string name="session_list_dock_new_session">새 세션</string>
     <string name="component_composer_always_allows">항상 허용: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">사이드 질문 모드 나가기</string>
+    <string name="component_composer_leave_side_question_mode">부가 질문 모드 나가기</string>
     <string name="session_list_worktree_empty_other_projects">필터를 지우면 다른 프로젝트의 세션을 볼 수 있어요.</string>
     <string name="component_attachment_uploading">업로드 중…</string>
     <string name="component_composer_deny">거부</string>
@@ -1488,12 +1488,12 @@
     <string name="share_diagnostics_chooser_title">진단 로그 공유</string>
     <string name="dictation_model_queued_title">%1$s가 나중에 %2$s 다운로드를 시작해요</string>
     <string name="session_list_dock_choose_project_or_worktree">프로젝트 또는 worktree 선택</string>
-    <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
+    <string name="component_top_bar_worktree_subtitle">worktree %1$s</string>
     <string name="component_image_could_not_load_label">%1$s, 불러올 수 없음</string>
     <string name="component_composer_question">질문</string>
-    <string name="component_worktree">Worktree</string>
+    <string name="component_worktree">worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">필터를 지우면 다른 worktree의 세션을 볼 수 있어요.</string>
-    <string name="component_composer_side_question_mode">사이드 질문 모드</string>
+    <string name="component_composer_side_question_mode">부가 질문 모드</string>
     <string name="component_page_indicator_label">%2$d페이지 중 %1$d페이지</string>
     <string name="component_composer_next">다음</string>
     <string name="component_message_image_label">이미지 %1$s</string>
@@ -1503,7 +1503,7 @@
     <string name="session_list_status_failed">실패</string>
     <string name="component_composer_custom_answer_title">직접 답변 입력</string>
     <string name="component_composer_always">항상</string>
-    <string name="component_composer_send_side_question">사이드 질문하기</string>
+    <string name="component_composer_send_side_question">부가 질문하기</string>
     <string name="component_composer_select_exactly">%1$d개 선택</string>
     <string name="dictation_action_open_settings">설정 열기</string>
     <string name="component_composer_open_commands">명령어 열기</string>
@@ -1580,7 +1580,7 @@
         <item quantity="other">%1$d분 전</item>
     </plurals>
     <string name="component_composer_request_position">%2$d개 중 %1$d번째</string>
-    <string name="component_composer_side_question_placeholder">사이드 질문, 채팅에 추가되지 않아요</string>
+    <string name="component_composer_side_question_placeholder">부가 질문, 채팅에 추가되지 않아요</string>
     <string name="session_list_worktree_empty_every_project">필터를 지우면 모든 프로젝트를 볼 수 있어요.</string>
     <string name="component_image_viewer_could_not_load_named">%1$s 불러오기에 실패했어요</string>
     <string name="component_composer_select_up_to">최대 %1$d개 선택</string>
@@ -1632,12 +1632,12 @@
     <string name="relative_time_now">방금</string>
     <string name="component_composer_previous_permission">이전 권한 요청</string>
     <string name="component_composer_dictate">받아쓰기</string>
-    <string name="component_composer_side_question_mode_description">사이드 질문 모드. 사이드 질문 모드 나가기</string>
+    <string name="component_composer_side_question_mode_description">부가 질문 모드. 부가 질문 모드 나가기</string>
     <string name="component_composer_abort">진행 중인 작업 중단</string>
     <string name="component_server_address_scheme_button">스킴 %1$s</string>
     <string name="component_composer_open_subagent_session">서브에이전트 세션 열기</string>
     <string name="component_composer_question_step">%2$d단계 중 %1$d단계</string>
-    <string name="share_feedback_subject_bug">OpenCode Mobile 버그 제보</string>
+    <string name="share_feedback_subject_bug">OpenCode Mobile 버그 보고서</string>
     <string name="component_activity_card_opens_child_session_hint">하위 세션 열기</string>
     <string name="component_activity_status_failed">실패</string>
     <string name="dictation_model_not_installed_title">%1$s에는 %2$s 설치가 필요해요</string>

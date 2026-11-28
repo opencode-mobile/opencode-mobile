@@ -94,7 +94,7 @@
     <string name="onboarding_features_sessions_detail">Список, відкриття, створення, перейменування, розгалуження, архівування, видалення</string>
     <string name="onboarding_features_chat_title">Чат і зупинка</string>
     <string name="onboarding_features_chat_detail">Надсилайте запити й зупиняйте поточну роботу</string>
-    <string name="onboarding_features_permissions_title">Дозволи</string>
+    <string name="onboarding_features_permissions_title">Запити на дозволи</string>
     <string name="onboarding_features_permissions_detail">Схвалюйте або забороняйте запити (без постійного запам\'ятовування)</string>
     <string name="onboarding_features_changes_title">Зміни</string>
     <string name="onboarding_features_changes_detail">Перегляд diff сесій</string>
@@ -117,10 +117,10 @@
     <string name="privacy_cover_unlock">Розблокувати</string>
     <string name="servers_title">Сервери</string>
     <plurals name="servers_profile_count">
-        <item quantity="one">%1$d підключення до сервера</item>
-        <item quantity="few">%1$d підключення до серверів</item>
-        <item quantity="many">%1$d підключень до серверів</item>
-        <item quantity="other">%1$d підключення до серверів</item>
+        <item quantity="one">%1$d збережене підключення до сервера</item>
+        <item quantity="few">%1$d збережені підключення до серверів</item>
+        <item quantity="many">%1$d збережених підключень до серверів</item>
+        <item quantity="other">%1$d збереженого підключення до серверів</item>
     </plurals>
     <string name="servers_saved">Збережені</string>
     <string name="server_health_title">Стан сервера</string>
@@ -132,7 +132,7 @@
     <string name="server_health_range_hour">1 год</string>
     <string name="server_health_range_day">24 год</string>
     <string name="server_health_range_week">7 дн</string>
-    <string name="server_health_uptime">Аптайм</string>
+    <string name="server_health_uptime">Час роботи</string>
     <string name="server_health_uptime_detail">із виміряних %1$s</string>
     <string name="server_health_reconnects">Перепідключення</string>
     <string name="server_health_reconnects_detail">медіана відновлення — %1$s</string>
@@ -196,10 +196,10 @@
     <string name="server_health_status_auth_failed">Помилка автентифікації</string>
     <string name="server_health_status_stopped">Не вимірюється</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Аптайм %1$s · %2$d перепідключення сьогодні</item>
-        <item quantity="few">Аптайм %1$s · %2$d перепідключення сьогодні</item>
-        <item quantity="many">Аптайм %1$s · %2$d перепідключень сьогодні</item>
-        <item quantity="other">Аптайм %1$s · %2$d перепідключення сьогодні</item>
+        <item quantity="one">Час роботи %1$s · %2$d перепідключення сьогодні</item>
+        <item quantity="few">Час роботи %1$s · %2$d перепідключення сьогодні</item>
+        <item quantity="many">Час роботи %1$s · %2$d перепідключень сьогодні</item>
+        <item quantity="other">Час роботи %1$s · %2$d перепідключення сьогодні</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Вимірювання…</string>
     <string name="server_health_details">Докладніше</string>
@@ -211,7 +211,7 @@
     <string name="servers_add">Додати сервер</string>
     <string name="servers_edit_profile">Редагувати %1$s</string>
     <string name="servers_remove_dialog_title_named">Видалити «%1$s»?</string>
-    <string name="servers_remove_dialog_message">Цей пристрій забуде збережене підключення до сервера. Сесії залишаться на тому сервері. Якщо це активний сервер, ви оберете інший — або потрапите на екран підключення, якщо інших не лишиться.</string>
+    <string name="servers_remove_dialog_message">Цей пристрій забуде збережене підключення до сервера. Сесії залишаться на тому сервері. Якщо це активний сервер, ви виберете інший — або потрапите на екран підключення, якщо інших не лишиться.</string>
     <string name="common_retry">Повторити спробу</string>
     <string name="common_save">Зберегти</string>
     <string name="common_delete">Видалити</string>
@@ -327,7 +327,7 @@
     <string name="add_project_list_error_message">Перевірте шлях і спробуйте ще раз.</string>
     <string name="add_project_no_other_projects">На цьому сервері немає інших проєктів.</string>
     <string name="add_project_folder_path">Шлях до теки</string>
-    <string name="add_project_up_one_folder">На рівень вище</string>
+    <string name="add_project_up_one_folder">На одну теку вгору</string>
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Виберіть теку</string>
     <string name="add_project_already_on_home">Уже на головній</string>
@@ -359,7 +359,7 @@
     <string name="worktree_run_in_subtitle">Створити checkout і почати там</string>
     <string name="worktree_move_subtitle">Створити checkout і перейти туди</string>
     <string name="worktree_needs_v2">Потрібен сервер opencode v2</string>
-    <string name="worktree_turn_on">Увімкніть Worktrees у налаштуваннях</string>
+    <string name="worktree_turn_on">Увімкніть worktree у налаштуваннях</string>
     <string name="worktree_not_git">Потрібен git-репозиторій</string>
     <string name="worktree_no_commit">Потрібен git-репозиторій із комітом</string>
     <string name="worktree_unsupported">Цей сервер не може створювати worktree</string>
@@ -585,7 +585,7 @@
     </plurals>
     <string name="attachment_drop_some_skipped">Деякі буде пропущено</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
-    <string name="session_chat_activity_review_permission">Переглянути дозвіл</string>
+    <string name="session_chat_activity_review_permission">Переглянути запит на дозвіл</string>
     <string name="session_chat_activity_review_permission_request">Переглянути запит на дозвіл</string>
     <string name="session_chat_activity_answer_question">Відповісти на запитання</string>
     <string name="session_chat_activity_request_failed">Запит не вдався</string>
@@ -1077,7 +1077,7 @@
     <string name="session_chat_goal_waiting_shell">Чекає на завершення фонового shell: %1$s. Пауза, якщо нічого не виконуватиметься %2$d хв.</string>
     <string name="session_chat_goal_waiting_subagent">Чекає на завершення субагента. Пауза, якщо нічого не виконуватиметься %1$d хв.</string>
     <string name="session_chat_goal_waiting_on_you">Очікує на вас</string>
-    <string name="session_chat_goal_waiting_permission">Є відкритий запит дозволу. Мета продовжиться, коли ви відповісте.</string>
+    <string name="session_chat_goal_waiting_permission">Є відкритий запит на дозвіл. Мета продовжиться, коли ви відповісте.</string>
     <string name="session_chat_goal_waiting_question">Є відкрите запитання. Мета продовжиться, коли ви відповісте.</string>
     <string name="session_chat_goal_evidence">Докази</string>
     <string name="session_chat_goal_reconnecting">Перепідключення. Показано останню відому мету.</string>
@@ -1159,11 +1159,11 @@
     <string name="session_chat_reply_error_question_reason">Не вдалося надіслати відповідь. %1$s.</string>
     <string name="session_chat_reply_error_dismiss">Не вдалося закрити запитання. Спробуйте ще раз.</string>
     <string name="session_chat_reply_error_dismiss_reason">Не вдалося закрити запитання. %1$s.</string>
-    <string name="session_chat_permission_unavailable">Запит дозволу більше недоступний</string>
+    <string name="session_chat_permission_unavailable">Запит на дозвіл більше недоступний</string>
     <string name="session_chat_question_unavailable">Запитання більше недоступне</string>
-    <string name="session_chat_permission_tree_failed">Не вдалося оновити дерево сесій запиту дозволу</string>
+    <string name="session_chat_permission_tree_failed">Не вдалося оновити дерево сесій запиту на дозвіл</string>
     <string name="session_chat_question_tree_failed">Не вдалося оновити дерево сесій запитання</string>
-    <string name="session_chat_sheet_timeline_style_picker_title">Новинка: оберіть вигляд стрічки</string>
+    <string name="session_chat_sheet_timeline_style_picker_title">Новинка: виберіть вигляд стрічки</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Це оновлення додає нові способи стежити за тим, що робить агент.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">Це можна будь-коли змінити в розділі «Налаштування → Стиль стрічки».</string>
     <string name="session_chat_sheet_timeline_style_picker_use">Використати %1$s</string>
@@ -1254,7 +1254,7 @@
     <string name="session_context_load_failed_message">Контекст не завантажився.</string>
     <string name="session_context_refresh_failed">Не вдалося оновити контекст сесії</string>
     <string name="session_context_refreshing">Оновлення контексту сесії</string>
-    <string name="session_context_retry">Повторіть спробу</string>
+    <string name="session_context_retry">Повторити спробу</string>
     <string name="session_context_stat_session">Сесія</string>
     <string name="session_context_stat_messages">Повідомлення</string>
     <string name="session_context_stat_provider">Провайдер</string>
@@ -1424,7 +1424,7 @@
     <string name="appearance_syntax_blurb_neon">Сімейство Dracula</string>
     <string name="appearance_preview_light">Світла</string>
     <string name="appearance_preview_dark">Темна</string>
-    <string name="appearance_preview_sample_message">Пройдися по сховищу токенів.</string>
+    <string name="appearance_preview_sample_message">Пройдіться по сховищу токенів.</string>
     <string name="appearance_preview_sample_reply">Оновлюю один раз, потім повторюю.</string>
     <string name="appearance_more_options">Більше параметрів</string>
     <string name="appearance_reset_text_sizes">Скинути розміри тексту</string>
@@ -1572,7 +1572,7 @@
     <string name="keyboard_shortcuts_settings">Налаштування</string>
     <string name="keyboard_shortcuts_project">Проєкт %1$d</string>
     <string name="keyboard_shortcuts_show_project">Показати %1$s</string>
-    <string name="keyboard_shortcuts_allow_once">Дозволити раз</string>
+    <string name="keyboard_shortcuts_allow_once">Дозволити один раз</string>
     <string name="keyboard_shortcuts_always_allow">Завжди дозволяти</string>
     <string name="keyboard_shortcuts_deny">Заборонити</string>
     <string name="keyboard_shortcuts_deny_with_note">Заборонити з приміткою</string>
@@ -1615,7 +1615,7 @@
     <string name="changes_error_title">Не вдалося завантажити зміни</string>
     <string name="changes_error_fallback">Зміни не завантажилися.</string>
     <string name="changes_error_request_failed">Не вдалося виконати запит</string>
-    <string name="changes_error_turn_moved_folders">Під час цього ходу було переміщено папки, тож його зміни не можна показати разом.</string>
+    <string name="changes_error_turn_moved_folders">Під час цього ходу було переміщено теки, тож його зміни не можна показати разом.</string>
     <string name="changes_refresh_failed">Не вдалося оновити: %1$s</string>
     <string name="changes_filter_hint">Фільтр</string>
     <string name="changes_filter_accessibility_label">Фільтрувати змінені файли</string>
@@ -1700,7 +1700,7 @@
     <string name="component_filter_tabs_unseen">нове</string>
     <string name="component_text_size_slider_sample_letter">А</string>
     <string name="component_message_time_yesterday">Учора</string>
-    <string name="component_composer_reverting_title">Скасування цього повідомлення</string>
+    <string name="component_composer_reverting_title">Відкочування цього повідомлення</string>
     <string name="session_new_title">Нова сесія</string>
     <string name="session_list_dock_add_project">Додати проєкт</string>
     <string name="theme_error_preset_not_found">Пресет теми не знайдено</string>
@@ -1859,7 +1859,7 @@
     <string name="dictation_action_download">Завантажити</string>
     <string name="component_attachment_kind_pdf">PDF</string>
     <string name="session_list_dock_next_project">Наступний проєкт</string>
-    <string name="component_composer_allow_once">Дозволити раз</string>
+    <string name="component_composer_allow_once">Дозволити один раз</string>
     <string name="session_list_worktree_empty_title">У цьому worktree немає сесій</string>
     <string name="component_activity_card_opens_activity_hint">Відкриває активність</string>
     <string name="dictation_speech_model">мовна модель</string>
@@ -1878,7 +1878,7 @@
     <string name="live_updates_status_live">наживо</string>
     <string name="component_image_viewer_could_not_load_this">Не вдалося завантажити це зображення</string>
     <string name="component_image_viewer_could_not_load_full">Не вдалося завантажити повне зображення</string>
-    <string name="component_image_viewer_retry">Повторіть спробу</string>
+    <string name="component_image_viewer_retry">Повторити спробу</string>
     <string name="component_image_viewer_loading_full">Завантаження повного зображення</string>
     <string name="session_list_worktree_empty_action">Очистити фільтр</string>
     <string name="dictation_model_download_failed_detail">Перевірте з’єднання та вільне місце на цьому пристрої й спробуйте знову.</string>
@@ -1900,7 +1900,7 @@
         <item quantity="other">%1$d попереднього кроку</item>
     </plurals>
     <string name="component_outgoing_message_long_press_hint">Утримуйте, щоб показати дії з повідомленням</string>
-    <string name="component_composer_hide_permission">Сховати запит дозволу</string>
+    <string name="component_composer_hide_permission">Сховати запит на дозвіл</string>
     <string name="dictation_downloading_model_progress">Завантаження мовної моделі, %1$s</string>
     <string name="component_branch_pill_copy_branch_name">Копіювати назву гілки</string>
     <string name="component_truncation_row_full_message_title">Показати повне повідомлення</string>
@@ -1924,7 +1924,7 @@
     <string name="component_session_list_skeleton_slow_label">%1$s. %2$s</string>
     <string name="component_close">Закрити</string>
     <string name="relative_time_now">щойно</string>
-    <string name="component_composer_previous_permission">Попередній запит дозволу</string>
+    <string name="component_composer_previous_permission">Попередній запит на дозвіл</string>
     <string name="component_composer_dictate">Диктувати</string>
     <string name="component_composer_side_question_mode_description">Режим побічного запитання. Вийти з режиму побічного запитання</string>
     <string name="component_composer_abort">Перервати поточну роботу</string>
@@ -1940,11 +1940,11 @@
     <string name="session_list_status_retrying">Повторна спроба</string>
     <string name="component_attachment_remove">Видалити %1$s</string>
     <string name="component_composer_send_steer">Надіслати як спрямування</string>
-    <string name="component_composer_next_permission">Наступний запит дозволу</string>
+    <string name="component_composer_next_permission">Наступний запит на дозвіл</string>
     <string name="session_list_dock_project_filter">Фільтр проєктів</string>
     <string name="component_split_pane_resize_hint">Двічі торкніться, щоб сховати бічну панель</string>
     <string name="component_branch_pill_shows_details_hint">Показує відомості про гілку</string>
-    <string name="component_composer_permission_requested">Запит дозволу</string>
+    <string name="component_composer_permission_requested">Запит на дозвіл</string>
     <string name="component_thinking">Мислення</string>
     <string name="dictation_model_downloading_title">Система %1$s завантажує: %2$s</string>
     <string name="component_hunk_navigation_expand_context">Розгорнути контекст</string>
@@ -1976,7 +1976,7 @@
         <item quantity="many">%1$d worktree</item>
         <item quantity="other">%1$d worktree</item>
     </plurals>
-    <string name="worktrees_main_checkout">Основна копія</string>
+    <string name="worktrees_main_checkout">Основний checkout</string>
     <string name="worktrees_cannot_remove">Не можна видалити</string>
     <plurals name="worktrees_changed">
         <item quantity="one">%1$d змінено</item>
@@ -1985,14 +1985,14 @@
         <item quantity="other">%1$d змінено</item>
     </plurals>
     <string name="worktrees_none_in_project">Немає worktree. «Нова сесія» → «Вибрати проєкт або worktree» створює його.</string>
-    <string name="worktrees_footer">Видалення worktree стирає його папку на сервері. Його сесії залишаться, але більше не зможуть у ньому працювати.</string>
+    <string name="worktrees_footer">Видалення worktree видаляє його теку на сервері. Його сесії залишаться, але більше не зможуть у ньому працювати.</string>
     <string name="worktrees_more">Більше дій для %1$s</string>
     <string name="worktrees_removing">Видалення…</string>
     <string name="worktrees_actions_show_on_home">Показати сесії на головній</string>
     <string name="worktrees_actions_new_session">Нова сесія тут</string>
     <string name="worktrees_actions_remove">Видалити worktree…</string>
     <string name="worktrees_remove_title">Видалити worktree «%1$s»?</string>
-    <string name="worktrees_remove_message">Стирає %1$s на сервері.</string>
+    <string name="worktrees_remove_message">Видаляє %1$s на сервері.</string>
     <plurals name="worktrees_remove_changes">
         <item quantity="one">%1$d незафіксовану зміну буде втрачено.</item>
         <item quantity="few">%1$d незафіксовані зміни буде втрачено.</item>

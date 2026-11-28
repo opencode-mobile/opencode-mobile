@@ -21,7 +21,7 @@
     <string name="connection_setup_action_scan_qr">Escaneja el QR</string>
     <string name="connection_setup_action_scan_new_qr">Escaneja un QR nou</string>
     <string name="connection_setup_action_enter_pairing_code">Introdueix un codi d\'aparellament</string>
-    <string name="connection_setup_action_use_host_password">Usa un amfitrió i una contrasenya</string>
+    <string name="connection_setup_action_use_host_password">Utilitza un amfitrió i una contrasenya</string>
     <string name="connection_setup_action_scan_qr_instead">Escaneja un QR</string>
     <string name="connection_setup_scan_qr_instead_hint">Des d\'opencode pair</string>
     <string name="connection_setup_remove_server">Elimina el servidor</string>
@@ -57,9 +57,9 @@
     <string name="connection_cleartext_message_hosts">%1$s usen http sense xifrar fora de la teva xarxa local o Tailscale. La contrasenya del servidor i tot el contingut de les sessions viatjarien sense xifrar. És millor usar https, una VPN o un túnel.</string>
     <string name="connection_cleartext_message_this_address">Aquesta adreça usa http sense xifrar fora de la teva xarxa local o Tailscale. La contrasenya del servidor i tot el contingut de les sessions viatjarien sense xifrar. És millor usar https, una VPN o un túnel.</string>
     <string name="connection_cleartext_connect_anyway">Connecta igualment</string>
-    <string name="connection_error_invalid_qr">Aquest no és un QR d\'enllaç d\'OpenCode 2</string>
+    <string name="connection_error_invalid_qr">Aquest no és un QR d\'aparellament d\'OpenCode 2</string>
     <string name="connection_error_localhost_qr">Aquest QR només té una adreça localhost</string>
-    <string name="connection_error_camera_denied">Permet l\'accés a la càmera per escanejar el QR d\'enllaç</string>
+    <string name="connection_error_camera_denied">Permet l\'accés a la càmera per escanejar el QR d\'aparellament</string>
     <string name="connection_error_camera_unavailable">La càmera no està disponible en aquest dispositiu</string>
     <string name="connection_error_enter_host">Introdueix un amfitrió</string>
     <string name="connection_error_enter_pairing_code">Introdueix un codi d\'aparellament</string>
@@ -131,7 +131,7 @@
     <string name="server_health_range_hour">1 h</string>
     <string name="server_health_range_day">24 h</string>
     <string name="server_health_range_week">7 d</string>
-    <string name="server_health_uptime">Disponibilitat</string>
+    <string name="server_health_uptime">Temps d\'activitat</string>
     <string name="server_health_uptime_detail">de %1$s mesurats</string>
     <string name="server_health_reconnects">Reconnexions</string>
     <string name="server_health_reconnects_detail">recuperat en %1$s (mediana)</string>
@@ -194,9 +194,9 @@
     <string name="server_health_status_auth_failed">Autenticació fallida</string>
     <string name="server_health_status_stopped">Sense mesurar</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Disponibilitat %1$s · %2$d reconnexió avui</item>
-        <item quantity="many">Disponibilitat %1$s · %2$d de reconnexions avui</item>
-        <item quantity="other">Disponibilitat %1$s · %2$d reconnexions avui</item>
+        <item quantity="one">Temps d\'activitat %1$s · %2$d reconnexió avui</item>
+        <item quantity="many">Temps d\'activitat %1$s · %2$d de reconnexions avui</item>
+        <item quantity="other">Temps d\'activitat %1$s · %2$d reconnexions avui</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Mesurant…</string>
     <string name="server_health_details">Detalls</string>
@@ -246,7 +246,7 @@
         <item quantity="many">%1$d de projectes</item>
         <item quantity="other">%1$d projectes</item>
     </plurals>
-    <string name="home_main_checkout">main checkout</string>
+    <string name="home_main_checkout">checkout principal</string>
     <plurals name="home_worktree_count">
         <item quantity="one">%1$d worktree</item>
         <item quantity="many">%1$d de worktrees</item>
@@ -332,7 +332,7 @@
     <string name="add_project_folder_empty">Buida</string>
     <plurals name="add_project_folder_count">
         <item quantity="one">%1$d carpeta</item>
-        <item quantity="many">%1$d carpetes</item>
+        <item quantity="many">%1$d de carpetes</item>
         <item quantity="other">%1$d carpetes</item>
     </plurals>
     <string name="add_project_no_subfolders">Cap subcarpeta</string>
@@ -424,7 +424,7 @@
     <string name="file_viewer_too_large_message_size">Aquest fitxer és més gran del que l\'aplicació pot previsualitzar.\n%1$s</string>
     <plurals name="file_viewer_line_count">
         <item quantity="one">%1$d línia</item>
-        <item quantity="many">%1$d línies</item>
+        <item quantity="many">%1$d de línies</item>
         <item quantity="other">%1$d línies</item>
     </plurals>
     <string name="file_viewer_meta">%1$s · %2$s</string>
@@ -502,11 +502,11 @@
     <string name="session_chat_commands_new_description">Inicia una sessió nova</string>
     <string name="session_chat_commands_fork_label">Bifurca</string>
     <string name="session_chat_commands_fork_description">Bifurca aquesta sessió</string>
-    <string name="session_chat_commands_undo_label">Desfer</string>
+    <string name="session_chat_commands_undo_label">Desfés</string>
     <string name="session_chat_commands_undo_description">Desfés l\'últim missatge</string>
     <string name="session_chat_commands_redo_label">Refer</string>
     <string name="session_chat_commands_redo_description">Refés el missatge desfet</string>
-    <string name="session_chat_commands_compact_label">Compacte</string>
+    <string name="session_chat_commands_compact_label">Compacta</string>
     <string name="session_chat_commands_compact_description">Compacta el context de la sessió</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">Obre el shell del projecte</string>
@@ -636,7 +636,7 @@
         <item quantity="many">Vés al final, %1$d de missatges nous</item>
         <item quantity="other">Vés al final, %1$d missatges nous</item>
     </plurals>
-    <string name="home_error_reconnect_to_create">Torna a connectar-te per crear una sessió</string>
+    <string name="home_error_reconnect_to_create">Reconnecta per crear una sessió</string>
     <string name="timeline_state_creating_title">S\'està iniciant la sessió…</string>
     <string name="timeline_state_creating_subtitle">Creant-la al servidor…</string>
     <string name="new_session_title">Nova sessió</string>
@@ -668,7 +668,7 @@
     <string name="timeline_message_actions_hint_long_press">Mantén premut per mostrar les accions del missatge</string>
     <string name="timeline_message_actions_hint">Mostra les accions del missatge</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
-    <string name="timeline_failure_copy">Còpia</string>
+    <string name="timeline_failure_copy">Copia</string>
     <string name="timeline_retry_retrying_in">es tornarà a provar d\'aquí a %1$d s</string>
     <string name="timeline_retry_attempt_retrying_in">intent %1$d, es tornarà a provar d\'aquí a %2$d s</string>
     <plurals name="timeline_background_work_subagent_count">
@@ -821,9 +821,9 @@
         <item quantity="other">%1$d coincidències</item>
     </plurals>
     <plurals name="tool_count_path">
-        <item quantity="one">%1$d camí</item>
-        <item quantity="many">%1$d de camins</item>
-        <item quantity="other">%1$d camins</item>
+        <item quantity="one">%1$d ruta</item>
+        <item quantity="many">%1$d de rutes</item>
+        <item quantity="other">%1$d rutes</item>
     </plurals>
     <plurals name="tool_count_named">
         <item quantity="one">%1$d %2$s</item>
@@ -884,12 +884,12 @@
     <string name="timeline_list_comma">%1$s, %2$s</string>
     <plurals name="timeline_activity_count_step">
         <item quantity="one">%1$d pas</item>
-        <item quantity="many">%1$d passos</item>
+        <item quantity="many">%1$d de passos</item>
         <item quantity="other">%1$d passos</item>
     </plurals>
     <plurals name="timeline_activity_count_command">
         <item quantity="one">%1$d ordre</item>
-        <item quantity="many">%1$d ordres</item>
+        <item quantity="many">%1$d d\'ordres</item>
         <item quantity="other">%1$d ordres</item>
     </plurals>
     <plurals name="timeline_activity_count_thought">
@@ -899,7 +899,7 @@
     </plurals>
     <plurals name="timeline_activity_count_agent">
         <item quantity="one">%1$d agent</item>
-        <item quantity="many">%1$d agents</item>
+        <item quantity="many">%1$d d\'agents</item>
         <item quantity="other">%1$d agents</item>
     </plurals>
     <string name="timeline_activity_thinking">Pensant…</string>
@@ -910,7 +910,7 @@
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
     <string name="timeline_notice_switched_to">S\'ha canviat a</string>
     <string name="timeline_notice_variant_switched">Variant canviada a</string>
-    <string name="timeline_notice_variant_default">Variant canviada a Per defecte</string>
+    <string name="timeline_notice_variant_default">Variant canviada a Predeterminada</string>
     <string name="timeline_notice_instructions_updated">Instruccions actualitzades</string>
     <string name="timeline_notice_restart">Continuant després del reinici</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
@@ -944,7 +944,7 @@
     <string name="session_chat_shell_duration_hours">%1$d h</string>
     <string name="session_chat_shell_duration_hours_minutes">%1$d h %2$d min</string>
     <string name="session_chat_todos_progress">%1$d/%2$d</string>
-    <string name="session_chat_sheet_copy">Còpia</string>
+    <string name="session_chat_sheet_copy">Copia</string>
     <string name="session_chat_sheet_copy_output">Copia la sortida</string>
     <string name="session_chat_sheet_message_actions_title">Missatge</string>
     <string name="session_chat_sheet_message_actions_revert">Reverteix el missatge</string>
@@ -1020,7 +1020,7 @@
     <string name="session_chat_goal_waiting_permission">Hi ha una sol·licitud de permís oberta. L’objectiu continua quan hi responguis.</string>
     <string name="session_chat_goal_waiting_question">Hi ha una pregunta oberta. L’objectiu continua quan hi responguis.</string>
     <string name="session_chat_goal_evidence">Evidència</string>
-    <string name="session_chat_goal_reconnecting">Tornant a connectar. Es mostra l’últim objectiu conegut.</string>
+    <string name="session_chat_goal_reconnecting">Reconnectant. Es mostra l’últim objectiu conegut.</string>
     <string name="session_chat_goal_pause">Pausa</string>
     <string name="session_chat_goal_pausing">Pausant…</string>
     <string name="session_chat_goal_resume">Reprèn</string>
@@ -1061,7 +1061,7 @@
     <string name="session_chat_timeline_style_notice">Cronologia: %1$s. Pots canviar-ho quan vulguis a Configuració.</string>
     <string name="session_chat_branch_copied">S\'ha copiat el nom de la branca</string>
     <string name="session_chat_follow_up_switched_steer">S\'ha canviat a Redirigeix</string>
-    <string name="session_chat_follow_up_switched_queue">S\'ha canviat a En cua</string>
+    <string name="session_chat_follow_up_switched_queue">S\'ha canviat a Cua</string>
     <string name="session_chat_failure_retry_after_seconds">Torna-ho a provar d\'aquí a %1$d s</string>
     <string name="session_chat_failure_retry_after_minutes">Torna-ho a provar d\'aquí a %1$d min</string>
     <string name="component_outgoing_message_pending_caption">Pendent · s\'envia al pas següent</string>
@@ -1104,7 +1104,7 @@
     <string name="session_chat_sheet_timeline_style_picker_title">Novetat: tria la teva cronologia</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Aquesta actualització afegeix noves maneres de seguir què fa l\'agent.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">Pots canviar-ho quan vulguis a Configuració → Estil de la cronologia.</string>
-    <string name="session_chat_sheet_timeline_style_picker_use">Usa %1$s</string>
+    <string name="session_chat_sheet_timeline_style_picker_use">Utilitza %1$s</string>
     <string name="session_chat_sheet_timeline_style_picker_recommended">Recomanat</string>
     <string name="session_chat_sheet_timeline_style_picker_current">Actual</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_title">Estàndard</string>
@@ -1232,7 +1232,7 @@
     </plurals>
     <string name="settings_send_feedback_title">Envia comentaris</string>
     <string name="settings_send_feedback_subtitle">Informa d\'un error o comparteix una idea</string>
-    <string name="settings_hide_user_directory_title">Amaga el directori d\'usuari</string>
+    <string name="settings_hide_user_directory_title">Amaga la carpeta d\'usuari</string>
     <string name="settings_hide_user_directory_subtitle">Mostra ~/Projects/… en lloc de /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">Finestra de recents</string>
     <string name="settings_recent_window_message">Les sessions es mantenen a Recents mentre estan en execució o a punt, o si s\'han actualitzat dins d\'aquesta finestra.</string>
@@ -1272,9 +1272,9 @@
     <string name="settings_clear_session_cache_dialog_title">Vols esborrar la memòria cau de sessions?</string>
     <string name="settings_clear_session_cache_dialog_message">Elimina les sessions i els missatges en memòria cau. La connexió i les credencials es mantenen.</string>
     <string name="settings_clear">Esborra</string>
-    <string name="settings_app_lock_title">Bloqueig de l\'app</string>
-    <string name="settings_app_lock_subtitle_available">Demana l\'empremta, la cara o el bloqueig de pantalla quan l\'app torna des del segon pla</string>
-    <string name="settings_app_lock_subtitle_unavailable">Configura un bloqueig de pantalla en aquest dispositiu per usar el bloqueig de l\'app</string>
+    <string name="settings_app_lock_title">Bloqueig de l\'aplicació</string>
+    <string name="settings_app_lock_subtitle_available">Demana l\'empremta, la cara o el bloqueig de pantalla quan l\'aplicació torna des del segon pla</string>
+    <string name="settings_app_lock_subtitle_unavailable">Configura un bloqueig de pantalla en aquest dispositiu per utilitzar el bloqueig de l\'aplicació</string>
     <string name="settings_privacy_policy_title">Política de privadesa</string>
     <string name="settings_privacy_policy_subtitle">Com tracten les dades les apps</string>
     <string name="settings_analytics_title">Analítiques i informes d\'errors</string>
@@ -1325,7 +1325,7 @@
     <string name="diagnostics_share">Comparteix</string>
     <string name="diagnostics_export_window_title">Finestra d\'exportació</string>
     <string name="diagnostics_export_sheet_title">Exporta els registres de diagnòstic</string>
-    <string name="diagnostics_share_via_apps">Comparteix amb altres apps</string>
+    <string name="diagnostics_share_via_apps">Comparteix amb altres aplicacions</string>
     <string name="diagnostics_save_to_files">Desa a Fitxers</string>
     <string name="diagnostics_clear_dialog_title">Vols esborrar els registres de diagnòstic?</string>
     <string name="diagnostics_clear_dialog_message">Això elimina el registre de diagnòstic emmagatzemat.</string>
@@ -1394,18 +1394,18 @@
     <string name="feedback_kind_idea">Idea</string>
     <string name="feedback_placeholder_bug">Què ha passat? Què t\'esperaves?</string>
     <string name="feedback_placeholder_idea">Què faria millor OpenCode per a tu?</string>
-    <string name="feedback_privacy_note">Només arriba a l\'equip d\'OpenCode Mobile. Mai inclou l\'adreça del servidor, el nom d\'usuari ni la contrasenya. Els registres s\'anonimitzen en aquest telèfon.</string>
+    <string name="feedback_privacy_note">Només arriba a l\'equip d\'OpenCode Mobile. Mai inclou l\'adreça del servidor, el nom d\'usuari ni la contrasenya. Les dades sensibles dels registres s\'oculten en aquest telèfon.</string>
     <string name="feedback_error_offline">No tens connexió. L\'informe es conserva aquí; torna-ho a provar quan estiguis connectat.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">Acabes d\'enviar un informe. Torna-ho a provar d\'aquí a %1$d s.</item>
         <item quantity="many">Acabes d\'enviar un informe. Torna-ho a provar d\'aquí a %1$d s.</item>
         <item quantity="other">Acabes d\'enviar un informe. Torna-ho a provar d\'aquí a %1$d s.</item>
     </plurals>
-    <string name="feedback_error_unverified">No s\'ha pogut verificar aquesta còpia de l\'app. Els informes només es poden enviar des d\'una instal·lació de l\'App Store, TestFlight o Google Play.</string>
+    <string name="feedback_error_unverified">No s\'ha pogut verificar aquesta còpia de l\'aplicació. Els informes només es poden enviar des d\'una instal·lació de l\'App Store, TestFlight o Google Play.</string>
     <string name="feedback_error_failed">No s\'ha pogut enviar l\'informe.</string>
     <string name="feedback_action_try_again">Torna-ho a provar</string>
     <string name="feedback_action_share_instead">Comparteix-lo</string>
-    <string name="feedback_undo">Desfer</string>
+    <string name="feedback_undo">Desfés</string>
     <string name="feedback_done">Fet</string>
     <string name="feedback_add_attachment">Afegeix un adjunt</string>
     <string name="feedback_dictate">Dicta</string>
@@ -1631,7 +1631,7 @@
     <string name="component_composer_hide_question">Amaga la pregunta</string>
     <string name="live_updates_status_connecting">connectant</string>
     <string name="dictation_model_queued_detail">%1$s ha posat la baixada en cua. Pot esperar a tenir Wi-Fi, càrrega o espai lliure. Torna-ho a comprovar d\'aquí a uns minuts.</string>
-    <string name="dictation_model_not_installed_detail">El dictat funciona en aquest dispositiu, així que la teva veu no es puja mai enlloc. %1$s baixa el model una sola vegada i el conserva per a totes les apps.</string>
+    <string name="dictation_model_not_installed_detail">El dictat funciona en aquest dispositiu, així que la teva veu no es puja mai enlloc. %1$s baixa el model una sola vegada i el conserva per a totes les aplicacions.</string>
     <string name="component_outgoing_message_shows_actions_hint">Mostra les accions del missatge</string>
     <string name="component_activity_status_stopped">aturada</string>
     <string name="dictation_action_try_again">Torna-ho a provar</string>
@@ -1774,7 +1774,7 @@
         <item quantity="other">fa %1$d min</item>
     </plurals>
     <string name="component_composer_request_position">%1$d de %2$d</string>
-    <string name="component_composer_side_question_placeholder">Pregunta apart, no s\'afegeix al xat</string>
+    <string name="component_composer_side_question_placeholder">Pregunta addicional, no s\'afegeix al xat</string>
     <string name="session_list_worktree_empty_every_project">Esborra el filtre per veure tots els projectes.</string>
     <string name="component_image_viewer_could_not_load_named">No s\'ha pogut carregar %1$s</string>
     <string name="component_composer_select_up_to">Selecciona fins a %1$d</string>

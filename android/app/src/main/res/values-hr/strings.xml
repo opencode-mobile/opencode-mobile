@@ -9,7 +9,7 @@
     <string name="top_bar_back">Natrag</string>
     <string name="common_cancel">Otkaži</string>
     <string name="common_remove">Ukloni</string>
-    <string name="common_loading_sessions">Učitavanje sjednica</string>
+    <string name="common_loading_sessions">Učitavanje sesija</string>
     <string name="common_checking_server">Provjera poslužitelja…</string>
     <string name="connection_setup_title_first">Poveži se s poslužiteljem</string>
     <string name="connection_setup_title_add">Dodaj poslužitelj</string>
@@ -53,9 +53,9 @@
     <string name="connection_setup_pair_again_unreachable">Spremljena adresa nije dostupna. Upari ponovno.</string>
     <string name="connection_setup_pair_again_unauthorized">Ovaj poslužitelj odbio je spremljenu prijavu. Upari ponovno. Nova lozinka odjavljuje sve uređaje.</string>
     <string name="connection_cleartext_title">Veza nije šifrirana</string>
-    <string name="connection_cleartext_message_one_host">%1$s koristi običan http izvan lokalne mreže ili Tailscalea. Lozinka poslužitelja i sve u tvojim sjednicama putovali bi nešifrirano. Radije koristi https, VPN ili tunel.</string>
-    <string name="connection_cleartext_message_hosts">%1$s koriste običan http izvan lokalne mreže ili Tailscalea. Lozinka poslužitelja i sve u tvojim sjednicama putovali bi nešifrirano. Radije koristi https, VPN ili tunel.</string>
-    <string name="connection_cleartext_message_this_address">Ova adresa koristi običan http izvan lokalne mreže ili Tailscalea. Lozinka poslužitelja i sve u tvojim sjednicama putovali bi nešifrirano. Radije koristi https, VPN ili tunel.</string>
+    <string name="connection_cleartext_message_one_host">%1$s koristi običan http izvan lokalne mreže ili Tailscalea. Lozinka poslužitelja i sve u tvojim sesijama putovali bi nešifrirano. Radije koristi https, VPN ili tunel.</string>
+    <string name="connection_cleartext_message_hosts">%1$s koriste običan http izvan lokalne mreže ili Tailscalea. Lozinka poslužitelja i sve u tvojim sesijama putovali bi nešifrirano. Radije koristi https, VPN ili tunel.</string>
+    <string name="connection_cleartext_message_this_address">Ova adresa koristi običan http izvan lokalne mreže ili Tailscalea. Lozinka poslužitelja i sve u tvojim sesijama putovali bi nešifrirano. Radije koristi https, VPN ili tunel.</string>
     <string name="connection_cleartext_connect_anyway">Ipak se poveži</string>
     <string name="connection_error_invalid_qr">Ovo nije QR za uparivanje OpenCodea 2</string>
     <string name="connection_error_localhost_qr">Taj QR sadrži samo localhost adresu</string>
@@ -90,11 +90,11 @@
     <string name="onboarding_connect_page_body">Usmjeri aplikaciju na opencode poslužitelj na svom računalu. Preporučujemo Tailscale kako bi mu telefon mogao sigurno pristupiti odasvud.</string>
     <string name="onboarding_connect_page_setup_link">Prvo trebaš poslužitelj?</string>
     <string name="onboarding_features_title">Što sve možeš\nodavde</string>
-    <string name="onboarding_features_sessions_title">Sjednice</string>
-    <string name="onboarding_features_sessions_detail">Popis, otvaranje, izrada, preimenovanje, grananje, arhiviranje, brisanje</string>
+    <string name="onboarding_features_sessions_title">Sesije</string>
+    <string name="onboarding_features_sessions_detail">Popis, otvaranje, izrada, preimenovanje, račvanje, arhiviranje, brisanje</string>
     <string name="onboarding_features_chat_title">Chat i prekid</string>
     <string name="onboarding_features_chat_detail">Pošalji upite i zaustavi posao u tijeku</string>
-    <string name="onboarding_features_permissions_title">Dozvole</string>
+    <string name="onboarding_features_permissions_title">Dopuštenja</string>
     <string name="onboarding_features_permissions_detail">Odobri ili odbij zahtjeve (bez trajnog pamćenja)</string>
     <string name="onboarding_features_changes_title">Promjene</string>
     <string name="onboarding_features_changes_detail">Pregledaj diffove sesije</string>
@@ -208,8 +208,8 @@
     <string name="servers_add">Dodaj poslužitelj</string>
     <string name="servers_edit_profile">Uredi %1$s</string>
     <string name="servers_remove_dialog_title_named">Ukloniti „%1$s”?</string>
-    <string name="servers_remove_dialog_message">Ovaj uređaj zaboravlja spremljenu vezu s poslužiteljem. Sjednice ostaju na tom poslužitelju. Ako je to aktivni poslužitelj, odabrat ćeš drugi ili ćeš doći na zaslon Poveži se ako nijedan ne ostane.</string>
-    <string name="common_retry">Pokušaj ponovo</string>
+    <string name="servers_remove_dialog_message">Ovaj uređaj zaboravlja spremljenu vezu s poslužiteljem. Sesije ostaju na tom poslužitelju. Ako je to aktivni poslužitelj, odabrat ćeš drugi ili ćeš doći na zaslon Poveži se ako nijedan ne ostane.</string>
+    <string name="common_retry">Pokušaj ponovno</string>
     <string name="common_save">Spremi</string>
     <string name="common_delete">Izbriši</string>
     <string name="common_edit">Uredi</string>
@@ -219,7 +219,7 @@
     <string name="common_settings">Postavke</string>
     <string name="common_terminal">Terminal</string>
     <string name="common_selected">Odabrano</string>
-    <string name="home_sessions_title">Sjednice</string>
+    <string name="home_sessions_title">Sesije</string>
     <string name="home_servers_sheet_using_now">Trenutno u upotrebi</string>
     <string name="home_servers_sheet_switch_to">Prebaci na</string>
     <string name="home_servers_sheet_manage">Upravljaj u postavkama</string>
@@ -233,9 +233,9 @@
     <string name="home_probe_failed_message">Povezivanje nije uspjelo.</string>
     <string name="home_probe_failed_edit_connection">Uredi vezu</string>
     <string name="home_error_load_projects">Projekte nije moguće učitati</string>
-    <string name="home_error_project_load_failed">Sjednice nije moguće učitati</string>
+    <string name="home_error_project_load_failed">Sesije nije moguće učitati</string>
     <string name="home_remove_project_title">Ukloniti s početnog zaslona?</string>
-    <string name="home_remove_project_message">Ukloniti „%1$s” s početnog zaslona? Njegove sjednice ostaju na poslužitelju.</string>
+    <string name="home_remove_project_message">Ukloniti „%1$s” s početnog zaslona? Njegove sesije ostaju na poslužitelju.</string>
     <string name="home_snackbar_removed">„%1$s” uklonjen s početnog zaslona</string>
     <string name="home_snackbar_already_on_home">„%1$s” je već na početnom zaslonu</string>
     <string name="home_snackbar_joined_project">Isti repozitorij kao %1$s. Prikazan je tamo kao worktree.</string>
@@ -249,13 +249,13 @@
     <string name="home_main_checkout">glavni checkout</string>
     <plurals name="home_worktree_count">
         <item quantity="one">%1$d worktree</item>
-        <item quantity="few">%1$d worktree</item>
-        <item quantity="other">%1$d worktree</item>
+        <item quantity="few">%1$d worktreea</item>
+        <item quantity="other">%1$d worktreeova</item>
     </plurals>
     <plurals name="home_all_worktrees">
         <item quantity="one">Svih %1$d worktree</item>
-        <item quantity="few">Svih %1$d worktree</item>
-        <item quantity="other">Svih %1$d worktree</item>
+        <item quantity="few">Svih %1$d worktreea</item>
+        <item quantity="other">Svih %1$d worktreeova</item>
     </plurals>
     <plurals name="home_running_count">
         <item quantity="one">%1$d aktivno</item>
@@ -268,9 +268,9 @@
         <item quantity="other">Prikaži svih %1$d</item>
     </plurals>
     <string name="home_show_fewer">Prikaži manje</string>
-    <string name="home_show_worktrees">Prikaži worktree projekta %1$s</string>
-    <string name="home_hide_worktrees">Sakrij worktree projekta %1$s</string>
-    <string name="home_reorder_note">Povuci za promjenu redoslijeda. Worktree ostaju uz svoj projekt.</string>
+    <string name="home_show_worktrees">Prikaži worktreeove projekta %1$s</string>
+    <string name="home_hide_worktrees">Sakrij worktreeove projekta %1$s</string>
+    <string name="home_reorder_note">Povuci za promjenu redoslijeda. Worktreeovi ostaju uz svoj projekt.</string>
     <string name="home_session_actions_title">Radnje sesije</string>
     <string name="home_session_actions_rename">Preimenuj sesiju</string>
     <string name="home_session_actions_fork">Račvaj sesiju</string>
@@ -291,7 +291,7 @@
     <string name="home_session_error_request_failed">Zahtjev nije uspio</string>
     <string name="home_session_error_unreadable_response">Odgovor poslužitelja nije moguće pročitati</string>
     <string name="home_session_error_generic">Nešto je pošlo po zlu</string>
-    <string name="archived_sessions_title">Arhivirane sjednice</string>
+    <string name="archived_sessions_title">Arhivirane sesije</string>
     <string name="home_menu_archived_count">%1$d u %2$s</string>
     <string name="archived_sessions_section_this_week">Ovaj tjedan</string>
     <string name="archived_sessions_section_earlier">Ranije</string>
@@ -301,8 +301,8 @@
     <string name="archived_sessions_archived_at">Arhivirano %1$s</string>
     <string name="archived_sessions_unarchived">Sesija „%1$s” vraćena iz arhive</string>
     <string name="archived_sessions_undo">Poništi</string>
-    <string name="archived_sessions_empty_title">Nema arhiviranih sjednica</string>
-    <string name="archived_sessions_empty_message">Sjednice koje arhiviraš u %1$s pojavit će se ovdje.</string>
+    <string name="archived_sessions_empty_title">Nema arhiviranih sesija</string>
+    <string name="archived_sessions_empty_message">Sesije koje arhiviraš u %1$s pojavit će se ovdje.</string>
     <string name="archived_sessions_show_all_projects">Prikaži sve projekte</string>
     <string name="archived_sessions_footer">Dodirni sesiju za više opcija. Vraćanje iz arhive vraća je na početnu.</string>
     <string name="archived_sessions_load_failed">Učitavanje arhiviranih sjednica nije uspjelo.</string>
@@ -349,10 +349,10 @@
     <string name="worktree_run_in_subtitle">Stvori checkout i počni u njemu</string>
     <string name="worktree_move_subtitle">Stvori checkout i prijeđi u njega</string>
     <string name="worktree_needs_v2">Potreban je opencode v2 poslužitelj</string>
-    <string name="worktree_turn_on">Uključi Worktree u Postavkama</string>
+    <string name="worktree_turn_on">Uključi Worktreeove u Postavkama</string>
     <string name="worktree_not_git">Potreban je git repozitorij</string>
     <string name="worktree_no_commit">Potreban je git repozitorij s commitom</string>
-    <string name="worktree_unsupported">Ovaj poslužitelj ne može stvarati worktree</string>
+    <string name="worktree_unsupported">Ovaj poslužitelj ne može stvarati worktreeove</string>
     <string name="worktree_form_title">Novi worktree</string>
     <string name="worktree_name">Naziv</string>
     <string name="worktree_branch">Grana</string>
@@ -389,7 +389,7 @@
     <string name="files_loading_title">Učitavanje datoteka</string>
     <string name="files_loading_subtitle">Dohvaćanje mape…</string>
     <string name="files_folder_error">Mapu nije moguće učitati</string>
-    <string name="files_retry">Pokušaj ponovo</string>
+    <string name="files_retry">Pokušaj ponovno</string>
     <string name="files_empty_folder">Prazna mapa</string>
     <string name="files_empty_project">Ovaj projekt nema datoteka za prikaz.</string>
     <string name="files_ignored">zanemareno</string>
@@ -397,7 +397,7 @@
     <string name="files_find_error">Pretraživanje datoteka nije uspjelo</string>
     <string name="files_find_no_match">Nema datoteka za „%1$s”</string>
     <string name="files_find_no_match_detail">Pretraživanje na poslužitelju preskače zanemarene mape.</string>
-    <string name="files_error_check_server_connection">Provjeri vezu s poslužiteljem i pokušaj ponovo.</string>
+    <string name="files_error_check_server_connection">Provjeri vezu s poslužiteljem i pokušaj ponovno.</string>
     <string name="files_error_server_status">Poslužitelj je odgovorio s %1$d.</string>
     <string name="files_no_file_title">Otvori datoteku iz stabla</string>
     <string name="files_no_file_message">Otvorene datoteke ostaju kao kartice</string>
@@ -457,7 +457,7 @@
     <string name="terminal_connect_failed_title">Povezivanje nije uspjelo</string>
     <string name="terminal_connect_failed_message">Pokretanje shella za ovaj projekt nije uspjelo.</string>
     <string name="terminal_exited">Shell je završio</string>
-    <string name="terminal_retry">Pokušaj ponovo</string>
+    <string name="terminal_retry">Pokušaj ponovno</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
     <string name="terminal_key_tab">Tab</string>
@@ -494,7 +494,7 @@
     <string name="session_chat_attachment_source_photos">Fotografije</string>
     <string name="session_chat_attachment_source_media">Mediji</string>
     <string name="session_chat_attachment_source_files">Datoteke</string>
-    <string name="session_chat_attachment_source_log_file">Datoteka dnevnika</string>
+    <string name="session_chat_attachment_source_log_file">Datoteka zapisa</string>
     <string name="session_chat_commands_title">Naredbe</string>
     <string name="session_chat_commands_mcp_title">MCP poslužitelji</string>
     <string name="session_chat_commands_back">Natrag na naredbe</string>
@@ -569,12 +569,12 @@
     </plurals>
     <string name="attachment_drop_some_skipped">Neke će biti preskočene</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
-    <string name="session_chat_activity_review_permission">Pregledaj dozvolu</string>
-    <string name="session_chat_activity_review_permission_request">Pregledaj zahtjev za dozvolu</string>
+    <string name="session_chat_activity_review_permission">Pregledaj dopuštenje</string>
+    <string name="session_chat_activity_review_permission_request">Pregledaj zahtjev za dopuštenje</string>
     <string name="session_chat_activity_answer_question">Odgovori na pitanje</string>
     <string name="session_chat_activity_request_failed">Zahtjev nije uspio</string>
-    <string name="session_chat_activity_btw_failed">/btw nije uspio · Pokušaj ponovo</string>
-    <string name="session_chat_activity_btw_failed_count">/btw nije uspio ×%1$d · Pokušaj ponovo</string>
+    <string name="session_chat_activity_btw_failed">/btw nije uspio · Pokušaj ponovno</string>
+    <string name="session_chat_activity_btw_failed_count">/btw nije uspio ×%1$d · Pokušaj ponovno</string>
     <string name="session_chat_activity_btw_ready">Odgovor na /btw je spreman</string>
     <string name="session_chat_activity_btw_ready_count">Odgovor na /btw je spreman ×%1$d</string>
     <plurals name="session_chat_activity_queued">
@@ -609,7 +609,7 @@
     <string name="session_chat_activity_action_open_request">Otvori zahtjev</string>
     <string name="session_chat_activity_action_open_background_work">Otvori pozadinski rad</string>
     <string name="session_chat_activity_action_show_in_chat">Prikaži u chatu</string>
-    <string name="session_chat_activity_action_retry">Pokušaj ponovo</string>
+    <string name="session_chat_activity_action_retry">Pokušaj ponovno</string>
     <string name="session_chat_activity_action_open">Otvori</string>
     <string name="session_chat_activity_action_open_up_next">Otvori Sljedeće</string>
     <string name="session_chat_activity_action_show_thought">Prikaži razmišljanje</string>
@@ -636,7 +636,7 @@
         <item quantity="few">Pomakni na kraj, %1$d nove poruke</item>
         <item quantity="other">Pomakni na kraj, %1$d novih poruka</item>
     </plurals>
-    <string name="home_error_reconnect_to_create">Ponovo se poveži za izradu sesije</string>
+    <string name="home_error_reconnect_to_create">Ponovno se poveži za izradu sesije</string>
     <string name="timeline_state_creating_title">Pokretanje sesije…</string>
     <string name="timeline_state_creating_subtitle">Izrada na poslužitelju…</string>
     <string name="new_session_title">Nova sesija</string>
@@ -661,14 +661,14 @@
     <string name="timeline_state_loading_subtitle">Dohvaćanje vremenske crte…</string>
     <string name="timeline_state_error_title">Poruke se ne mogu učitati</string>
     <string name="timeline_state_error_fallback">Vremenska crta se nije učitala.</string>
-    <string name="timeline_state_retry">Pokušaj ponovo</string>
+    <string name="timeline_state_retry">Pokušaj ponovno</string>
     <string name="timeline_state_empty">Još nema poruka. Pošalji upit za početak.</string>
     <string name="timeline_state_refreshing">Osvježavanje poruka</string>
     <string name="timeline_message_assistant">Poruka asistenta</string>
     <string name="timeline_message_actions_hint_long_press">Dugo pritisni za radnje s porukom</string>
     <string name="timeline_message_actions_hint">Prikazuje radnje s porukom</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
-    <string name="timeline_failure_copy">Kopirati</string>
+    <string name="timeline_failure_copy">Kopiraj</string>
     <string name="timeline_retry_retrying_in">ponovni pokušaj za %1$d s</string>
     <string name="timeline_retry_attempt_retrying_in">pokušaj %1$d, ponovno za %2$d s</string>
     <plurals name="timeline_background_work_subagent_count">
@@ -834,7 +834,7 @@
     <string name="tool_error_failed">Neuspjelo</string>
     <string name="tool_error_exit_code">Završeno s izlaznim kodom %1$d</string>
     <string name="tool_status_declined">Odbijeno</string>
-    <string name="tool_user_note">Tvoja bilješka: %1$s</string>
+    <string name="tool_user_note">Tvoja napomena: %1$s</string>
     <string name="tool_status_stopped">Zaustavljeno</string>
     <string name="tool_placeholder_writing_command">Pisanje naredbe…</string>
     <string name="tool_placeholder_preparing_read">Priprema čitanja…</string>
@@ -1017,7 +1017,7 @@
     <string name="session_chat_goal_waiting_shell">Čeka se da završi pozadinski shell: %1$s. Pauzira se ako ništa ne radi %2$d min.</string>
     <string name="session_chat_goal_waiting_subagent">Čeka se da subagent završi. Pauzira se ako ništa ne radi %1$d min.</string>
     <string name="session_chat_goal_waiting_on_you">Čeka tebe</string>
-    <string name="session_chat_goal_waiting_permission">Zahtjev za dozvolu je otvoren. Cilj se nastavlja kad odgovoriš.</string>
+    <string name="session_chat_goal_waiting_permission">Zahtjev za dopuštenje je otvoren. Cilj se nastavlja kad odgovoriš.</string>
     <string name="session_chat_goal_waiting_question">Pitanje je otvoreno. Cilj se nastavlja kad odgovoriš.</string>
     <string name="session_chat_goal_evidence">Dokaz</string>
     <string name="session_chat_goal_reconnecting">Ponovno povezivanje. Prikazan je zadnji poznati cilj.</string>
@@ -1056,8 +1056,8 @@
     <string name="session_chat_goal_pause_failed_reason">Cilj nije moguće pauzirati: %1$s</string>
     <string name="session_chat_goal_resume_failed">Cilj nije moguće nastaviti</string>
     <string name="session_chat_goal_resume_failed_reason">Cilj nije moguće nastaviti: %1$s</string>
-    <string name="session_chat_goal_clear_failed">Cilj nije moguće ukloniti</string>
-    <string name="session_chat_goal_clear_failed_reason">Cilj nije moguće ukloniti: %1$s</string>
+    <string name="session_chat_goal_clear_failed">Cilj nije moguće očistiti</string>
+    <string name="session_chat_goal_clear_failed_reason">Cilj nije moguće očistiti: %1$s</string>
     <string name="session_chat_timeline_style_notice">Vremenska crta: %1$s. Promijeni je bilo kada u Postavkama.</string>
     <string name="session_chat_branch_copied">Naziv grane kopiran</string>
     <string name="session_chat_follow_up_switched_steer">Prebačeno na Usmjeri</string>
@@ -1147,7 +1147,7 @@
     <string name="session_chat_sheet_shell_stop">Zaustavi shell</string>
     <string name="session_chat_sheet_shell_stopping">Zaustavljanje…</string>
     <string name="session_chat_sheet_background_work_title">Rad u pozadini</string>
-    <string name="session_chat_sheet_background_work_subagents">Podagenti</string>
+    <string name="session_chat_sheet_background_work_subagents">Subagenti</string>
     <string name="session_chat_sheet_background_work_shells">Shellovi</string>
     <string name="session_chat_sheet_background_work_tab_running">U tijeku</string>
     <string name="session_chat_sheet_background_work_tab_done">Gotovo</string>
@@ -1185,7 +1185,7 @@
     <string name="session_context_load_failed_message">Kontekst se nije učitao.</string>
     <string name="session_context_refresh_failed">Kontekst sesije nije moguće osvježiti</string>
     <string name="session_context_refreshing">Osvježavanje konteksta sesije</string>
-    <string name="session_context_retry">Pokušaj ponovo</string>
+    <string name="session_context_retry">Pokušaj ponovno</string>
     <string name="session_context_stat_session">Sesija</string>
     <string name="session_context_stat_messages">Poruke</string>
     <string name="session_context_stat_provider">Pružatelj usluga</string>
@@ -1232,7 +1232,7 @@
     </plurals>
     <string name="settings_send_feedback_title">Pošalji povratnu informaciju</string>
     <string name="settings_send_feedback_subtitle">Prijavi grešku ili podijeli ideju</string>
-    <string name="settings_hide_user_directory_title">Sakrij korisnički direktorij</string>
+    <string name="settings_hide_user_directory_title">Sakrij korisničku mapu</string>
     <string name="settings_hide_user_directory_subtitle">Prikaži ~/Projects/… umjesto /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">Razdoblje nedavnih</string>
     <string name="settings_recent_window_message">Sesije ostaju u Nedavnima dok su u tijeku ili spremne, odnosno ako su ažurirane unutar ovog razdoblja.</string>
@@ -1350,7 +1350,7 @@
     <string name="appearance_preview_light">Svijetla</string>
     <string name="appearance_preview_dark">Tamna</string>
     <string name="appearance_preview_sample_message">Prođi kroz spremište tokena.</string>
-    <string name="appearance_preview_sample_reply">Osvježavam jednom, zatim ponovo pokušavam.</string>
+    <string name="appearance_preview_sample_reply">Osvježava se jednom, zatim se pokušava ponovno.</string>
     <string name="appearance_more_options">Više opcija</string>
     <string name="appearance_reset_text_sizes">Vrati veličine teksta</string>
     <string name="appearance_reset_all">Vrati sav izgled</string>
@@ -1506,8 +1506,8 @@
     <string name="changes_source_menu_selected">%1$s, odabrano</string>
     <string name="changes_source_working_tree_name">Git promjene</string>
     <string name="changes_source_working_tree_empty_title">Nema Git promjena</string>
-    <string name="changes_source_working_tree_empty_message">Radno stablo nema nespremljenih promjena.</string>
-    <string name="changes_source_last_turn_name">Promjene zadnjeg koraka</string>
+    <string name="changes_source_working_tree_empty_message">Radno stablo nema necommitanih promjena.</string>
+    <string name="changes_source_last_turn_name">Promjene zadnjeg poteza</string>
     <plurals name="changes_other_source_working_tree">
         <item quantity="one">Git promjene imaju %1$d promijenjenu datoteku.</item>
         <item quantity="few">Git promjene imaju %1$d promijenjene datoteke.</item>
@@ -1529,7 +1529,7 @@
     <string name="changes_error_title">Promjene se ne mogu učitati</string>
     <string name="changes_error_fallback">Promjene nisu učitane.</string>
     <string name="changes_error_request_failed">Zahtjev nije uspio</string>
-    <string name="changes_error_turn_moved_folders">Ovaj je korak premjestio mape pa se njegove promjene ne mogu prikazati zajedno.</string>
+    <string name="changes_error_turn_moved_folders">Ovaj je potez premjestio mape pa se njegove promjene ne mogu prikazati zajedno.</string>
     <string name="changes_refresh_failed">Osvježavanje nije uspjelo: %1$s</string>
     <string name="changes_filter_hint">Filtriraj</string>
     <string name="changes_filter_accessibility_label">Filtriraj promijenjene datoteke</string>
@@ -1583,7 +1583,7 @@
     <string name="component_reasoning_row_duration_minutes_seconds">%1$d min %2$d s</string>
     <string name="component_reasoning_row_duration_hours_minutes">%1$d h %2$d min</string>
     <string name="component_reasoning_row_shows_thought_hint">Prikazuje cijelo razmišljanje</string>
-    <string name="component_unified_diff_row_kind_hunk">blok izmjena</string>
+    <string name="component_unified_diff_row_kind_hunk">blok promjena</string>
     <string name="component_unified_diff_row_kind_metadata">metapodaci</string>
     <string name="component_unified_diff_row_kind_context">kontekst</string>
     <string name="component_unified_diff_row_kind_addition">dodavanje</string>
@@ -1610,7 +1610,7 @@
     <string name="component_filter_tabs_unseen">novo</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Jučer</string>
-    <string name="component_composer_reverting_title">Poništavanje ove poruke</string>
+    <string name="component_composer_reverting_title">Vraćanje ove poruke</string>
     <string name="session_new_title">Nova sesija</string>
     <string name="session_list_dock_add_project">Dodaj projekt</string>
     <string name="theme_error_preset_not_found">Predložak teme nije pronađen</string>
@@ -1641,7 +1641,7 @@
     <string name="component_image_loading_label">%1$s, učitavanje</string>
     <string name="session_list_dock_new_session">Nova sesija</string>
     <string name="component_composer_always_allows">Uvijek dopušta: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">Izađi iz načina sporednog pitanja</string>
+    <string name="component_composer_leave_side_question_mode">Izađi iz načina usputnog pitanja</string>
     <string name="session_list_worktree_empty_other_projects">Očisti filtar da vidiš sesije u drugim projektima.</string>
     <string name="component_attachment_uploading">Prijenos…</string>
     <string name="component_composer_deny">Odbij</string>
@@ -1766,7 +1766,7 @@
     <string name="component_composer_allow_once">Dopusti jednom</string>
     <string name="session_list_worktree_empty_title">Nema sesija u ovom worktreeju</string>
     <string name="component_activity_card_opens_activity_hint">Otvara aktivnost</string>
-    <string name="dictation_speech_model">model govora</string>
+    <string name="dictation_speech_model">govorni model</string>
     <string name="session_list_dock_previous_project">Prethodni projekt</string>
     <plurals name="relative_time_minutes_ago">
         <item quantity="one">prije %1$d min</item>
@@ -1781,7 +1781,7 @@
     <string name="live_updates_status_live">uživo</string>
     <string name="component_image_viewer_could_not_load_this">Nije moguće učitati ovu sliku</string>
     <string name="component_image_viewer_could_not_load_full">Nije moguće učitati cijelu sliku</string>
-    <string name="component_image_viewer_retry">Pokušaj ponovo</string>
+    <string name="component_image_viewer_retry">Pokušaj ponovno</string>
     <string name="component_image_viewer_loading_full">Učitavanje cijele slike</string>
     <string name="session_list_worktree_empty_action">Očisti filtar</string>
     <string name="dictation_model_download_failed_detail">Provjeri vezu i slobodan prostor na uređaju pa pokušaj ponovo.</string>
@@ -1831,7 +1831,7 @@
     <string name="component_composer_side_question_mode_description">Način usputnog pitanja. Izađi iz načina usputnog pitanja</string>
     <string name="component_composer_abort">Prekini aktivni rad</string>
     <string name="component_server_address_scheme_button">Shema %1$s</string>
-    <string name="component_composer_open_subagent_session">Otvori sesiju podagenta</string>
+    <string name="component_composer_open_subagent_session">Otvori sesiju subagenta</string>
     <string name="component_composer_question_step">Korak %1$d od %2$d</string>
     <string name="share_feedback_subject_bug">Prijava greške u OpenCode Mobile</string>
     <string name="component_activity_card_opens_child_session_hint">Otvara podređenu sesiju</string>
@@ -1854,7 +1854,7 @@
     <string name="component_skeleton_illustration_unofficial">Neslužbeno</string>
     <string name="dictation_status_ready">Spremno za umetanje</string>
     <string name="dictation_starting">Pokretanje…</string>
-    <string name="dictation_language_speech_model">Model govora: %1$s</string>
+    <string name="dictation_language_speech_model">Govorni model: %1$s</string>
     <string name="component_reorderable_list_move_down">Pomakni dolje</string>
     <plurals name="component_section_header_item_count">
         <item quantity="one">%1$d stavka</item>
@@ -1893,12 +1893,12 @@
     <string name="worktrees_remove_title">Ukloniti worktree „%1$s”?</string>
     <string name="worktrees_remove_message">Briše %1$s na poslužitelju.</string>
     <plurals name="worktrees_remove_changes">
-        <item quantity="one">Izgubit će se %1$d promjena koja nije commitana.</item>
-        <item quantity="few">Izgubit će se %1$d promjene koje nisu commitane.</item>
-        <item quantity="other">Izgubit će se %1$d promjena koje nisu commitane.</item>
+        <item quantity="one">Izgubit će se %1$d necommitana promjena.</item>
+        <item quantity="few">Izgubit će se %1$d necommitane promjene.</item>
+        <item quantity="other">Izgubit će se %1$d necommitanih promjena.</item>
     </plurals>
-    <string name="worktrees_remove_changes_unknown">Promjene koje nisu commitane bit će izgubljene.</string>
-    <string name="worktrees_remove_changes_unchecked">Provjera promjena koje nisu commitane nije uspjela. Sve takve promjene bit će izgubljene.</string>
+    <string name="worktrees_remove_changes_unknown">Necommitane promjene bit će izgubljene.</string>
+    <string name="worktrees_remove_changes_unchecked">Provjera necommitanih promjena nije uspjela. Sve takve promjene bit će izgubljene.</string>
     <string name="worktrees_remove_sessions_stay">Sesije koje koriste ovaj worktree ostaju na početnom zaslonu, ali se ovdje više ne mogu pokretati.</string>
     <string name="worktrees_remove_confirm_anyway">Ipak ukloni</string>
     <string name="worktrees_blocked_title">Još nije moguće ukloniti „%1$s”</string>

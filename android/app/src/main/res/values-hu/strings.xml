@@ -38,7 +38,7 @@
     <string name="connection_setup_password_hint">Jelszó (nem kötelező)</string>
     <string name="connection_setup_password_help">Az alapértelmezett felhasználó: opencode. A jelszó nem kötelező.</string>
     <string name="connection_setup_pairing_code_hint">Párosítási kód</string>
-    <string name="connection_setup_pairing_code_help">A pair hivatkozásból. Egyszer használható, és 5 perc múlva lejár.</string>
+    <string name="connection_setup_pairing_code_help">A párosítási hivatkozásból. Egyszer használható, és 5 perc múlva lejár.</string>
     <string name="connection_setup_segment_password">Jelszó</string>
     <string name="connection_setup_segment_pairing_code">Párosítási kód</string>
     <string name="connection_setup_addresses_hint_tunnel_only">A távoli tunnel mentve. Nincs több választható elem. Addig marad, amíg ki nem kapcsolod a távoli hozzáférést.</string>
@@ -63,7 +63,7 @@
     <string name="connection_error_camera_unavailable">A kamera nem érhető el ezen az eszközön</string>
     <string name="connection_error_enter_host">Add meg a gazdagépet</string>
     <string name="connection_error_enter_pairing_code">Adj meg egy párosítási kódot</string>
-    <string name="connection_error_pairing_link_expired">Ez a párosítási link lejárt, vagy már felhasználták</string>
+    <string name="connection_error_pairing_link_expired">Ez a párosítási hivatkozás lejárt, vagy már felhasználták</string>
     <string name="connection_error_duplicate_profile">Ilyen gazdagéppel és felhasználónévvel már van mentett kiszolgáló</string>
     <string name="connection_error_qr_scan_failed">A QR nem csatlakozott. Az OpenCode 2 párosítási API-ja még változik, ezért a beolvasás akkor is hibázhat, ha az app működik. Add meg a gazdagépet, és csatlakozz. A jelszó nem kötelező. Párosítási kóddal is megy.</string>
     <string name="connection_error_unreachable">A kiszolgáló nem érhető el</string>
@@ -93,7 +93,7 @@
     <string name="onboarding_features_sessions_title">Munkamenetek</string>
     <string name="onboarding_features_sessions_detail">Listázás, megnyitás, létrehozás, átnevezés, elágaztatás, archiválás, törlés</string>
     <string name="onboarding_features_chat_title">Csevegés és leállítás</string>
-    <string name="onboarding_features_chat_detail">Promptok küldése és futó munka leállítása</string>
+    <string name="onboarding_features_chat_detail">Utasítások küldése és futó munka leállítása</string>
     <string name="onboarding_features_permissions_title">Engedélyek</string>
     <string name="onboarding_features_permissions_detail">Kérések jóváhagyása vagy megtagadása (a döntést nem jegyzi meg tartósan)</string>
     <string name="onboarding_features_changes_title">Változások</string>
@@ -115,7 +115,7 @@
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">Az OpenCode Mobile zárolva van</string>
     <string name="privacy_cover_unlock">Feloldás</string>
-    <string name="servers_title">Szerverek</string>
+    <string name="servers_title">Kiszolgálók</string>
     <plurals name="servers_profile_count">
         <item quantity="one">%1$d mentett kiszolgálókapcsolat</item>
         <item quantity="other">%1$d mentett kiszolgálókapcsolat</item>
@@ -294,7 +294,7 @@
     <string name="archived_sessions_unarchived">Visszaállítva: „%1$s”</string>
     <string name="archived_sessions_undo">Visszavonás</string>
     <string name="archived_sessions_empty_title">Nincs archivált munkamenet</string>
-    <string name="archived_sessions_empty_message">Az archivált munkamenetek itt jelennek meg. Hatókör: %1$s.</string>
+    <string name="archived_sessions_empty_message">A(z) %1$s alatt archivált munkamenetek itt jelennek meg.</string>
     <string name="archived_sessions_show_all_projects">Az összes projekt megjelenítése</string>
     <string name="archived_sessions_footer">Koppints egy munkamenetre a további lehetőségekért. A visszaállítás visszateszi a kezdőlapra.</string>
     <string name="archived_sessions_load_failed">Nem sikerült betölteni az archivált munkameneteket.</string>
@@ -455,7 +455,7 @@
     <string name="session_chat_loading">Munkamenet betöltése</string>
     <string name="session_chat_more_options">További lehetőségek</string>
     <string name="session_chat_menu_rename">Munkamenet átnevezése</string>
-    <string name="session_chat_menu_review_changes">Módosítások áttekintése</string>
+    <string name="session_chat_menu_review_changes">Változások áttekintése</string>
     <string name="session_chat_menu_fork">Munkamenet elágaztatása</string>
     <string name="session_chat_menu_browse_files">Fájlok böngészése</string>
     <string name="session_chat_menu_session_context">Munkamenet kontextusa</string>
@@ -483,7 +483,7 @@
     <string name="session_chat_attachment_source_files">Fájlok</string>
     <string name="session_chat_attachment_source_log_file">Naplófájl</string>
     <string name="session_chat_commands_title">Parancsok</string>
-    <string name="session_chat_commands_mcp_title">MCP-szerverek</string>
+    <string name="session_chat_commands_mcp_title">MCP-kiszolgálók</string>
     <string name="session_chat_commands_back">Vissza a parancsokhoz</string>
     <string name="session_chat_commands_new_label">Új</string>
     <string name="session_chat_commands_new_description">Új munkamenet indítása</string>
@@ -493,20 +493,20 @@
     <string name="session_chat_commands_undo_description">Utolsó üzenet visszavonása</string>
     <string name="session_chat_commands_redo_label">Újra</string>
     <string name="session_chat_commands_redo_description">Visszavont üzenet visszaállítása</string>
-    <string name="session_chat_commands_compact_label">Kompakt</string>
+    <string name="session_chat_commands_compact_label">Tömörítés</string>
     <string name="session_chat_commands_compact_description">Munkamenet-kontextus tömörítése</string>
     <string name="session_chat_commands_terminal_label">Terminál</string>
     <string name="session_chat_commands_terminal_description">A projekt shelljének megnyitása</string>
     <string name="session_chat_commands_files_label">Fájlok</string>
     <string name="session_chat_commands_files_description">Projektfájlok böngészése</string>
-    <string name="session_chat_commands_mcp_label">MCP-szerverek</string>
-    <string name="session_chat_commands_mcp_description">MCP-szerver állapotának megjelenítése</string>
+    <string name="session_chat_commands_mcp_label">MCP-kiszolgálók</string>
+    <string name="session_chat_commands_mcp_description">MCP-kiszolgáló állapotának megjelenítése</string>
     <string name="session_chat_commands_btw_label">Btw</string>
-    <string name="session_chat_commands_btw_description">Mellékes kérdés feltevése</string>
+    <string name="session_chat_commands_btw_description">Mellékkérdés feltevése</string>
     <string name="session_chat_suggestion_file">Fájl</string>
     <string name="session_chat_suggestion_no_matches">Nincs találat</string>
     <string name="session_chat_suggestion_no_commands">Nincs parancs</string>
-    <string name="session_chat_suggestion_badge_skill">ügyesség</string>
+    <string name="session_chat_suggestion_badge_skill">képesség</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
     <string name="session_chat_move_worktree_current">Jelenlegi worktree</string>
     <string name="session_chat_move_worktree_menu_title">Áthelyezés worktree-be…</string>
@@ -647,8 +647,8 @@
     <string name="timeline_retry_retrying_in">újrapróbálkozás %1$d mp múlva</string>
     <string name="timeline_retry_attempt_retrying_in">%1$d. kísérlet, újrapróbálkozás %2$d mp múlva</string>
     <plurals name="timeline_background_work_subagent_count">
-        <item quantity="one">%1$d subagent</item>
-        <item quantity="other">%1$d subagent</item>
+        <item quantity="one">%1$d alügynök</item>
+        <item quantity="other">%1$d alügynök</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
         <item quantity="one">%1$d shell</item>
@@ -659,8 +659,8 @@
     <string name="timeline_background_work_running_spoken">%1$s fut</string>
     <string name="timeline_background_work_agent_needs_input">%1$s beavatkozást kér</string>
     <plurals name="timeline_background_work_subagents_need_input">
-        <item quantity="one">%1$d subagent beavatkozást kér</item>
-        <item quantity="other">%1$d subagent beavatkozást kér</item>
+        <item quantity="one">%1$d alügynök beavatkozást kér</item>
+        <item quantity="other">%1$d alügynök beavatkozást kér</item>
     </plurals>
     <string name="timeline_background_work_needs_input_running">%1$s · %2$d fut</string>
     <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s fut</string>
@@ -687,7 +687,7 @@
     <string name="tool_title_plan">Terv</string>
     <string name="tool_title_edit">Szerkesztés</string>
     <string name="tool_title_write">Írás</string>
-    <string name="tool_title_skill">Ügyesség</string>
+    <string name="tool_title_skill">Képesség</string>
     <string name="tool_title_patch">Patch</string>
     <string name="tool_title_get_issue">Hibajegy lekérése</string>
     <string name="tool_title_save_issue">Hibajegy mentése</string>
@@ -743,8 +743,8 @@
         <item quantity="other">%1$d írás</item>
     </plurals>
     <plurals name="tool_count_skill">
-        <item quantity="one">%1$d ügyesség</item>
-        <item quantity="other">%1$d ügyesség</item>
+        <item quantity="one">%1$d képesség</item>
+        <item quantity="other">%1$d képesség</item>
     </plurals>
     <plurals name="tool_count_patch">
         <item quantity="one">%1$d patch</item>
@@ -815,9 +815,9 @@
     <string name="timeline_step_running_named">Futtatás: %1$s</string>
     <string name="timeline_step_ran_named">Futtatva: %1$s</string>
     <string name="timeline_step_ran_command">Parancs lefuttatva</string>
-    <string name="timeline_step_loading_skill">Ügyesség betöltése…</string>
-    <string name="timeline_step_loading_skill_named">Ügyesség betöltése: %1$s</string>
-    <string name="timeline_step_skill_named">Ügyesség: %1$s</string>
+    <string name="timeline_step_loading_skill">Képesség betöltése…</string>
+    <string name="timeline_step_loading_skill_named">Képesség betöltése: %1$s</string>
+    <string name="timeline_step_skill_named">Képesség: %1$s</string>
     <string name="timeline_step_thought_duration">Gondolkodás · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">Átvizsgálva — %1$s</string>
@@ -900,11 +900,11 @@
     <string name="session_chat_sheet_select_text_full_message_title">Teljes üzenet</string>
     <string name="session_chat_copy_too_long">Túl hosszú a másoláshoz. Jelölj ki inkább egy részt.</string>
     <string name="session_chat_sheet_message_actions_clip_label_code">Kód</string>
-    <string name="session_chat_sheet_mcp_loading_title">MCP-szerverek ellenőrzése</string>
+    <string name="session_chat_sheet_mcp_loading_title">MCP-kiszolgálók ellenőrzése</string>
     <string name="session_chat_sheet_mcp_loading_subtitle">Állapot lekérése az opencode kiszolgálóról</string>
-    <string name="session_chat_sheet_mcp_error_title">Nem sikerült betölteni az MCP-szervereket</string>
-    <string name="session_chat_sheet_mcp_error_message">Az MCP-szerverek listája nem töltődött be.</string>
-    <string name="session_chat_sheet_mcp_empty_title">Nincs MCP-szerver</string>
+    <string name="session_chat_sheet_mcp_error_title">Nem sikerült betölteni az MCP-kiszolgálókat</string>
+    <string name="session_chat_sheet_mcp_error_message">Az MCP-kiszolgálók listája nem töltődött be.</string>
+    <string name="session_chat_sheet_mcp_empty_title">Nincs MCP-kiszolgáló</string>
     <string name="session_chat_sheet_mcp_empty_message">Ezen az opencode kiszolgálón egy sincs beállítva.</string>
     <plurals name="session_chat_sheet_mcp_headline">
         <item quantity="one">%1$d/%2$d csatlakoztatva</item>
@@ -955,7 +955,7 @@
     </plurals>
     <string name="session_chat_goal_waiting">Várakozik</string>
     <string name="session_chat_goal_waiting_shell">Egy háttérben futó shell befejezésére: %1$s. Szünetel, ha %2$d percig nem fut semmi.</string>
-    <string name="session_chat_goal_waiting_subagent">Egy subagent befejezésére. Szünetel, ha %1$d percig nem fut semmi.</string>
+    <string name="session_chat_goal_waiting_subagent">Egy alügynök befejezésére. Szünetel, ha %1$d percig nem fut semmi.</string>
     <string name="session_chat_goal_waiting_on_you">Rád vár</string>
     <string name="session_chat_goal_waiting_permission">Egy engedélykérés nyitva van. A cél folytatódik, miután válaszolsz rá.</string>
     <string name="session_chat_goal_waiting_question">Egy kérdés nyitva van. A cél folytatódik, miután válaszolsz rá.</string>
@@ -1025,7 +1025,7 @@
     <string name="component_branch_pill_a11y_removed">%1$s, %2$d eltávolítva</string>
     <string name="session_chat_archive_failed">Nem sikerült archiválni a munkamenetet.</string>
     <string name="session_chat_delete_failed">Nem sikerült törölni a munkamenetet.</string>
-    <string name="session_chat_mcp_load_failed">Nem sikerült betölteni az MCP-szervereket. Ellenőrizd a kapcsolatot, és próbáld újra.</string>
+    <string name="session_chat_mcp_load_failed">Nem sikerült betölteni az MCP-kiszolgálókat. Ellenőrizd a kapcsolatot, és próbáld újra.</string>
     <string name="session_chat_create_failed">Nem sikerült létrehozni a munkamenetet</string>
     <string name="session_chat_send_timed_out">Nem sikerült elküldeni. Próbáld újra.</string>
     <string name="session_chat_shell_cannot_queue">A shell-parancsok nem állíthatók sorba. Válts Irányításra az azonnali futtatáshoz.</string>
@@ -1150,7 +1150,7 @@
     <string name="settings_section_session_cache">Munkamenet-gyorsítótár</string>
     <string name="settings_section_privacy">Adatvédelem</string>
     <string name="settings_section_about">Névjegy</string>
-    <string name="settings_servers_summary_none">Nincs mentett szerver</string>
+    <string name="settings_servers_summary_none">Nincs mentett kiszolgáló</string>
     <plurals name="settings_servers_summary_saved">
         <item quantity="one">%1$d mentve</item>
         <item quantity="other">%1$d mentve</item>
@@ -1181,9 +1181,9 @@
     <string name="settings_follow_up_title">Követő üzenet küldése</string>
     <string name="settings_follow_up_steer">Irányítás</string>
     <string name="settings_follow_up_queue">Sorba állítás</string>
-    <string name="settings_follow_up_subtitle_steer">Irányítás · Csak V2 szervereken. A V1 nem támogatja.</string>
-    <string name="settings_follow_up_subtitle_queue">Sorba állítás · Csak V2 szervereken. A V1 nem támogatja.</string>
-    <string name="settings_follow_up_unsupported">V1-en nem támogatott. Ez a szerver mindig azonnal küld.</string>
+    <string name="settings_follow_up_subtitle_steer">Irányítás · Csak V2 kiszolgálókon. A V1 nem támogatja.</string>
+    <string name="settings_follow_up_subtitle_queue">Sorba állítás · Csak V2 kiszolgálókon. A V1 nem támogatja.</string>
+    <string name="settings_follow_up_unsupported">V1-en nem támogatott. Ez a kiszolgáló mindig azonnal küld.</string>
     <string name="settings_worktrees_title">Worktree-k</string>
     <string name="settings_worktrees_subtitle">Az egyes projektek worktree-it és ágait mutatja a Kezdőlapon, az Új munkamenet gombot nyomva tartva pedig worktree-t választhatsz.</string>
     <string name="settings_session_rows_title">Munkamenet-sorok</string>
@@ -1297,7 +1297,7 @@
     <string name="appearance_text_size_default">Alapértelmezett</string>
     <string name="appearance_text_size_large">Nagy</string>
     <string name="appearance_text_size_extra_large">Extra nagy</string>
-    <string name="appearance_text_code_note">Terminál, Módosítások, a fájlmegjelenítő és az eszközkimenet.</string>
+    <string name="appearance_text_code_note">Terminál, Változások, a fájlmegjelenítő és az eszközkimenet.</string>
     <string name="appearance_text_session_chat_note">Az üzenetekben és a szerkesztőben lévő kódblokkok a Munkamenet-csevegés méretét követik.</string>
     <string name="appearance_sample_session_one">Az instabil bejelentkezési átirányítási teszt javítása</string>
     <string name="appearance_sample_session_two">Beállítások áthelyezése az új tárolóba</string>
@@ -1328,7 +1328,7 @@
     <string name="feedback_error_unverified">Az alkalmazás ezen példányát nem sikerült ellenőrizni. Jelentést csak App Store-, TestFlight- vagy Google Play-telepítésből lehet küldeni.</string>
     <string name="feedback_error_failed">A jelentést nem sikerült elküldeni.</string>
     <string name="feedback_action_try_again">Próbáld újra</string>
-    <string name="feedback_action_share_instead">Megosztás inkább</string>
+    <string name="feedback_action_share_instead">Megosztás helyette</string>
     <string name="feedback_undo">Visszavonás</string>
     <string name="feedback_done">Kész</string>
     <string name="feedback_add_attachment">Melléklet hozzáadása</string>
@@ -1405,7 +1405,7 @@
     <string name="keyboard_shortcuts_project">%1$d. projekt</string>
     <string name="keyboard_shortcuts_show_project">%1$s megjelenítése</string>
     <string name="keyboard_shortcuts_allow_once">Egyszeri engedélyezés</string>
-    <string name="keyboard_shortcuts_always_allow">Mindig engedélyez</string>
+    <string name="keyboard_shortcuts_always_allow">Engedélyezés mindig</string>
     <string name="keyboard_shortcuts_deny">Megtagadás</string>
     <string name="keyboard_shortcuts_deny_with_note">Megtagadás megjegyzéssel</string>
     <string name="keyboard_shortcuts_send_note">Megjegyzés küldése</string>
@@ -1520,7 +1520,7 @@
     <string name="component_filter_tabs_unseen">új</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Tegnap</string>
-    <string name="component_composer_reverting_title">Az üzenet visszavonása folyamatban</string>
+    <string name="component_composer_reverting_title">Az üzenet visszaállítása folyamatban</string>
     <string name="session_new_title">Új munkamenet</string>
     <string name="session_list_dock_add_project">Projekt hozzáadása</string>
     <string name="theme_error_preset_not_found">A téma előbeállítása nem található</string>
@@ -1566,7 +1566,7 @@
     </plurals>
     <string name="dictation_stopped">A diktálás leállt</string>
     <string name="dictation_microphone_failed">A mikrofon nem használható</string>
-    <string name="dictation_busy">A beszédfelismerő foglalt</string>
+    <string name="dictation_busy">A diktálás jelenleg foglalt</string>
     <string name="component_composer_question_position">%1$d / %2$d</string>
     <string name="session_list_status_ready">Kész</string>
     <string name="session_list_dock_hint_swipe">Megnyitja a projektszűrőt. Húzással válthatsz projektet.</string>
@@ -1640,10 +1640,10 @@
     <string name="component_composer_previous_question">Előző kérdés</string>
     <string name="component_activity_card_agent">Ügynök</string>
     <string name="session_list_section_today">Ma</string>
-    <string name="component_composer_child_lockout">Almunkamenetnek nem lehet üzenetet küldeni.</string>
+    <string name="component_composer_child_lockout">Almunkamenetnek nem lehet utasítást küldeni.</string>
     <string name="component_attachment_uploading_percent">Feltöltés: %1$d%%</string>
     <string name="component_composer_custom_answer_hint">Adj meg egyéni választ</string>
-    <string name="component_composer_cancel_revert">Visszavonás megszakítása</string>
+    <string name="component_composer_cancel_revert">Visszaállítás megszakítása</string>
     <string name="session_list_scope_load_slow_caption">Még töltődik – a nagy projektek egy kis időt igényelhetnek</string>
     <string name="component_outgoing_message_label_with_actions">Kimenő üzenet. Megjeleníti az üzenetműveleteket</string>
     <string name="session_list_scope_load_failed_subtitle">A munkamenetek betöltése nem sikerült</string>
@@ -1697,7 +1697,7 @@
     <string name="session_list_section_week_of">%1$s – %2$s hete</string>
     <string name="dictation_model_download_failed_title">%1$s nem tudta letölteni a következőt: %2$s</string>
     <string name="component_activity_status_pending">függőben</string>
-    <string name="component_composer_revert_tag">Visszavonás</string>
+    <string name="component_composer_revert_tag">Visszaállítás</string>
     <string name="component_composer_model">Modell: %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
         <item quantity="one">%1$d korábbi lépés</item>
@@ -1723,7 +1723,7 @@
     <string name="dictation_microphone_off">A mikrofonhozzáférés ki van kapcsolva</string>
     <string name="component_composer_shell">Shell</string>
     <string name="live_updates_status_auth_failed">A hitelesítés sikertelen</string>
-    <string name="component_branch_pill_view_all_changes">Összes módosítás megtekintése</string>
+    <string name="component_branch_pill_view_all_changes">Összes változás megtekintése</string>
     <string name="component_composer_send">Küldés</string>
     <string name="component_session_list_skeleton_slow_label">%1$s. %2$s</string>
     <string name="component_close">Bezárás</string>
@@ -1792,11 +1792,11 @@
     <string name="worktrees_remove_title">Eltávolítod a(z) „%1$s” worktree-t?</string>
     <string name="worktrees_remove_message">Törli a következőt a kiszolgálón: %1$s.</string>
     <plurals name="worktrees_remove_changes">
-        <item quantity="one">%1$d nem commitolt módosítás elvész.</item>
-        <item quantity="other">%1$d nem commitolt módosítás elvész.</item>
+        <item quantity="one">%1$d nem commitolt változás elvész.</item>
+        <item quantity="other">%1$d nem commitolt változás elvész.</item>
     </plurals>
-    <string name="worktrees_remove_changes_unknown">A nem commitolt módosítások elvesznek.</string>
-    <string name="worktrees_remove_changes_unchecked">Nem sikerült ellenőrizni a nem commitolt módosításokat. Ha vannak ilyenek, elvesznek.</string>
+    <string name="worktrees_remove_changes_unknown">A nem commitolt változások elvesznek.</string>
+    <string name="worktrees_remove_changes_unchecked">Nem sikerült ellenőrizni a nem commitolt változásokat. Ha vannak ilyenek, elvesznek.</string>
     <string name="worktrees_remove_sessions_stay">A worktree-t használó munkamenetek megmaradnak a Kezdőlapon, de már nem futtathatók benne.</string>
     <string name="worktrees_remove_confirm_anyway">Eltávolítás mindenképp</string>
     <string name="worktrees_blocked_title">A(z) „%1$s” még nem távolítható el</string>

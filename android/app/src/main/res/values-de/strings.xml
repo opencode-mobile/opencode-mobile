@@ -20,7 +20,7 @@
     <string name="connection_setup_action_saving">Wird gespeichert…</string>
     <string name="connection_setup_action_scan_qr">QR-Code scannen</string>
     <string name="connection_setup_action_scan_new_qr">Neuen QR-Code scannen</string>
-    <string name="connection_setup_action_enter_pairing_code">Pairing-Code eingeben</string>
+    <string name="connection_setup_action_enter_pairing_code">Kopplungscode eingeben</string>
     <string name="connection_setup_action_use_host_password">Host und Passwort verwenden</string>
     <string name="connection_setup_action_scan_qr_instead">Stattdessen QR-Code scannen</string>
     <string name="connection_setup_scan_qr_instead_hint">Aus opencode pair</string>
@@ -37,10 +37,10 @@
     <string name="connection_setup_username_hint">Benutzername</string>
     <string name="connection_setup_password_hint">Passwort (optional)</string>
     <string name="connection_setup_password_help">Standardbenutzer ist opencode. Das Passwort ist optional.</string>
-    <string name="connection_setup_pairing_code_hint">Pairing-Code</string>
-    <string name="connection_setup_pairing_code_help">Aus dem Pairing-Link. Gilt nur einmal und läuft nach 5 Minuten ab.</string>
+    <string name="connection_setup_pairing_code_hint">Kopplungscode</string>
+    <string name="connection_setup_pairing_code_help">Aus dem Kopplungslink. Gilt nur einmal und läuft nach 5 Minuten ab.</string>
     <string name="connection_setup_segment_password">Passwort</string>
-    <string name="connection_setup_segment_pairing_code">Pairing-Code</string>
+    <string name="connection_setup_segment_pairing_code">Kopplungscode</string>
     <string name="connection_setup_addresses_hint_tunnel_only">Remote-Tunnel gespeichert. Es gibt nichts weiter auszuwählen. Er bleibt bestehen, bis du den Remote-Zugriff ausschaltest.</string>
     <string name="connection_setup_addresses_hint_tailscale_fallback">Tailscale wird verwendet, sobald es antwortet. Das lokale Netzwerk dient als Ersatz.</string>
     <string name="connection_setup_addresses_hint_default">Gespeicherte Adressen werden nacheinander versucht, bis eine antwortet. Tailscale hat Vorrang, sobald es antwortet.</string>
@@ -50,32 +50,32 @@
     <string name="connection_setup_address_not_reachable">%1$s · nicht erreichbar</string>
     <string name="connection_setup_address_using_now">Aktiv</string>
     <string name="connection_setup_address_saved">Gespeichert</string>
-    <string name="connection_setup_pair_again_unreachable">Die gespeicherte Adresse ist nicht erreichbar. Bitte erneut koppeln.</string>
-    <string name="connection_setup_pair_again_unauthorized">Dieser Server hat die gespeicherte Anmeldung abgelehnt. Bitte erneut koppeln. Ein neues Passwort meldet alle Geräte ab.</string>
+    <string name="connection_setup_pair_again_unreachable">Die gespeicherte Adresse ist nicht erreichbar. Koppele erneut.</string>
+    <string name="connection_setup_pair_again_unauthorized">Dieser Server hat die gespeicherte Anmeldung abgelehnt. Koppele erneut. Ein neues Passwort meldet alle Geräte ab.</string>
     <string name="connection_cleartext_title">Verbindung ist nicht verschlüsselt</string>
     <string name="connection_cleartext_message_one_host">%1$s verwendet unverschlüsseltes http außerhalb deines lokalen Netzwerks oder Tailscale. Dein Serverpasswort und alles in deinen Sitzungen würden unverschlüsselt übertragen. Verwende besser https, ein VPN oder einen Tunnel.</string>
     <string name="connection_cleartext_message_hosts">%1$s verwenden unverschlüsseltes http außerhalb deines lokalen Netzwerks oder Tailscale. Dein Serverpasswort und alles in deinen Sitzungen würden unverschlüsselt übertragen. Verwende besser https, ein VPN oder einen Tunnel.</string>
     <string name="connection_cleartext_message_this_address">Diese Adresse verwendet unverschlüsseltes http außerhalb deines lokalen Netzwerks oder Tailscale. Dein Serverpasswort und alles in deinen Sitzungen würden unverschlüsselt übertragen. Verwende besser https, ein VPN oder einen Tunnel.</string>
     <string name="connection_cleartext_connect_anyway">Trotzdem verbinden</string>
-    <string name="connection_error_invalid_qr">Das ist kein Pairing-QR-Code für OpenCode 2</string>
+    <string name="connection_error_invalid_qr">Das ist kein Kopplungs-QR-Code für OpenCode 2</string>
     <string name="connection_error_localhost_qr">Dieser QR-Code enthält nur eine localhost-Adresse</string>
-    <string name="connection_error_camera_denied">Erlaube den Kamerazugriff, um den Pairing-QR-Code zu scannen</string>
+    <string name="connection_error_camera_denied">Erlaube den Kamerazugriff, um den Kopplungs-QR-Code zu scannen</string>
     <string name="connection_error_camera_unavailable">Die Kamera ist auf diesem Gerät nicht verfügbar</string>
     <string name="connection_error_enter_host">Host eingeben</string>
-    <string name="connection_error_enter_pairing_code">Pairing-Code eingeben</string>
-    <string name="connection_error_pairing_link_expired">Dieser Pairing-Link ist abgelaufen oder wurde bereits verwendet</string>
+    <string name="connection_error_enter_pairing_code">Kopplungscode eingeben</string>
+    <string name="connection_error_pairing_link_expired">Dieser Kopplungslink ist abgelaufen oder wurde bereits verwendet</string>
     <string name="connection_error_duplicate_profile">Ein Server mit diesem Host und Benutzernamen ist bereits gespeichert</string>
-    <string name="connection_error_qr_scan_failed">Verbindung per QR-Code fehlgeschlagen. Die Pairing-API von OpenCode 2 ändert sich noch, daher kann ein Scan fehlschlagen, obwohl die App funktioniert. Gib den Host ein und verbinde dich. Das Passwort ist optional. Ein Pairing-Code funktioniert ebenfalls.</string>
+    <string name="connection_error_qr_scan_failed">Verbindung per QR-Code fehlgeschlagen. Die Kopplungs-API von OpenCode 2 ändert sich noch, daher kann ein Scan fehlschlagen, obwohl die App funktioniert. Gib den Host ein und verbinde dich. Das Passwort ist optional. Ein Kopplungscode funktioniert ebenfalls.</string>
     <string name="connection_error_unreachable">Server nicht erreichbar</string>
-    <string name="server_error_pairing_expired">Pairing abgelaufen, bitte erneut koppeln</string>
+    <string name="server_error_pairing_expired">Kopplung abgelaufen. Koppele erneut.</string>
     <string name="server_error_not_found">Ordner oder Datei nicht gefunden</string>
     <string name="server_error_not_found_path">Ordner oder Datei nicht gefunden · %1$s</string>
     <string name="server_error_session_busy">Sitzung ist beschäftigt</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Authentifizierung fehlgeschlagen</string>
     <string name="connection_error_unhealthy">Server meldet einen fehlerhaften Zustand</string>
-    <string name="connection_scanner_title">Pairing-QR-Code scannen</string>
-    <string name="connection_scanner_card_title">OpenCode-Pairing-QR-Code</string>
+    <string name="connection_scanner_title">Kopplungs-QR-Code scannen</string>
+    <string name="connection_scanner_card_title">OpenCode-Kopplungs-QR-Code</string>
     <string name="connection_scanner_card_body">Aus opencode pair --remote. Ohne Optionen zeigt pair nur dann einen QR-Code an, wenn der Server über localhost hinaus erreichbar ist.</string>
     <string name="connection_onboarding_title">Mit deinem Server verbinden</string>
     <string name="connection_onboarding_body">OpenCode Mobile steuert Sitzungen auf einem opencode-Server, der auf deinem Entwicklungsrechner läuft.</string>
@@ -95,11 +95,11 @@
     <string name="onboarding_features_chat_title">Chat &amp; Abbrechen</string>
     <string name="onboarding_features_chat_detail">Prompts senden und laufende Arbeit stoppen</string>
     <string name="onboarding_features_permissions_title">Berechtigungen</string>
-    <string name="onboarding_features_permissions_detail">Anfragen genehmigen oder verweigern (ohne dauerhaftes Merken)</string>
+    <string name="onboarding_features_permissions_detail">Anfragen genehmigen oder ablehnen (ohne dauerhaftes Merken)</string>
     <string name="onboarding_features_changes_title">Änderungen</string>
     <string name="onboarding_features_changes_detail">Diffs der Sitzung ansehen</string>
     <string name="onboarding_features_live_title">Live, solange geöffnet</string>
-    <string name="onboarding_features_live_detail">Ereignis-Stream im Vordergrund; Aktualisierung nach erneutem Verbinden</string>
+    <string name="onboarding_features_live_detail">Ereignis-Stream im Vordergrund; Aktualisierung nach Neuverbindung</string>
     <string name="onboarding_setup_title">opencode serve einrichten</string>
     <string name="onboarding_setup_intro">Die App kommuniziert mit einem opencode-Server, den du selbst betreibst. Unten der kurze Weg – alle Details in der offiziellen Dokumentation.</string>
     <string name="onboarding_setup_step_number">Schritt %1$d</string>
@@ -130,7 +130,7 @@
     <string name="server_health_range_hour">1 Std.</string>
     <string name="server_health_range_day">24 Std.</string>
     <string name="server_health_range_week">7 T.</string>
-    <string name="server_health_uptime">Verfügbarkeit</string>
+    <string name="server_health_uptime">Betriebszeit</string>
     <string name="server_health_uptime_detail">bei %1$s Messdauer</string>
     <string name="server_health_reconnects">Neuverbindungen</string>
     <string name="server_health_reconnects_detail">Median: nach %1$s wieder verbunden</string>
@@ -192,8 +192,8 @@
     <string name="server_health_status_auth_failed">Anmeldung fehlgeschlagen</string>
     <string name="server_health_status_stopped">Keine Messung</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="one">Verfügbarkeit %1$s · %2$d Neuverbindung heute</item>
-        <item quantity="other">Verfügbarkeit %1$s · %2$d Neuverbindungen heute</item>
+        <item quantity="one">Betriebszeit %1$s · %2$d Neuverbindung heute</item>
+        <item quantity="other">Betriebszeit %1$s · %2$d Neuverbindungen heute</item>
     </plurals>
     <string name="server_health_quick_view_measuring">Wird gemessen…</string>
     <string name="server_health_details">Details</string>
@@ -276,7 +276,7 @@
     <string name="home_fork_result_stay">Hier bleiben</string>
     <string name="home_delete_title">Sitzung löschen</string>
     <string name="home_delete_message">Sitzung „%1$s“ löschen?</string>
-    <string name="home_session_error_empty_title">Titel der Sitzung eingeben</string>
+    <string name="home_session_error_empty_title">Sitzungstitel eingeben</string>
     <string name="home_session_error_nothing_to_fork">Noch nichts zum Forken</string>
     <string name="home_session_error_archive_failed">Sitzung konnte nicht archiviert werden.</string>
     <string name="home_session_error_delete_failed">Sitzung konnte nicht gelöscht werden.</string>
@@ -296,7 +296,7 @@
     <string name="archived_sessions_empty_title">Keine archivierten Sitzungen</string>
     <string name="archived_sessions_empty_message">Sitzungen, die du in %1$s archivierst, erscheinen hier.</string>
     <string name="archived_sessions_show_all_projects">Alle Projekte anzeigen</string>
-    <string name="archived_sessions_footer">Tippe auf eine Sitzung, um weitere Optionen zu sehen. Mit „Dearchivieren“ kommt sie zurück auf die Startseite.</string>
+    <string name="archived_sessions_footer">Tippe auf eine Sitzung, um weitere Optionen zu sehen. Mit „Archivierung aufheben“ kommt sie zurück auf die Startseite.</string>
     <string name="archived_sessions_load_failed">Archivierte Sitzungen konnten nicht geladen werden.</string>
     <string name="archived_sessions_unarchive_failed">Sitzung konnte nicht dearchiviert werden.</string>
     <string name="session_chat_archived_banner">Archiviert %1$s</string>
@@ -334,7 +334,7 @@
     </plurals>
     <string name="add_project_in_folder">In %1$s</string>
     <string name="add_project_root_home">Home</string>
-    <string name="add_project_error_add_failed">Dieses Verzeichnis kann nicht hinzugefügt werden</string>
+    <string name="add_project_error_add_failed">Dieser Ordner kann nicht hinzugefügt werden</string>
     <string name="worktree_new_row">Neuer Worktree…</string>
     <string name="worktree_run_in_subtitle">Checkout erstellen und dort starten</string>
     <string name="worktree_move_subtitle">Checkout erstellen und dorthin wechseln</string>
@@ -481,7 +481,7 @@
     <string name="session_chat_attachment_source_photos">Fotos</string>
     <string name="session_chat_attachment_source_media">Medien</string>
     <string name="session_chat_attachment_source_files">Dateien</string>
-    <string name="session_chat_attachment_source_log_file">Logdatei</string>
+    <string name="session_chat_attachment_source_log_file">Protokolldatei</string>
     <string name="session_chat_commands_title">Befehle</string>
     <string name="session_chat_commands_mcp_title">MCP-Server</string>
     <string name="session_chat_commands_back">Zurück zu Befehlen</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_suggestion_file">Datei</string>
     <string name="session_chat_suggestion_no_matches">Keine Treffer</string>
     <string name="session_chat_suggestion_no_commands">Keine Befehle</string>
-    <string name="session_chat_suggestion_badge_skill">Fähigkeit</string>
+    <string name="session_chat_suggestion_badge_skill">Skill</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
     <string name="session_chat_move_worktree_current">Aktueller Worktree</string>
     <string name="session_chat_move_worktree_menu_title">In Worktree verschieben…</string>
@@ -687,7 +687,7 @@
     <string name="tool_title_plan">Plan</string>
     <string name="tool_title_edit">Bearbeiten</string>
     <string name="tool_title_write">Schreiben</string>
-    <string name="tool_title_skill">Fähigkeit</string>
+    <string name="tool_title_skill">Skill</string>
     <string name="tool_title_patch">Patch</string>
     <string name="tool_title_get_issue">Issue abrufen</string>
     <string name="tool_title_save_issue">Issue speichern</string>
@@ -743,8 +743,8 @@
         <item quantity="other">%1$d Schreibvorgänge</item>
     </plurals>
     <plurals name="tool_count_skill">
-        <item quantity="one">%1$d Fähigkeit</item>
-        <item quantity="other">%1$d Fähigkeiten</item>
+        <item quantity="one">%1$d Skill</item>
+        <item quantity="other">%1$d Skills</item>
     </plurals>
     <plurals name="tool_count_patch">
         <item quantity="one">%1$d Patch</item>
@@ -815,9 +815,9 @@
     <string name="timeline_step_running_named">Führt %1$s aus</string>
     <string name="timeline_step_ran_named">%1$s ausgeführt</string>
     <string name="timeline_step_ran_command">Befehl ausgeführt</string>
-    <string name="timeline_step_loading_skill">Lädt Fähigkeit…</string>
-    <string name="timeline_step_loading_skill_named">Lädt Fähigkeit %1$s</string>
-    <string name="timeline_step_skill_named">Fähigkeit %1$s</string>
+    <string name="timeline_step_loading_skill">Skill wird geladen…</string>
+    <string name="timeline_step_loading_skill_named">Skill %1$s wird geladen</string>
+    <string name="timeline_step_skill_named">Skill %1$s</string>
     <string name="timeline_step_thought_duration">Nachgedacht · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">Erkundet — %1$s</string>
@@ -1123,7 +1123,7 @@
     <string name="session_context_stat_model">Modell</string>
     <string name="session_context_stat_context_limit">Kontextlimit</string>
     <string name="session_context_stat_total_tokens">Tokens gesamt</string>
-    <string name="session_context_stat_usage">Auslastung</string>
+    <string name="session_context_stat_usage">Nutzung</string>
     <string name="session_context_stat_input_tokens">Eingabe-Tokens</string>
     <string name="session_context_stat_output_tokens">Ausgabe-Tokens</string>
     <string name="session_context_stat_reasoning_tokens">Reasoning-Tokens</string>
@@ -1161,7 +1161,7 @@
     </plurals>
     <string name="settings_send_feedback_title">Feedback senden</string>
     <string name="settings_send_feedback_subtitle">Fehler melden oder Idee teilen</string>
-    <string name="settings_hide_user_directory_title">Benutzerverzeichnis ausblenden</string>
+    <string name="settings_hide_user_directory_title">Benutzerordner ausblenden</string>
     <string name="settings_hide_user_directory_subtitle">~/Projects/… statt /Users/you/Projects/… anzeigen</string>
     <string name="settings_recent_window_title">Zeitraum „Zuletzt“</string>
     <string name="settings_recent_window_message">Sitzungen bleiben unter „Zuletzt“, solange sie laufen oder bereit sind oder innerhalb dieses Zeitraums aktualisiert wurden.</string>
@@ -1255,10 +1255,10 @@
     <string name="diagnostics_clear_dialog_title">Diagnoseprotokolle leeren?</string>
     <string name="diagnostics_clear_dialog_message">Dadurch wird das gespeicherte Diagnoseprotokoll entfernt.</string>
     <string name="diagnostics_error_share">Diagnoseprotokoll konnte nicht zum Teilen vorbereitet werden.</string>
-    <string name="diagnostics_error_save">Diagnoseprotokoll konnte nicht gesichert werden.</string>
-    <string name="diagnostics_saved">Diagnoseprotokoll gesichert.</string>
+    <string name="diagnostics_error_save">Diagnoseprotokoll konnte nicht gespeichert werden.</string>
+    <string name="diagnostics_saved">Diagnoseprotokoll gespeichert.</string>
     <string name="appearance_title">Erscheinungsbild</string>
-    <string name="appearance_theme_title">Thema</string>
+    <string name="appearance_theme_title">Theme</string>
     <string name="appearance_theme_subtitle">%1$s · %2$s</string>
     <string name="appearance_code_highlight_title">Code-Hervorhebung</string>
     <string name="appearance_theme_blurb_porcelain">Fast weiß / fast schwarz</string>
@@ -1266,8 +1266,8 @@
     <string name="appearance_theme_blurb_signal">Reines Weiß / reines Schwarz</string>
     <string name="appearance_theme_blurb_hotline">Neutrale Oberfläche, knalliges Pink</string>
     <string name="appearance_theme_blurb_phosphor">Neutrale Oberfläche, CRT-Grün</string>
-    <string name="appearance_syntax_name_match">Wie Thema</string>
-    <string name="appearance_syntax_blurb_match">Nutzt die eigenen Token des UI-Themas</string>
+    <string name="appearance_syntax_name_match">Wie Theme</string>
+    <string name="appearance_syntax_blurb_match">Nutzt die eigenen Tokens des UI-Themes</string>
     <string name="appearance_syntax_blurb_nocturne">One-Dark-Familie</string>
     <string name="appearance_syntax_blurb_citrus">Solarized-Familie</string>
     <string name="appearance_syntax_blurb_paper">GitHub-Familie</string>
@@ -1406,8 +1406,8 @@
     <string name="keyboard_shortcuts_show_project">%1$s anzeigen</string>
     <string name="keyboard_shortcuts_allow_once">Einmal erlauben</string>
     <string name="keyboard_shortcuts_always_allow">Immer erlauben</string>
-    <string name="keyboard_shortcuts_deny">Verweigern</string>
-    <string name="keyboard_shortcuts_deny_with_note">Mit Notiz verweigern</string>
+    <string name="keyboard_shortcuts_deny">Ablehnen</string>
+    <string name="keyboard_shortcuts_deny_with_note">Mit Notiz ablehnen</string>
     <string name="keyboard_shortcuts_send_note">Notiz senden</string>
     <string name="keyboard_shortcuts_next_question">Nächste Frage</string>
     <string name="keyboard_shortcuts_submit_answers">Antworten senden</string>
@@ -1449,7 +1449,7 @@
     <string name="changes_filter_accessibility_label">Geänderte Dateien filtern</string>
     <string name="changes_no_matches_title">Keine passenden Dateien</string>
     <string name="changes_no_matches_message">Versuche einen anderen Pfad oder setze den Filter zurück.</string>
-    <string name="changes_no_matches_clear_filter">Filter löschen</string>
+    <string name="changes_no_matches_clear_filter">Filter zurücksetzen</string>
     <string name="changes_select_file_title">Datei auswählen</string>
     <string name="changes_select_file_message">Wähle eine geänderte Datei, um den Diff zu sehen.</string>
     <string name="changes_preview_unavailable_title">Vorschau nicht verfügbar</string>
@@ -1523,7 +1523,7 @@
     <string name="component_composer_reverting_title">Diese Nachricht wird zurückgesetzt</string>
     <string name="session_new_title">Neue Sitzung</string>
     <string name="session_list_dock_add_project">Projekt hinzufügen</string>
-    <string name="theme_error_preset_not_found">Themenvorlage nicht gefunden</string>
+    <string name="theme_error_preset_not_found">Theme-Vorlage nicht gefunden</string>
     <string name="component_composer_submit">Senden</string>
     <string name="component_composer_select_all_that_apply">Alle zutreffenden Optionen auswählen</string>
     <string name="component_unified_diff_summary_modified">Geänderte Datei %1$s, %2$s, %3$s</string>
@@ -1541,7 +1541,7 @@
     <string name="component_composer_hide_question">Frage ausblenden</string>
     <string name="live_updates_status_connecting">wird verbunden</string>
     <string name="dictation_model_queued_detail">%1$s hat den Download in die Warteschlange gestellt. Möglicherweise wartet er auf WLAN, eine Stromverbindung oder freien Speicherplatz. Prüfe es in ein paar Minuten erneut.</string>
-    <string name="dictation_model_not_installed_detail">Die Diktierfunktion läuft auf diesem Gerät, daher wird deine Stimme nie hochgeladen. %1$s lädt das Modell einmal herunter und stellt es allen Apps zur Verfügung.</string>
+    <string name="dictation_model_not_installed_detail">Das Diktat läuft auf diesem Gerät, daher wird deine Stimme nie hochgeladen. %1$s lädt das Modell einmal herunter und stellt es allen Apps zur Verfügung.</string>
     <string name="component_outgoing_message_shows_actions_hint">Zeigt Nachrichtenaktionen an</string>
     <string name="component_activity_status_stopped">gestoppt</string>
     <string name="dictation_action_try_again">Erneut versuchen</string>
@@ -1552,13 +1552,13 @@
     <string name="session_list_dock_new_session">Neue Sitzung</string>
     <string name="component_composer_always_allows">Erlaubt immer: %1$s</string>
     <string name="component_composer_leave_side_question_mode">Nebenfragen-Modus verlassen</string>
-    <string name="session_list_worktree_empty_other_projects">Entferne den Filter, um Sitzungen in anderen Projekten zu sehen.</string>
+    <string name="session_list_worktree_empty_other_projects">Setze den Filter zurück, um Sitzungen in anderen Projekten zu sehen.</string>
     <string name="component_attachment_uploading">Wird hochgeladen…</string>
-    <string name="component_composer_deny">Verweigern</string>
-    <string name="component_composer_deny_options">Weitere Optionen zum Verweigern</string>
-    <string name="component_composer_deny_with_note_menu">Mit Notiz verweigern…</string>
+    <string name="component_composer_deny">Ablehnen</string>
+    <string name="component_composer_deny_options">Weitere Optionen zum Ablehnen</string>
+    <string name="component_composer_deny_with_note_menu">Mit Notiz ablehnen…</string>
     <string name="component_composer_deny_with_note_menu_subtitle">Sag dem Agenten, was er stattdessen tun soll</string>
-    <string name="component_composer_deny_with_note_title">Mit Notiz verweigern</string>
+    <string name="component_composer_deny_with_note_title">Mit Notiz ablehnen</string>
     <string name="component_composer_deny_note_placeholder">Sag OpenCode, was es anders machen soll</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="one">Verweigert auch %1$d weitere wartende Anfrage.</item>
@@ -1566,7 +1566,7 @@
     </plurals>
     <string name="dictation_stopped">Diktat beendet</string>
     <string name="dictation_microphone_failed">Mikrofon konnte nicht verwendet werden</string>
-    <string name="dictation_busy">Diktierfunktion ist ausgelastet</string>
+    <string name="dictation_busy">Diktat ist ausgelastet</string>
     <string name="component_composer_question_position">%1$d von %2$d</string>
     <string name="session_list_status_ready">Bereit</string>
     <string name="session_list_dock_hint_swipe">Öffnet den Projektfilter. Wische, um das Projekt zu wechseln.</string>
@@ -1583,7 +1583,7 @@
     <string name="component_image_could_not_load_label">%1$s, konnte nicht geladen werden</string>
     <string name="component_composer_question">Frage</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Entferne den Filter, um Sitzungen in anderen Worktrees zu sehen.</string>
+    <string name="session_list_worktree_empty_other_worktrees">Setze den Filter zurück, um Sitzungen in anderen Worktrees zu sehen.</string>
     <string name="component_composer_side_question_mode">Nebenfragen-Modus</string>
     <string name="component_page_indicator_label">Seite %1$d von %2$d</string>
     <string name="component_composer_next">Weiter</string>
@@ -1609,7 +1609,7 @@
     <string name="session_list_scope_load_failed_title">%1$s konnte nicht geladen werden</string>
     <string name="dictation_status_listening">Hört zu</string>
     <string name="dictation_downloading_model">Sprachmodell wird heruntergeladen</string>
-    <string name="session_list_worktree_empty_every_worktree">Filter zurücksetzen, um alle Worktrees zu sehen.</string>
+    <string name="session_list_worktree_empty_every_worktree">Setze den Filter zurück, um alle Worktrees zu sehen.</string>
     <string name="component_overflow_menu_more_options">Weitere Optionen</string>
     <string name="session_list_status_retrying_attempt">Neuer Versuch · %1$d</string>
     <string name="live_updates_status_offline">offline</string>
@@ -1626,7 +1626,7 @@
         <item quantity="one">%1$d Schritt</item>
         <item quantity="other">%1$d Schritte</item>
     </plurals>
-    <string name="theme_error_apply_failed">Themenvorlage konnte nicht angewendet werden</string>
+    <string name="theme_error_apply_failed">Theme-Vorlage konnte nicht angewendet werden</string>
     <string name="component_unified_diff_summary_deleted">Gelöschte Datei %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">Läuft</string>
     <string name="component_step_rail_expands">%1$s, ausklappbar</string>
@@ -1678,7 +1678,7 @@
     </plurals>
     <string name="component_composer_request_position">%1$d von %2$d</string>
     <string name="component_composer_side_question_placeholder">Nebenfrage, wird nicht zum Chat hinzugefügt</string>
-    <string name="session_list_worktree_empty_every_project">Filter zurücksetzen, um alle Projekte zu sehen.</string>
+    <string name="session_list_worktree_empty_every_project">Setze den Filter zurück, um alle Projekte zu sehen.</string>
     <string name="component_image_viewer_could_not_load_named">%1$s konnte nicht geladen werden</string>
     <string name="component_composer_select_up_to">Bis zu %1$d auswählen</string>
     <string name="live_updates_status_live">live</string>

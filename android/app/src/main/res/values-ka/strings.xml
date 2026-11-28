@@ -22,7 +22,7 @@
     <string name="connection_setup_action_scan_new_qr">ახალი QR-ის სკანირება</string>
     <string name="connection_setup_action_enter_pairing_code">დაწყვილების კოდის შეყვანა</string>
     <string name="connection_setup_action_use_host_password">ჰოსტისა და პაროლის გამოყენება</string>
-    <string name="connection_setup_action_scan_qr_instead">QR-ის სკანირება</string>
+    <string name="connection_setup_action_scan_qr_instead">ამის ნაცვლად QR-ის სკანირება</string>
     <string name="connection_setup_scan_qr_instead_hint">opencode pair-იდან</string>
     <string name="connection_setup_remove_server">სერვერის წაშლა</string>
     <string name="connection_setup_remove_dialog_title_unnamed">წაიშალოს „სერვერი“?</string>
@@ -93,7 +93,7 @@
     <string name="onboarding_features_sessions_title">სესიები</string>
     <string name="onboarding_features_sessions_detail">სიის ნახვა, გახსნა, შექმნა, გადარქმევა, ფორკი, დაარქივება, წაშლა</string>
     <string name="onboarding_features_chat_title">ჩათი და შეჩერება</string>
-    <string name="onboarding_features_chat_detail">მოთხოვნების გაგზავნა და მიმდინარე სამუშაოს შეჩერება</string>
+    <string name="onboarding_features_chat_detail">პრომპტების გაგზავნა და მიმდინარე სამუშაოს შეჩერება</string>
     <string name="onboarding_features_permissions_title">ნებართვები</string>
     <string name="onboarding_features_permissions_detail">მოთხოვნების დაშვება ან უარყოფა (მუდმივი დამახსოვრების გარეშე)</string>
     <string name="onboarding_features_changes_title">ცვლილებები</string>
@@ -157,7 +157,7 @@
     </plurals>
     <string name="server_health_errors">შეცდომები</string>
     <string name="server_health_errors_empty">ამ პერიოდში შეცდომები არ არის.</string>
-    <string name="server_health_error_log">შეცდომების ჟურნალი</string>
+    <string name="server_health_error_log">შეცდომების ლოგი</string>
     <string name="server_health_error_log_check">მდგომარეობის შემოწმება</string>
     <string name="server_health_error_log_stream">რეალური დროის კავშირი</string>
     <string name="server_health_error_log_repeated">%1$d-ჯერ ზედიზედ %2$s-ის განმავლობაში</string>
@@ -231,7 +231,7 @@
     <string name="home_probe_failed_edit_connection">კავშირის რედაქტირება</string>
     <string name="home_error_load_projects">პროექტების ჩატვირთვა ვერ მოხერხდა</string>
     <string name="home_error_project_load_failed">სესიების ჩატვირთვა ვერ მოხერხდა</string>
-    <string name="home_remove_project_title">მთავარიდან წაიშალოს?</string>
+    <string name="home_remove_project_title">მთავარი ეკრანიდან წაიშალოს?</string>
     <string name="home_remove_project_message">წაიშალოს „%1$s“ მთავარი ეკრანიდან? მისი სესიები სერვერზე დარჩება.</string>
     <string name="home_snackbar_removed">„%1$s“ მთავარი ეკრანიდან წაიშალა</string>
     <string name="home_snackbar_already_on_home">„%1$s“ უკვე მთავარ ეკრანზეა</string>
@@ -242,7 +242,7 @@
         <item quantity="one">%1$d პროექტი</item>
         <item quantity="other">%1$d პროექტი</item>
     </plurals>
-    <string name="home_main_checkout">მთავარი checkout</string>
+    <string name="home_main_checkout">ძირითადი checkout</string>
     <plurals name="home_worktree_count">
         <item quantity="one">%1$d worktree</item>
         <item quantity="other">%1$d worktree</item>
@@ -266,7 +266,7 @@
     <string name="home_session_actions_title">სესიის მოქმედებები</string>
     <string name="home_session_actions_rename">სესიის გადარქმევა</string>
     <string name="home_session_actions_fork">სესიის გაფორკვა</string>
-    <string name="home_session_actions_archive">არქივში გადატანა</string>
+    <string name="home_session_actions_archive">დაარქივება</string>
     <string name="home_rename_title">სესიის გადარქმევა</string>
     <string name="home_session_title_hint">სათაური</string>
     <string name="home_fork_title">სესიის გაფორკვა</string>
@@ -278,7 +278,7 @@
     <string name="home_delete_message">წაიშალოს სესია „%1$s“?</string>
     <string name="home_session_error_empty_title">შეიყვანეთ სესიის სათაური</string>
     <string name="home_session_error_nothing_to_fork">გასაფორკი ჯერ არაფერია</string>
-    <string name="home_session_error_archive_failed">სესიის არქივში გადატანა ვერ მოხერხდა.</string>
+    <string name="home_session_error_archive_failed">სესიის დაარქივება ვერ მოხერხდა.</string>
     <string name="home_session_error_delete_failed">სესიის წაშლა ვერ მოხერხდა.</string>
     <string name="home_session_error_request_failed">მოთხოვნა ვერ შესრულდა</string>
     <string name="home_session_error_unreadable_response">სერვერის პასუხის წაკითხვა ვერ მოხერხდა</string>
@@ -308,16 +308,16 @@
     <string name="add_project_loading_projects">პროექტები იტვირთება</string>
     <string name="add_project_loading_folders">საქაღალდეები იტვირთება</string>
     <string name="add_project_list_error_title">ამ საქაღალდის შიგთავსის ჩატვირთვა ვერ მოხერხდა</string>
-    <string name="add_project_list_error_message">შეამოწმეთ მისამართი და სცადეთ ხელახლა.</string>
+    <string name="add_project_list_error_message">შეამოწმეთ ბილიკი და სცადეთ ხელახლა.</string>
     <string name="add_project_no_other_projects">ამ სერვერზე სხვა პროექტები არ არის.</string>
-    <string name="add_project_folder_path">საქაღალდის მისამართი</string>
+    <string name="add_project_folder_path">საქაღალდის ბილიკი</string>
     <string name="add_project_up_one_folder">ერთი საქაღალდით ზემოთ</string>
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">აირჩიეთ საქაღალდე</string>
     <string name="add_project_already_on_home">უკვე მთავარ ეკრანზეა</string>
     <string name="add_project_add_home_folder">საწყისი საქაღალდის დამატება</string>
     <string name="add_project_add_this_folder">ამ საქაღალდის დამატება</string>
-    <string name="add_project_path_not_found">მისამართი ვერ მოიძებნა</string>
+    <string name="add_project_path_not_found">ბილიკი ვერ მოიძებნა</string>
     <string name="add_project_no_folder_named">საქაღალდე სახელით „%1$s“ არ არსებობს</string>
     <string name="add_project_on_home">მთავარ ეკრანზეა</string>
     <string name="add_project_on_home_with_count">მთავარ ეკრანზეა · %1$s</string>
@@ -365,7 +365,7 @@
     <string name="worktree_submit_run_in">შექმნა და დაწყება</string>
     <string name="worktree_submit_move">შექმნა და გადასვლა</string>
     <string name="worktree_submitting">იქმნება…</string>
-    <string name="worktree_create_failed">worktree-ის შექმნა ვერ მოხერხდა: %1$s</string>
+    <string name="worktree_create_failed">Worktree-ის შექმნა ვერ მოხერხდა: %1$s</string>
     <string name="worktree_unknown_error">უცნობი შეცდომა</string>
     <string name="worktree_request_failed_http">მოთხოვნა ვერ შესრულდა (HTTP %1$d)</string>
     <string name="files_title">ფაილები</string>
@@ -390,8 +390,8 @@
     <string name="files_error_server_status">სერვერმა უპასუხა: %1$d.</string>
     <string name="files_no_file_title">გახსენით ფაილი ხიდან</string>
     <string name="files_no_file_message">გახსნილი ფაილები ჩანართებად დარჩება</string>
-    <string name="files_path_copied">მისამართი კოპირებულია</string>
-    <string name="file_viewer_copy_path">მისამართის კოპირება</string>
+    <string name="files_path_copied">ბილიკი კოპირებულია</string>
+    <string name="file_viewer_copy_path">ბილიკის კოპირება</string>
     <string name="file_viewer_wrap_lines">სტრიქონების გადატანა</string>
     <string name="file_viewer_wrap_lines_on">სტრიქონების გადატანა, ჩართულია</string>
     <string name="file_viewer_wrap_lines_off">სტრიქონების გადატანა, გამორთულია</string>
@@ -438,12 +438,12 @@
     <string name="terminal_close_dialog_message">ეს სერვერზე shell-ს დაასრულებს.</string>
     <string name="terminal_projects_empty_title">პროექტები ჯერ არ არის</string>
     <string name="terminal_projects_empty_message">დაამატეთ პროექტი მთავარ ეკრანზე, შემდეგ აქედან გაუშვით shell.</string>
-    <string name="terminal_error_create">shell-ის გაშვება ვერ მოხერხდა.</string>
+    <string name="terminal_error_create">Shell-ის გაშვება ვერ მოხერხდა.</string>
     <string name="terminal_connecting_title">კავშირი მყარდება</string>
-    <string name="terminal_connecting_subtitle">shell იწყება…</string>
+    <string name="terminal_connecting_subtitle">Shell იწყება…</string>
     <string name="terminal_connect_failed_title">დაკავშირება ვერ მოხერხდა</string>
     <string name="terminal_connect_failed_message">ამ პროექტისთვის shell-ის გაშვება ვერ მოხერხდა.</string>
-    <string name="terminal_exited">shell დასრულდა</string>
+    <string name="terminal_exited">Shell დასრულდა</string>
     <string name="terminal_retry">ხელახლა ცდა</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
@@ -460,7 +460,7 @@
     <string name="session_chat_menu_browse_files">ფაილების დათვალიერება</string>
     <string name="session_chat_menu_session_context">სესიის კონტექსტი</string>
     <string name="session_chat_menu_copy_session_id">სესიის ID-ის კოპირება</string>
-    <string name="session_chat_menu_archive">არქივში გადატანა</string>
+    <string name="session_chat_menu_archive">დაარქივება</string>
     <string name="session_chat_menu_report_problem">პრობლემის შესახებ შეტყობინება</string>
     <string name="session_chat_menu_delete">წაშლა</string>
     <string name="session_chat_delete_dialog_title">სესიის წაშლა</string>
@@ -481,7 +481,7 @@
     <string name="session_chat_attachment_source_photos">ფოტოები</string>
     <string name="session_chat_attachment_source_media">მედია</string>
     <string name="session_chat_attachment_source_files">ფაილები</string>
-    <string name="session_chat_attachment_source_log_file">ჟურნალის ფაილი</string>
+    <string name="session_chat_attachment_source_log_file">ლოგის ფაილი</string>
     <string name="session_chat_commands_title">ბრძანებები</string>
     <string name="session_chat_commands_mcp_title">MCP სერვერები</string>
     <string name="session_chat_commands_back">ბრძანებებზე დაბრუნება</string>
@@ -502,15 +502,15 @@
     <string name="session_chat_commands_mcp_label">MCP სერვერები</string>
     <string name="session_chat_commands_mcp_description">MCP სერვერის სტატუსის ჩვენება</string>
     <string name="session_chat_commands_btw_label">Btw</string>
-    <string name="session_chat_commands_btw_description">გვერდითი შეკითხვის დასმა</string>
+    <string name="session_chat_commands_btw_description">გვერდითი კითხვის დასმა</string>
     <string name="session_chat_suggestion_file">ფაილი</string>
     <string name="session_chat_suggestion_no_matches">შესატყვისი არ არის</string>
     <string name="session_chat_suggestion_no_commands">ბრძანებები არ არის</string>
     <string name="session_chat_suggestion_badge_skill">უნარი</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
     <string name="session_chat_move_worktree_current">მიმდინარე worktree</string>
-    <string name="session_chat_move_worktree_menu_title">worktree-ზე გადატანა…</string>
-    <string name="session_chat_move_worktree_sheet_title">worktree-ზე გადატანა</string>
+    <string name="session_chat_move_worktree_menu_title">Worktree-ზე გადატანა…</string>
+    <string name="session_chat_move_worktree_sheet_title">Worktree-ზე გადატანა</string>
     <string name="session_chat_move_worktree_no_other">ამ პროექტს სხვა worktree-ები არ აქვს</string>
     <string name="session_chat_move_worktree_moves_after_turn">ამ პასუხის დასრულების შემდეგ გადავა აქ: %1$s.</string>
     <string name="session_chat_move_worktree_failed">სესიის გადატანა ვერ მოხერხდა: %1$s</string>
@@ -521,7 +521,7 @@
     <string name="session_chat_model_notice_none_usable">გამოსაყენებელი მოდელები არ არის. ხელახლა საცდელად შეეხეთ „მოდელს“.</string>
     <string name="session_chat_model_notice_variant_unavailable">დამახსოვრებული ვარიანტი მიუწვდომელია. გამოიყენება „ნაგულისხმევი“.</string>
     <string name="session_chat_model_notice_model_unavailable">არჩეული მოდელი მიუწვდომელია. გამოიყენება %1$s.</string>
-    <string name="session_chat_side_question_unsupported">/btw-სთვის საჭიროა opencode v2 სერვერი, რომელიც გვერდით შეკითხვებს პასუხობს. ეს სერვერი საუბარში დამატების გარეშე პასუხს ვერ გასცემს.</string>
+    <string name="session_chat_side_question_unsupported">/btw-სთვის საჭიროა opencode v2 სერვერი, რომელიც გვერდით კითხვებს პასუხობს. ეს სერვერი საუბარში დამატების გარეშე პასუხს ვერ გასცემს.</string>
     <string name="session_chat_side_question_unavailable">/btw-სთვის საჭიროა უფრო ახალი opencode სერვერი.</string>
     <string name="session_chat_side_question_copied">პასუხი კოპირებულია</string>
     <string name="session_chat_side_question_failed">/btw ვერ შესრულდა: „%1$s“</string>
@@ -566,23 +566,23 @@
         <item quantity="other">%1$d რიგში</item>
     </plurals>
     <plurals name="session_chat_activity_queued_prompts">
-        <item quantity="one">%1$d მოთხოვნა რიგში</item>
-        <item quantity="other">%1$d მოთხოვნა რიგში</item>
+        <item quantity="one">%1$d პრომპტი რიგში</item>
+        <item quantity="other">%1$d პრომპტი რიგში</item>
     </plurals>
-    <string name="session_chat_activity_side_question_failed">გვერდითი შეკითხვა ვერ შესრულდა</string>
+    <string name="session_chat_activity_side_question_failed">გვერდითი კითხვა ვერ შესრულდა</string>
     <plurals name="session_chat_activity_side_questions_failed">
-        <item quantity="one">%1$d გვერდითი შეკითხვა ვერ შესრულდა</item>
-        <item quantity="other">%1$d გვერდითი შეკითხვა ვერ შესრულდა</item>
+        <item quantity="one">%1$d გვერდითი კითხვა ვერ შესრულდა</item>
+        <item quantity="other">%1$d გვერდითი კითხვა ვერ შესრულდა</item>
     </plurals>
-    <string name="session_chat_activity_side_question_ready">გვერდითი შეკითხვის პასუხი მზადაა</string>
+    <string name="session_chat_activity_side_question_ready">გვერდითი კითხვის პასუხი მზადაა</string>
     <plurals name="session_chat_activity_side_questions_ready">
-        <item quantity="one">%1$d გვერდითი შეკითხვის პასუხი მზადაა</item>
-        <item quantity="other">%1$d გვერდითი შეკითხვის პასუხი მზადაა</item>
+        <item quantity="one">%1$d გვერდითი კითხვის პასუხი მზადაა</item>
+        <item quantity="other">%1$d გვერდითი კითხვის პასუხი მზადაა</item>
     </plurals>
-    <string name="session_chat_activity_side_question_running">გვერდითი შეკითხვა სრულდება</string>
+    <string name="session_chat_activity_side_question_running">გვერდითი კითხვა სრულდება</string>
     <plurals name="session_chat_activity_side_questions_running">
-        <item quantity="one">%1$d გვერდითი შეკითხვა სრულდება</item>
-        <item quantity="other">%1$d გვერდითი შეკითხვა სრულდება</item>
+        <item quantity="one">%1$d გვერდითი კითხვა სრულდება</item>
+        <item quantity="other">%1$d გვერდითი კითხვა სრულდება</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
     <string name="session_chat_activity_action_open_request">მოთხოვნის გახსნა</string>
@@ -637,7 +637,7 @@
     <string name="timeline_state_error_title">შეტყობინებები ვერ ჩაიტვირთა</string>
     <string name="timeline_state_error_fallback">ქრონოლოგია ვერ ჩაიტვირთა.</string>
     <string name="timeline_state_retry">ხელახლა ცდა</string>
-    <string name="timeline_state_empty">შეტყობინებები ჯერ არ არის. დასაწყებად გაგზავნეთ მოთხოვნა.</string>
+    <string name="timeline_state_empty">შეტყობინებები ჯერ არ არის. დასაწყებად გაგზავნეთ პრომპტი.</string>
     <string name="timeline_state_refreshing">შეტყობინებები ახლდება</string>
     <string name="timeline_message_assistant">ასისტენტის შეტყობინება</string>
     <string name="timeline_message_actions_hint_long_press">შეტყობინების მოქმედებებისთვის დააჭირეთ და ეჭირეთ</string>
@@ -876,7 +876,7 @@
     <string name="session_chat_revert_cancel_failed">დაბრუნების გაუქმება ვერ მოხერხდა.</string>
     <string name="session_chat_revert_commit_failed">დაბრუნების დადასტურება ვერ მოხერხდა.</string>
     <string name="session_chat_fork_rename_failed">ფორკი შეიქმნა, მაგრამ მისი სახელის შეცვლა ვერ მოხერხდა.</string>
-    <string name="session_chat_pending_prompt_update_failed">მოლოდინში მყოფი მოთხოვნის განახლება ვერ მოხერხდა</string>
+    <string name="session_chat_pending_prompt_update_failed">მოლოდინში მყოფი პრომპტის განახლება ვერ მოხერხდა</string>
     <string name="session_chat_shell_stop_failed">Shell-ის შეჩერება ვერ მოხერხდა. სცადეთ ხელახლა.</string>
     <string name="session_chat_shell_status_running">მუშაობს</string>
     <string name="session_chat_shell_status_exited">დასრულდა</string>
@@ -923,11 +923,11 @@
     <string name="session_chat_sheet_pending_prompts_clear_all">ყველას გასუფთავება</string>
     <string name="session_chat_sheet_pending_prompts_sending">იგზავნება…</string>
     <string name="session_chat_sheet_pending_prompts_move_to_queue">რიგში გადატანა</string>
-    <string name="session_chat_sheet_pending_prompts_steer_now">ახლავე მიმართვა</string>
+    <string name="session_chat_sheet_pending_prompts_steer_now">ახლავე წარმართვა</string>
     <string name="session_chat_sheet_pending_prompts_delete">წაშლა</string>
     <string name="session_chat_sheet_side_question_done">მზადაა</string>
     <string name="session_chat_sheet_side_question_not_added">საუბარს არ დაემატა</string>
-    <string name="session_chat_sheet_todos_title">სესიის todo-ები</string>
+    <string name="session_chat_sheet_todos_title">სესიის ამოცანები</string>
     <string name="session_chat_sheet_todos_progress">შესრულებულია %1$d / %2$d</string>
     <string name="session_chat_goal_pill">მიზანი</string>
     <string name="session_chat_goal_pill_paused">მიზანი შეჩერებულია</string>
@@ -965,8 +965,8 @@
     <string name="session_chat_goal_pausing">ჩერდება…</string>
     <string name="session_chat_goal_resume">გაგრძელება</string>
     <string name="session_chat_goal_resuming">გრძელდება…</string>
-    <string name="session_chat_goal_clear">მოხსნა</string>
-    <string name="session_chat_goal_clearing">იხსნება…</string>
+    <string name="session_chat_goal_clear">გასუფთავება</string>
+    <string name="session_chat_goal_clearing">ისუფთავება…</string>
     <string name="session_chat_goal_new">ახალი მიზანი…</string>
     <string name="session_chat_goal_footnote_active">ყოველი სვლის შემდეგ მიმომხილველი ამოწმებს სამუშაოს მიზანთან. აგენტი აგრძელებს, სანამ მიზანი არ მიიღწევა, თქვენ არ დაგჭირდებით ან %1$d რაუნდი არ გავა.</string>
     <string name="session_chat_goal_footnote_paused">გაგრძელებისას %1$d რაუნდის ახალი ლიმიტი ინიშნება.</string>
@@ -983,7 +983,7 @@
     <string name="session_chat_goal_met">მიზანი მიღწეულია</string>
     <string name="session_chat_goal_set">მიზანი დაყენებულია</string>
     <string name="session_chat_goal_ended">დასრულდა</string>
-    <string name="session_chat_goal_set_earlier">ადრინდელი მიზანი. ის მოიხსნა ან ჩანაცვლდა.</string>
+    <string name="session_chat_goal_set_earlier">ადრინდელი მიზანი. ის გასუფთავდა ან ჩანაცვლდა.</string>
     <string name="session_chat_goal_bubble_label">მიზანი</string>
     <string name="session_chat_goal_objective_hint">აღწერეთ, როგორ გამოიყურება „დასრულებული“…</string>
     <string name="session_chat_goal_resume_placeholder">უპასუხეთ, შემდეგ გააგრძელეთ მიზანი…</string>
@@ -996,11 +996,11 @@
     <string name="session_chat_goal_pause_failed_reason">მიზნის შეჩერება ვერ მოხერხდა: %1$s</string>
     <string name="session_chat_goal_resume_failed">მიზნის გაგრძელება ვერ მოხერხდა</string>
     <string name="session_chat_goal_resume_failed_reason">მიზნის გაგრძელება ვერ მოხერხდა: %1$s</string>
-    <string name="session_chat_goal_clear_failed">მიზნის მოხსნა ვერ მოხერხდა</string>
-    <string name="session_chat_goal_clear_failed_reason">მიზნის მოხსნა ვერ მოხერხდა: %1$s</string>
+    <string name="session_chat_goal_clear_failed">მიზნის გასუფთავება ვერ მოხერხდა</string>
+    <string name="session_chat_goal_clear_failed_reason">მიზნის გასუფთავება ვერ მოხერხდა: %1$s</string>
     <string name="session_chat_timeline_style_notice">ქრონოლოგია: %1$s. შეგიძლიათ ნებისმიერ დროს შეცვალოთ პარამეტრებში.</string>
     <string name="session_chat_branch_copied">ბრენჩის სახელი კოპირებულია</string>
-    <string name="session_chat_follow_up_switched_steer">გადართულია: მიმართვა</string>
+    <string name="session_chat_follow_up_switched_steer">გადართულია: წარმართვა</string>
     <string name="session_chat_follow_up_switched_queue">გადართულია: რიგი</string>
     <string name="session_chat_failure_retry_after_seconds">სცადეთ ხელახლა %1$d წმ-ში</string>
     <string name="session_chat_failure_retry_after_minutes">სცადეთ ხელახლა %1$d წთ-ში</string>
@@ -1028,7 +1028,7 @@
     <string name="session_chat_mcp_load_failed">MCP სერვერები ვერ ჩაიტვირთა. შეამოწმეთ კავშირი და სცადეთ ხელახლა.</string>
     <string name="session_chat_create_failed">სესიის შექმნა ვერ მოხერხდა</string>
     <string name="session_chat_send_timed_out">გაგზავნა ვერ მოხერხდა. სცადეთ ხელახლა.</string>
-    <string name="session_chat_shell_cannot_queue">Shell ბრძანებები რიგში ვერ დადგება. ახლავე შესასრულებლად გადართეთ მიმართვაზე.</string>
+    <string name="session_chat_shell_cannot_queue">Shell ბრძანებები რიგში ვერ დადგება. ახლავე შესასრულებლად გადართეთ წარმართვაზე.</string>
     <string name="session_chat_reply_error_permission">პასუხის გაგზავნა ვერ მოხერხდა. სცადეთ ხელახლა.</string>
     <string name="session_chat_reply_error_permission_reason">პასუხის გაგზავნა ვერ მოხერხდა. %1$s.</string>
     <string name="session_chat_reply_error_question">პასუხის გაგზავნა ვერ მოხერხდა. სცადეთ ხელახლა.</string>
@@ -1047,10 +1047,10 @@
     <string name="session_chat_sheet_timeline_style_picker_current">მიმდინარე</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_title">სტანდარტული</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">ხელსაწყოების ბარათები და ჯგუფები აგენტის შეტყობინებებს შორის</string>
-    <string name="session_chat_sheet_timeline_style_picker_step_rail_title">ნაბიჯების ლიანდაგი</string>
-    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">თითო ხაზი თითო ნაბიჯზე ლიანდაგზე, რეალურ დროში, სანამ აგენტი მუშაობს</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_title">ნაბიჯების ზოლი</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">თითო ხაზი თითო ნაბიჯზე, რეალურ დროში, სანამ აგენტი მუშაობს</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">აქტივობის ბარათი</string>
-    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">მიმდინარე ნაბიჯები ერთ, რეალურ დროში განახლებად ბარათზე, რომელიც შეჯამებად იკეცება</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">მიმდინარე ნაბიჯები ერთ ცოცხალ ბარათზე, რომელიც შეჯამებად იკეცება</string>
     <string name="session_chat_sheet_picker_model">მოდელი</string>
     <string name="session_chat_sheet_picker_agent_mode">აგენტის რეჟიმი</string>
     <string name="session_chat_sheet_picker_variant">ვარიანტი</string>
@@ -1069,12 +1069,12 @@
         <item quantity="other">%1$d ფაილი</item>
     </plurals>
     <plurals name="session_chat_sheet_tool_result_lines">
-        <item quantity="one">%1$d ხაზი</item>
-        <item quantity="other">%1$d ხაზი</item>
+        <item quantity="one">%1$d სტრიქონი</item>
+        <item quantity="other">%1$d სტრიქონი</item>
     </plurals>
     <string name="session_chat_sheet_tool_result_copy_link">კოპირება: %1$s</string>
     <string name="session_chat_sheet_tool_result_copies_link_hint">აკოპირებს ბმულს</string>
-    <string name="session_chat_sheet_tool_result_line_accessibility">ხაზი %1$d, %2$s</string>
+    <string name="session_chat_sheet_tool_result_line_accessibility">სტრიქონი %1$d, %2$s</string>
     <string name="session_chat_sheet_shell_title">Shell</string>
     <string name="session_chat_sheet_shell_command_accessibility">ბრძანება, %1$s</string>
     <string name="session_chat_sheet_shell_no_output">გამოტანა ჯერ არ არის</string>
@@ -1146,7 +1146,7 @@
     <string name="settings_section_help_feedback">დახმარება და უკუკავშირი</string>
     <string name="settings_section_appearance">გარეგნობა</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">მთავარი</string>
+    <string name="settings_section_home">მთავარი ეკრანი</string>
     <string name="settings_section_session_cache">სესიების ქეში</string>
     <string name="settings_section_privacy">კონფიდენციალურობა</string>
     <string name="settings_section_about">შესახებ</string>
@@ -1161,7 +1161,7 @@
     </plurals>
     <string name="settings_send_feedback_title">უკუკავშირის გაგზავნა</string>
     <string name="settings_send_feedback_subtitle">შეგვატყობინეთ შეცდომა ან გაგვიზიარეთ იდეა</string>
-    <string name="settings_hide_user_directory_title">მომხმარებლის დირექტორიის დამალვა</string>
+    <string name="settings_hide_user_directory_title">მომხმარებლის საქაღალდის დამალვა</string>
     <string name="settings_hide_user_directory_subtitle">აჩვენებს ~/Projects/… და არა /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">„უახლესის“ პერიოდი</string>
     <string name="settings_recent_window_message">სესიები რჩება „უახლესში“, სანამ მუშაობს ან მზადაა, ან თუ ამ პერიოდში განახლდა.</string>
@@ -1179,13 +1179,13 @@
     <string name="settings_timeline_style_activity_card_title">აქტივობის ბარათი</string>
     <string name="settings_timeline_style_activity_card_subtitle">მიმდინარე ნაბიჯები ერთ ცოცხალ ბარათზე, რომელიც შეჯამებად იკეცება</string>
     <string name="settings_follow_up_title">შემდგომი გაგზავნა</string>
-    <string name="settings_follow_up_steer">მიმართვა</string>
+    <string name="settings_follow_up_steer">წარმართვა</string>
     <string name="settings_follow_up_queue">რიგი</string>
-    <string name="settings_follow_up_subtitle_steer">მიმართვა · მხოლოდ V2 სერვერებზე. V1 ამას არ უჭერს მხარს.</string>
+    <string name="settings_follow_up_subtitle_steer">წარმართვა · მხოლოდ V2 სერვერებზე. V1 ამას არ უჭერს მხარს.</string>
     <string name="settings_follow_up_subtitle_queue">რიგი · მხოლოდ V2 სერვერებზე. V1 ამას არ უჭერს მხარს.</string>
     <string name="settings_follow_up_unsupported">V1-ზე მხარდაჭერილი არ არის. ეს სერვერი ყოველთვის დაუყოვნებლივ აგზავნის.</string>
     <string name="settings_worktrees_title">Worktree-ები</string>
-    <string name="settings_worktrees_subtitle">აჩვენებს თითოეული პროექტის worktree-ებსა და ბრენჩებს მთავარზე და „ახალი სესიისას“ საშუალებას გაძლევთ ხანგრძლივი დაჭერით აირჩიოთ worktree.</string>
+    <string name="settings_worktrees_subtitle">აჩვენებს თითოეული პროექტის worktree-ებსა და ბრენჩებს მთავარ ეკრანზე და „ახალი სესიისას“ საშუალებას გაძლევთ ხანგრძლივი დაჭერით აირჩიოთ worktree.</string>
     <string name="settings_session_rows_title">სესიების სტრიქონები</string>
     <string name="settings_session_rows_compact_title">კომპაქტური</string>
     <string name="settings_session_rows_compact_subtitle">ორი ხაზი: სათაური და დრო, შემდეგ პროექტი / worktree</string>
@@ -1225,8 +1225,8 @@
     <string name="diagnostics_loading">დიაგნოსტიკური ლოგები იტვირთება</string>
     <string name="diagnostics_entries_title">ჩანაწერები</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d გასუფთავებული ხაზი შენახულ პერიოდში</item>
-        <item quantity="other">%1$d გასუფთავებული ხაზი შენახულ პერიოდში</item>
+        <item quantity="one">%1$d გასუფთავებული სტრიქონი შენახულ პერიოდში</item>
+        <item quantity="other">%1$d გასუფთავებული სტრიქონი შენახულ პერიოდში</item>
     </plurals>
     <string name="diagnostics_entries_empty">შენახულ პერიოდში ჩანაწერები ჯერ არ არის</string>
     <string name="diagnostics_kept_title">შენახული</string>
@@ -1274,7 +1274,7 @@
     <string name="appearance_syntax_blurb_neon">Dracula-ს ოჯახი</string>
     <string name="appearance_preview_light">ღია</string>
     <string name="appearance_preview_dark">მუქი</string>
-    <string name="appearance_preview_sample_message">გაიარე ტოკენების საცავი.</string>
+    <string name="appearance_preview_sample_message">გაიარეთ ტოკენების საცავი.</string>
     <string name="appearance_preview_sample_reply">ერთხელ განახლება, შემდეგ ხელახლა ცდა.</string>
     <string name="appearance_more_options">მეტი ვარიანტი</string>
     <string name="appearance_reset_text_sizes">ტექსტის ზომების განულება</string>
@@ -1286,7 +1286,7 @@
     <string name="appearance_mode_note_system">მისდევს ტელეფონის ღია ან მუქი პარამეტრს.</string>
     <string name="appearance_mode_note_light">ყოველთვის ღიაა, ტელეფონის პარამეტრის მიუხედავად.</string>
     <string name="appearance_mode_note_dark">ყოველთვის მუქია, ტელეფონის პარამეტრის მიუხედავად.</string>
-    <string name="appearance_text_home_title">მთავარის სიის ტექსტი</string>
+    <string name="appearance_text_home_title">მთავარი ეკრანის სიის ტექსტი</string>
     <string name="appearance_text_session_chat_title">სესიის ჩატის ტექსტი</string>
     <string name="appearance_text_code_title">კოდის ტექსტი</string>
     <string name="appearance_text_size_label">ზომა</string>
@@ -1300,7 +1300,7 @@
     <string name="appearance_text_code_note">ტერმინალი, ცვლილებები, ფაილების ნახვა და ხელსაწყოს გამოსავალი.</string>
     <string name="appearance_text_session_chat_note">შეტყობინებებსა და კომპოზერში კოდის ბლოკები სესიის ჩატის ზომას მისდევს.</string>
     <string name="appearance_sample_session_one">გამოასწორე არასტაბილური ლოგინის გადამისამართების ტესტი</string>
-    <string name="appearance_sample_session_two">გადაიტანე პარამეტრები ახალ საცავში</string>
+    <string name="appearance_sample_session_two">გადაიტანეთ პარამეტრები ახალ საცავში</string>
     <string name="appearance_sample_time_now">ახლა</string>
     <string name="appearance_sample_time_minutes">12წთ</string>
     <string name="appearance_sample_user_message">რატომ ვარდება ლოგინის გადამისამართების ტესტი ხუთიდან ერთხელ?</string>
@@ -1365,7 +1365,7 @@
         <item quantity="other">ბოლო %1$d წუთი · ატვირთვისას შეიკუმშება gzip-ით. გასუფთავებულია ამ ტელეფონზე.</item>
     </plurals>
     <string name="feedback_log_preview_loading">იტვირთება…</string>
-    <string name="feedback_log_preview_empty_title">ლოგის ხაზები არ არის</string>
+    <string name="feedback_log_preview_empty_title">ლოგის სტრიქონები არ არის</string>
     <plurals name="feedback_log_preview_empty_message">
         <item quantity="one">ბოლო %1$d წუთში არაფერი ჩაწერილა.</item>
         <item quantity="other">ბოლო %1$d წუთში არაფერი ჩაწერილა.</item>
@@ -1396,7 +1396,7 @@
     <string name="session_search_archived_tag">დაარქივებული</string>
     <string name="session_search_scope_selected">%1$s, არჩეულია</string>
     <string name="keyboard_shortcuts_group_session">სესია</string>
-    <string name="keyboard_shortcuts_group_prompt">მოთხოვნა</string>
+    <string name="keyboard_shortcuts_group_prompt">პრომპტი</string>
     <string name="keyboard_shortcuts_group_go">გადასვლა</string>
     <string name="keyboard_shortcuts_new_session">ახალი სესია</string>
     <string name="keyboard_shortcuts_command_palette">ბრძანებათა პალიტრა</string>
@@ -1406,8 +1406,8 @@
     <string name="keyboard_shortcuts_show_project">ჩვენება: %1$s</string>
     <string name="keyboard_shortcuts_allow_once">ერთხელ დაშვება</string>
     <string name="keyboard_shortcuts_always_allow">ყოველთვის დაშვება</string>
-    <string name="keyboard_shortcuts_deny">უარი</string>
-    <string name="keyboard_shortcuts_deny_with_note">უარი შენიშვნით</string>
+    <string name="keyboard_shortcuts_deny">უარყოფა</string>
+    <string name="keyboard_shortcuts_deny_with_note">უარყოფა შენიშვნით</string>
     <string name="keyboard_shortcuts_send_note">შენიშვნის გაგზავნა</string>
     <string name="keyboard_shortcuts_next_question">შემდეგი კითხვა</string>
     <string name="keyboard_shortcuts_submit_answers">პასუხების გაგზავნა</string>
@@ -1437,9 +1437,9 @@
     <string name="changes_source_last_turn_empty_title">ცვლილებები არ არის</string>
     <string name="changes_source_last_turn_empty_message">ბოლო დასრულებულ სვლაში ფაილები არ შეცვლილა.</string>
     <string name="changes_loading_title">ცვლილებები იტვირთება</string>
-    <string name="changes_loading_message">diff-ის მიღება…</string>
+    <string name="changes_loading_message">Diff-ის მიღება…</string>
     <string name="changes_no_turn_title">დასრულებული სვლა არ არის</string>
-    <string name="changes_no_turn_message">გააგზავნეთ მოთხოვნა, დაელოდეთ დასრულებას და სცადეთ ხელახლა.</string>
+    <string name="changes_no_turn_message">გააგზავნეთ პრომპტი, დაელოდეთ დასრულებას და სცადეთ ხელახლა.</string>
     <string name="changes_error_title">ცვლილებების ჩატვირთვა ვერ მოხერხდა</string>
     <string name="changes_error_fallback">ცვლილებები არ ჩაიტვირთა.</string>
     <string name="changes_error_request_failed">მოთხოვნა ვერ შესრულდა</string>
@@ -1448,7 +1448,7 @@
     <string name="changes_filter_hint">ფილტრი</string>
     <string name="changes_filter_accessibility_label">შეცვლილი ფაილების გაფილტვრა</string>
     <string name="changes_no_matches_title">შესაბამისი ფაილები არ მოიძებნა</string>
-    <string name="changes_no_matches_message">სცადეთ სხვა გზა ან გაასუფთავეთ ფილტრი.</string>
+    <string name="changes_no_matches_message">სცადეთ სხვა ბილიკი ან გაასუფთავეთ ფილტრი.</string>
     <string name="changes_no_matches_clear_filter">ფილტრის გასუფთავება</string>
     <string name="changes_select_file_title">აირჩიეთ ფაილი</string>
     <string name="changes_select_file_message">აირჩიეთ შეცვლილი ფაილი diff-ის სანახავად.</string>
@@ -1510,7 +1510,7 @@
     <string name="common_expanded">გაშლილია</string>
     <string name="common_collapsed">ჩაკეცილია</string>
     <string name="component_tree_row_loading">იტვირთება</string>
-    <string name="component_timeline_notice_shows_one_line_hint">აჩვენებს ერთ ხაზს</string>
+    <string name="component_timeline_notice_shows_one_line_hint">აჩვენებს ერთ სტრიქონს</string>
     <string name="component_timeline_notice_shows_full_value_hint">აჩვენებს სრულ მნიშვნელობას</string>
     <string name="component_attachment_accessibility_label">%1$s, %2$s</string>
     <string name="component_subagent_state_waiting_for_input">ელოდება პასუხს</string>
@@ -1554,11 +1554,11 @@
     <string name="component_composer_leave_side_question_mode">გვერდითი კითხვის რეჟიმიდან გასვლა</string>
     <string name="session_list_worktree_empty_other_projects">სხვა პროექტების სესიების სანახავად გაასუფთავეთ ფილტრი.</string>
     <string name="component_attachment_uploading">იტვირთება…</string>
-    <string name="component_composer_deny">უარი</string>
-    <string name="component_composer_deny_options">უარის დამატებითი ვარიანტები</string>
-    <string name="component_composer_deny_with_note_menu">უარი შენიშვნით…</string>
+    <string name="component_composer_deny">უარყოფა</string>
+    <string name="component_composer_deny_options">უარყოფის დამატებითი ვარიანტები</string>
+    <string name="component_composer_deny_with_note_menu">უარყოფა შენიშვნით…</string>
     <string name="component_composer_deny_with_note_menu_subtitle">უთხარით აგენტს, სანაცვლოდ რა გააკეთოს</string>
-    <string name="component_composer_deny_with_note_title">უარი შენიშვნით</string>
+    <string name="component_composer_deny_with_note_title">უარყოფა შენიშვნით</string>
     <string name="component_composer_deny_note_placeholder">უთხარით OpenCode-ს, რა გააკეთოს სხვაგვარად</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="one">უარყოფს კიდევ %1$d მოლოდინში მყოფ მოთხოვნასაც.</item>
@@ -1588,7 +1588,7 @@
     <string name="component_page_indicator_label">გვერდი %1$d / %2$d</string>
     <string name="component_composer_next">შემდეგი</string>
     <string name="component_message_image_label">სურათი %1$s</string>
-    <string name="component_composer_leave_shell_mode">shell-ის რეჟიმიდან გასვლა</string>
+    <string name="component_composer_leave_shell_mode">Shell-ის რეჟიმიდან გასვლა</string>
     <string name="dictation_action_downloading">იტვირთება…</string>
     <string name="component_image_viewer_share">გაზიარება</string>
     <string name="session_list_status_failed">ვერ შესრულდა</string>
@@ -1633,14 +1633,14 @@
     <string name="session_list_status_done">დასრულდა</string>
     <string name="session_list_status_idle">უმოქმედო</string>
     <string name="component_attachment_kind_file">ფაილი</string>
-    <string name="component_composer_run_shell_command">shell ბრძანების გაშვება</string>
+    <string name="component_composer_run_shell_command">Shell ბრძანების გაშვება</string>
     <string name="component_image_could_not_load">ვერ ჩაიტვირთა</string>
     <string name="component_outgoing_message_show_actions">შეტყობინების მოქმედებების ჩვენება</string>
     <string name="live_updates_accessibility_label">რეალურ დროში განახლებები: %1$s</string>
     <string name="component_composer_previous_question">წინა კითხვა</string>
     <string name="component_activity_card_agent">აგენტი</string>
     <string name="session_list_section_today">დღეს</string>
-    <string name="component_composer_child_lockout">ქვესესიებს მოთხოვნას ვერ გაუგზავნით.</string>
+    <string name="component_composer_child_lockout">ქვესესიებს პრომპტს ვერ გაუგზავნით.</string>
     <string name="component_attachment_uploading_percent">იტვირთება %1$d%%</string>
     <string name="component_composer_custom_answer_hint">შეიყვანეთ საკუთარი პასუხი</string>
     <string name="component_composer_cancel_revert">დაბრუნების გაუქმება</string>
@@ -1717,7 +1717,7 @@
     <string name="component_composer_shell_mode">Shell-ის რეჟიმი</string>
     <string name="component_skeleton_illustration_connect">დაკავშირება</string>
     <string name="component_composer_not_selected">არჩეული არ არის</string>
-    <string name="component_composer_shell_mode_description">Shell-ის რეჟიმი. shell-ის რეჟიმიდან გასვლა</string>
+    <string name="component_composer_shell_mode_description">Shell-ის რეჟიმი. Shell-ის რეჟიმიდან გასვლა</string>
     <string name="component_branch_pill_based_on">ეფუძნება: %1$s</string>
     <string name="component_composer_add_attachment">დანართის დამატება</string>
     <string name="dictation_microphone_off">მიკროფონზე წვდომა გამორთულია</string>
@@ -1743,7 +1743,7 @@
     <string name="component_activity_sheet_working_count">მუშაობს %1$d</string>
     <string name="session_list_status_retrying">ხელახლა ცდა</string>
     <string name="component_attachment_remove">%1$s-ის წაშლა</string>
-    <string name="component_composer_send_steer">გაგზავნა მიმართვად</string>
+    <string name="component_composer_send_steer">გაგზავნა წარმართვად</string>
     <string name="component_composer_next_permission">შემდეგი ნებართვის მოთხოვნა</string>
     <string name="session_list_dock_project_filter">პროექტის ფილტრი</string>
     <string name="component_split_pane_resize_hint">გვერდითი პანელის დასამალად ორჯერ შეეხეთ</string>
@@ -1783,10 +1783,10 @@
         <item quantity="other">%1$d შეცვლილი</item>
     </plurals>
     <string name="worktrees_none_in_project">Worktree-ები არ არის. ახალი სესია → „აირჩიეთ პროექტი ან worktree“ ქმნის ერთს.</string>
-    <string name="worktrees_footer">worktree-ის წაშლა სერვერზე მის საქაღალდეს წაშლის. მისი სესიები დარჩება, მაგრამ მასში ხელახლა ვეღარ იმუშავებს.</string>
+    <string name="worktrees_footer">Worktree-ის წაშლა სერვერზე მის საქაღალდეს წაშლის. მისი სესიები დარჩება, მაგრამ მასში ხელახლა ვეღარ იმუშავებს.</string>
     <string name="worktrees_more">მეტი მოქმედება: %1$s</string>
     <string name="worktrees_removing">იშლება…</string>
-    <string name="worktrees_actions_show_on_home">სესიების ჩვენება მთავარზე</string>
+    <string name="worktrees_actions_show_on_home">სესიების ჩვენება მთავარ ეკრანზე</string>
     <string name="worktrees_actions_new_session">ახალი სესია აქ</string>
     <string name="worktrees_actions_remove">Worktree-ის წაშლა…</string>
     <string name="worktrees_remove_title">წაიშალოს worktree „%1$s“?</string>
@@ -1797,7 +1797,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">დაუკომიტებელი ცვლილებები დაიკარგება.</string>
     <string name="worktrees_remove_changes_unchecked">დაუკომიტებელი ცვლილებების შემოწმება ვერ მოხერხდა. თუ არის, დაიკარგება.</string>
-    <string name="worktrees_remove_sessions_stay">ამ worktree-ის სესიები მთავარზე დარჩება, მაგრამ აქ ხელახლა ვეღარ იმუშავებს.</string>
+    <string name="worktrees_remove_sessions_stay">ამ worktree-ის სესიები მთავარ ეკრანზე დარჩება, მაგრამ აქ ხელახლა ვეღარ იმუშავებს.</string>
     <string name="worktrees_remove_confirm_anyway">მაინც წაშლა</string>
     <string name="worktrees_blocked_title">„%1$s“ ჯერ ვერ წაიშლება</string>
     <string name="worktrees_blocked_message">ამ worktree-ში სესია მუშაობს. შეაჩერეთ და შემდეგ წაშალეთ worktree.</string>
