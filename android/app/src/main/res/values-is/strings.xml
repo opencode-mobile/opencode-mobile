@@ -297,7 +297,7 @@
     <string name="archived_sessions_empty_message">Lotur sem þú setur í skjalasafn í %1$s birtast hér.</string>
     <string name="archived_sessions_show_all_projects">Sýna öll verkefni</string>
     <string name="archived_sessions_footer">Ýttu á lotu til að sjá meira. Að taka úr skjalasafni setur hana aftur á heimaskjáinn.</string>
-    <string name="archived_sessions_load_failed">Gat ekki hlaðið fundum úr skjalasafni.</string>
+    <string name="archived_sessions_load_failed">Gat ekki hlaðið lotum úr skjalasafni.</string>
     <string name="archived_sessions_unarchive_failed">Gat ekki tekið lotu úr skjalasafni.</string>
     <string name="session_chat_archived_banner">Sett í skjalasafn %1$s</string>
     <string name="add_project_title">Bæta við verkefni</string>
@@ -614,7 +614,7 @@
     <string name="home_error_reconnect_to_create">Tengstu aftur til að stofna lotu</string>
     <string name="timeline_state_creating_title">Ræsi lotu…</string>
     <string name="timeline_state_creating_subtitle">Stofna á netþjóni…</string>
-    <string name="new_session_title">Ný seta</string>
+    <string name="new_session_title">Ný lota</string>
     <string name="new_session_draft_subtitle">Drög · stofnuð þegar þú sendir</string>
     <string name="new_session_discard_draft">Henda drögum</string>
     <string name="new_session_run_in_caption">Keyra lotu í</string>
@@ -1521,7 +1521,7 @@
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Í gær</string>
     <string name="component_composer_reverting_title">Afturkalla þessi skilaboð</string>
-    <string name="session_new_title">Ný seta</string>
+    <string name="session_new_title">Ný lota</string>
     <string name="session_list_dock_add_project">Bæta við verkefni</string>
     <string name="theme_error_preset_not_found">Þemaforstilling fannst ekki</string>
     <string name="component_composer_submit">Senda</string>
@@ -1659,7 +1659,7 @@
     <string name="session_list_scope_load_slow">Enn í hleðslu…</string>
     <string name="session_list_dock_hint">Opnar verkefnasíuna.</string>
     <string name="component_hunk_navigation_next">Næsti bútur</string>
-    <string name="session_list_scope_load_failed_message">Netþjónninn skilaði ekki fundum þessa verkefnis.</string>
+    <string name="session_list_scope_load_failed_message">Netþjónninn skilaði ekki lotum þessa verkefnis.</string>
     <string name="component_drop_overlay_accessibility_label">%1$s. %2$s</string>
     <string name="component_image_view_full_screen">Skoða á öllum skjánum</string>
     <string name="component_activity_sheet_back">Til baka í virkni</string>

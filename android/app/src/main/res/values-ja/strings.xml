@@ -986,7 +986,7 @@
     <string name="session_chat_sheet_timeline_style_picker_standard_title">標準</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">エージェントのメッセージの間にツールカードとグループを表示</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">ステップレール</string>
-    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">レール上にステップごとに1行、作業中はリアルタイムで更新</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">レール上にステップごとに1行、エージェントの作業中はリアルタイムで更新</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">アクティビティカード</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">実行中のステップを1枚のカードにまとめ、完了後は要約に折りたたみ</string>
     <string name="session_chat_sheet_picker_model">モデル</string>
@@ -1103,7 +1103,7 @@
     <string name="settings_timeline_style_standard_title">標準</string>
     <string name="settings_timeline_style_standard_subtitle">エージェントのメッセージの間にツールカードとグループを表示</string>
     <string name="settings_timeline_style_step_rail_title">ステップレール</string>
-    <string name="settings_timeline_style_step_rail_subtitle">レール上にステップごとに1行、作業中はリアルタイムで更新</string>
+    <string name="settings_timeline_style_step_rail_subtitle">レール上にステップごとに1行、エージェントの作業中はリアルタイムで更新</string>
     <string name="settings_timeline_style_activity_card_title">アクティビティカード</string>
     <string name="settings_timeline_style_activity_card_subtitle">実行中のステップを1枚のカードにまとめ、完了後は要約に折りたたみ</string>
     <string name="settings_follow_up_title">追加メッセージの送信</string>

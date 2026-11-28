@@ -305,7 +305,7 @@
     <string name="archived_sessions_empty_message">Sesije koje arhiviraš u %1$s pojavit će se ovdje.</string>
     <string name="archived_sessions_show_all_projects">Prikaži sve projekte</string>
     <string name="archived_sessions_footer">Dodirni sesiju za više opcija. Vraćanje iz arhive vraća je na početnu.</string>
-    <string name="archived_sessions_load_failed">Učitavanje arhiviranih sjednica nije uspjelo.</string>
+    <string name="archived_sessions_load_failed">Učitavanje arhiviranih sesija nije uspjelo.</string>
     <string name="archived_sessions_unarchive_failed">Vraćanje sesije iz arhive nije uspjelo.</string>
     <string name="session_chat_archived_banner">Arhivirano %1$s</string>
     <string name="add_project_title">Dodaj projekt</string>
@@ -525,7 +525,7 @@
     <string name="session_chat_move_worktree_menu_title">Premjesti u worktree…</string>
     <string name="session_chat_move_worktree_sheet_title">Premjesti u worktree</string>
     <string name="session_chat_move_worktree_no_other">Ovaj projekt nema drugih worktreeova</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Premješta se u %1$s nakon ovog odgovora.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Premješta se u %1$s nakon ovog poteza.</string>
     <string name="session_chat_move_worktree_failed">Premještanje sesije nije uspjelo: %1$s</string>
     <string name="session_chat_variant_default">Zadano</string>
     <string name="session_chat_model_chip_placeholder">Model</string>
@@ -1514,17 +1514,17 @@
         <item quantity="other">Git promjene imaju %1$d promijenjenih datoteka.</item>
     </plurals>
     <plurals name="changes_other_source_last_turn">
-        <item quantity="one">Zadnji korak promijenio je %1$d datoteku.</item>
-        <item quantity="few">Zadnji korak promijenio je %1$d datoteke.</item>
-        <item quantity="other">Zadnji korak promijenio je %1$d datoteka.</item>
+        <item quantity="one">Zadnji potez promijenio je %1$d datoteku.</item>
+        <item quantity="few">Zadnji potez promijenio je %1$d datoteke.</item>
+        <item quantity="other">Zadnji potez promijenio je %1$d datoteka.</item>
     </plurals>
     <string name="changes_other_source_show">Prikaži: %1$s</string>
     <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
     <string name="changes_source_last_turn_empty_title">Nema promjena</string>
-    <string name="changes_source_last_turn_empty_message">Zadnji dovršeni korak nije promijenio nijednu datoteku.</string>
+    <string name="changes_source_last_turn_empty_message">Zadnji dovršeni potez nije promijenio nijednu datoteku.</string>
     <string name="changes_loading_title">Učitavanje promjena</string>
     <string name="changes_loading_message">Dohvaćanje diffa…</string>
-    <string name="changes_no_turn_title">Nema dovršenog koraka</string>
+    <string name="changes_no_turn_title">Nema dovršenog poteza</string>
     <string name="changes_no_turn_message">Pošalji upit, pričekaj da završi i pokušaj ponovno.</string>
     <string name="changes_error_title">Promjene se ne mogu učitati</string>
     <string name="changes_error_fallback">Promjene nisu učitane.</string>
@@ -1834,7 +1834,7 @@
     <string name="component_composer_open_subagent_session">Otvori sesiju subagenta</string>
     <string name="component_composer_question_step">Korak %1$d od %2$d</string>
     <string name="share_feedback_subject_bug">Prijava greške u OpenCode Mobile</string>
-    <string name="component_activity_card_opens_child_session_hint">Otvara podređenu sesiju</string>
+    <string name="component_activity_card_opens_child_session_hint">Otvara podsesiju</string>
     <string name="component_activity_status_failed">nije uspjelo</string>
     <string name="dictation_model_not_installed_title">%1$s treba %2$s</string>
     <string name="component_composer_back_to_main_session">Natrag na glavnu sesiju</string>
@@ -1921,5 +1921,5 @@
     <string name="whats_new_done">Gotovo</string>
     <string name="whats_new_find_again">Ovo možeš ponovo pronaći u Postavkama → Što je novo</string>
     <string name="whats_new_installed">Instalirano</string>
-    <string name="whats_new_settings_subtitle">Bilješke o izdanju za svaku verziju</string>
+    <string name="whats_new_settings_subtitle">Napomene o izdanju za svaku verziju</string>
 </resources>

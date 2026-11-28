@@ -1284,7 +1284,7 @@
     <string name="settings_section_help_feedback">Nápověda a zpětná vazba</string>
     <string name="settings_section_appearance">Vzhled</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Domů</string>
+    <string name="settings_section_home">Domovská obrazovka</string>
     <string name="settings_section_session_cache">Mezipaměť relací</string>
     <string name="settings_section_privacy">Soukromí</string>
     <string name="settings_section_about">O aplikaci</string>
@@ -1944,7 +1944,7 @@
     <string name="session_list_dock_project_filter">Filtr projektů</string>
     <string name="component_split_pane_resize_hint">Dvojitým klepnutím skryjete postranní panel</string>
     <string name="component_branch_pill_shows_details_hint">Zobrazí podrobnosti větve</string>
-    <string name="component_composer_permission_requested">Vyžadováno oprávnění</string>
+    <string name="component_composer_permission_requested">Žádost o oprávnění</string>
     <string name="component_thinking">Myšlení</string>
     <string name="dictation_model_downloading_title">%1$s stahuje %2$s</string>
     <string name="component_hunk_navigation_expand_context">Rozbalit kontext</string>

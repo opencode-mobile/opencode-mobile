@@ -29,7 +29,7 @@
     <string name="connection_setup_instructions_run">Kompyuteringizda buni ishga tushiring, so‘ng QR kodni skanerlang.</string>
     <string name="connection_setup_instructions_first_run">Birinchi ishga tushirish taxminan bir daqiqa oladi. OpenCode 2.0.25 yoki undan yangisi kerak. Xizmat ishlamayotgan bo‘lsa, ishga tushadi.</string>
     <string name="connection_setup_instructions_same_wifi_title">Buning o‘rniga bir xil Wi-Fi</string>
-    <string name="connection_setup_instructions_same_wifi_body">Oddiy pair server localhostdan tashqarida ham erishiladigan bo‘lgandagina QR ko‘rsatadi.</string>
+    <string name="connection_setup_instructions_same_wifi_body">Oddiy pair QR kodni faqat server localhost’dan tashqarida ham ochiq bo‘lgandagina ko‘rsatadi.</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">Host</string>
     <string name="connection_setup_host_help">LAN, Tailscale MagicDNS yoki tunnel — telefondagi localhost emas.</string>
@@ -51,11 +51,11 @@
     <string name="connection_setup_address_using_now">Hozir ishlatilmoqda</string>
     <string name="connection_setup_address_saved">Saqlangan</string>
     <string name="connection_setup_pair_again_unreachable">Saqlangan manzilga erishib bo‘lmadi. Qayta juftlang.</string>
-    <string name="connection_setup_pair_again_unauthorized">Bu server saqlangan kirish maʼlumotlarini rad etdi. Qayta juftlang. Yangi parol barcha qurilmalarni tizimdan chiqarib yuboradi.</string>
+    <string name="connection_setup_pair_again_unauthorized">Bu server saqlangan kirish ma’lumotlarini rad etdi. Qayta juftlang. Yangi parol barcha qurilmalarni tizimdan chiqarib yuboradi.</string>
     <string name="connection_cleartext_title">Ulanish shifrlanmagan</string>
-    <string name="connection_cleartext_message_one_host">%1$s mahalliy tarmoq yoki Tailscaledan tashqarida oddiy http ishlatadi. Server parolingiz va seanslaringizdagi hamma narsa shifrlanmagan holda uzatiladi. https, VPN yoki tunnel afzal.</string>
-    <string name="connection_cleartext_message_hosts">%1$s mahalliy tarmoq yoki Tailscaledan tashqarida oddiy http ishlatadi. Server parolingiz va seanslaringizdagi hamma narsa shifrlanmagan holda uzatiladi. https, VPN yoki tunnel afzal.</string>
-    <string name="connection_cleartext_message_this_address">Bu manzil mahalliy tarmoq yoki Tailscaledan tashqarida oddiy http ishlatadi. Server parolingiz va seanslaringizdagi hamma narsa shifrlanmagan holda uzatiladi. https, VPN yoki tunnel afzal.</string>
+    <string name="connection_cleartext_message_one_host">%1$s mahalliy tarmoq yoki Tailscale’dan tashqarida oddiy http ishlatadi. Server parolingiz va seanslaringizdagi hamma narsa shifrlanmagan holda uzatiladi. https, VPN yoki tunnel afzal.</string>
+    <string name="connection_cleartext_message_hosts">%1$s mahalliy tarmoq yoki Tailscale’dan tashqarida oddiy http ishlatadi. Server parolingiz va seanslaringizdagi hamma narsa shifrlanmagan holda uzatiladi. https, VPN yoki tunnel afzal.</string>
+    <string name="connection_cleartext_message_this_address">Bu manzil mahalliy tarmoq yoki Tailscale’dan tashqarida oddiy http ishlatadi. Server parolingiz va seanslaringizdagi hamma narsa shifrlanmagan holda uzatiladi. https, VPN yoki tunnel afzal.</string>
     <string name="connection_cleartext_connect_anyway">Baribir ulanish</string>
     <string name="connection_error_invalid_qr">Bu OpenCode 2 juftlash QR kodi emas</string>
     <string name="connection_error_localhost_qr">Bu QRda faqat localhost manzili bor</string>
@@ -76,7 +76,7 @@
     <string name="connection_error_unhealthy">Server nosoz deb xabar berdi</string>
     <string name="connection_scanner_title">Juftlash QR kodini skanerlash</string>
     <string name="connection_scanner_card_title">OpenCode juftlash QR kodi</string>
-    <string name="connection_scanner_card_body">opencode pair --remote orqali. Oddiy pair server localhostdan tashqarida ham erishiladigan bo‘lgandagina QR ko‘rsatadi.</string>
+    <string name="connection_scanner_card_body">opencode pair --remote orqali. Oddiy pair QR kodni faqat server localhost’dan tashqarida ham ochiq bo‘lgandagina ko‘rsatadi.</string>
     <string name="connection_onboarding_title">Serveringizga ulaning</string>
     <string name="connection_onboarding_body">OpenCode Mobile dasturlash kompyuteringizda ishlayotgan opencode serveridagi seanslarni boshqaradi.</string>
     <string name="connection_onboarding_connect">Serverga ulanish</string>
@@ -493,7 +493,7 @@
     <string name="session_chat_commands_undo_description">Oxirgi xabarni bekor qilish</string>
     <string name="session_chat_commands_redo_label">Qayta qilish</string>
     <string name="session_chat_commands_redo_description">Bekor qilingan xabarni qaytarish</string>
-    <string name="session_chat_commands_compact_label">Ixcham</string>
+    <string name="session_chat_commands_compact_label">Ixchamlash</string>
     <string name="session_chat_commands_compact_description">Seans kontekstini ixchamlash</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">Loyiha shell’ini ochish</string>
@@ -566,8 +566,8 @@
         <item quantity="other">%1$d ta navbatda</item>
     </plurals>
     <plurals name="session_chat_activity_queued_prompts">
-        <item quantity="one">Navbatda %1$d ta tezkor</item>
-        <item quantity="other">Navbatda %1$d ta tezkor</item>
+        <item quantity="one">Navbatda %1$d ta prompt</item>
+        <item quantity="other">Navbatda %1$d ta prompt</item>
     </plurals>
     <string name="session_chat_activity_side_question_failed">Qo‘shimcha savol bajarilmadi</string>
     <plurals name="session_chat_activity_side_questions_failed">
@@ -637,7 +637,7 @@
     <string name="timeline_state_error_title">Xabarlarni yuklab bo‘lmadi</string>
     <string name="timeline_state_error_fallback">Xabarlar tarixi yuklanmadi.</string>
     <string name="timeline_state_retry">Qayta urinish</string>
-    <string name="timeline_state_empty">Hozircha xabar yo‘q. Boshlash uchun tezkor yuboring.</string>
+    <string name="timeline_state_empty">Hozircha xabar yo‘q. Boshlash uchun prompt yuboring.</string>
     <string name="timeline_state_refreshing">Xabarlar yangilanmoqda</string>
     <string name="timeline_message_assistant">Yordamchi xabari</string>
     <string name="timeline_message_actions_hint_long_press">Xabar amallarini ko‘rsatish uchun uzoq bosing</string>
@@ -863,7 +863,7 @@
     <string name="timeline_failure_session_work_failed">Seans ishi bajarilmadi</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Model tanlash</string>
-    <string name="timeline_failure_compact">Ixcham</string>
+    <string name="timeline_failure_compact">Ixchamlash</string>
     <string name="session_chat_compact_status">Ixchamlanmoqda…</string>
     <string name="session_chat_turn_sending">Yuborilmoqda…</string>
     <string name="session_chat_turn_sending_percent">Yuborilmoqda %1$d%%</string>
@@ -876,7 +876,7 @@
     <string name="session_chat_revert_cancel_failed">Qaytarishni bekor qilib bo‘lmadi.</string>
     <string name="session_chat_revert_commit_failed">Qaytarishni tasdiqlab bo‘lmadi.</string>
     <string name="session_chat_fork_rename_failed">Fork yaratildi, lekin nomini o‘zgartirib bo‘lmadi.</string>
-    <string name="session_chat_pending_prompt_update_failed">Kutilayotgan tezkorni yangilab bo‘lmadi</string>
+    <string name="session_chat_pending_prompt_update_failed">Kutilayotgan promptni yangilab bo‘lmadi</string>
     <string name="session_chat_shell_stop_failed">Shell’ni to‘xtatib bo‘lmadi. Qayta urining.</string>
     <string name="session_chat_shell_status_running">Ishlamoqda</string>
     <string name="session_chat_shell_status_exited">Tugadi</string>
@@ -1023,10 +1023,10 @@
     <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
     <string name="component_branch_pill_a11y_added">%1$s, %2$d ta qo‘shildi</string>
     <string name="component_branch_pill_a11y_removed">%1$s, %2$d ta o‘chirildi</string>
-    <string name="session_chat_archive_failed">Sessiyani arxivlab bo‘lmadi.</string>
-    <string name="session_chat_delete_failed">Sessiyani o‘chirib bo‘lmadi.</string>
+    <string name="session_chat_archive_failed">Seansni arxivlab bo‘lmadi.</string>
+    <string name="session_chat_delete_failed">Seansni o‘chirib bo‘lmadi.</string>
     <string name="session_chat_mcp_load_failed">MCP serverlarni yuklab bo‘lmadi. Ulanishni tekshirib, qayta urining.</string>
-    <string name="session_chat_create_failed">Sessiya yaratib bo‘lmadi</string>
+    <string name="session_chat_create_failed">Seans yaratib bo‘lmadi</string>
     <string name="session_chat_send_timed_out">Yuborib bo‘lmadi. Qayta urining.</string>
     <string name="session_chat_shell_cannot_queue">Shell buyruqlarini navbatga qo‘yib bo‘lmaydi. Hozir bajarish uchun Yo‘naltirishga o‘ting.</string>
     <string name="session_chat_reply_error_permission">Javobingizni yuborib bo‘lmadi. Qayta urining.</string>
@@ -1037,8 +1037,8 @@
     <string name="session_chat_reply_error_dismiss_reason">Savolni yopib bo‘lmadi. %1$s.</string>
     <string name="session_chat_permission_unavailable">Ruxsat so‘rovi endi mavjud emas</string>
     <string name="session_chat_question_unavailable">Savol so‘rovi endi mavjud emas</string>
-    <string name="session_chat_permission_tree_failed">Ruxsat sessiyalari daraxtini yangilab bo‘lmadi</string>
-    <string name="session_chat_question_tree_failed">Savol sessiyalari daraxtini yangilab bo‘lmadi</string>
+    <string name="session_chat_permission_tree_failed">Ruxsat seanslari daraxtini yangilab bo‘lmadi</string>
+    <string name="session_chat_question_tree_failed">Savol seanslari daraxtini yangilab bo‘lmadi</string>
     <string name="session_chat_sheet_timeline_style_picker_title">Yangi: xronologiyangizni tanlang</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">Bu yangilanish agent nima qilayotganini kuzatishning yangi usullarini qo‘shadi.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">Buni istalgan vaqtda Sozlamalar → Xronologiya uslubi bo‘limida o‘zgartirishingiz mumkin.</string>
@@ -1109,15 +1109,15 @@
         <item quantity="other">%1$d ta vosita</item>
     </plurals>
     <string name="session_chat_sheet_activity_stopped">To‘xtatildi</string>
-    <string name="session_context_title">Sessiya konteksti</string>
-    <string name="session_context_loading_title">Sessiya konteksti yuklanmoqda</string>
+    <string name="session_context_title">Seans konteksti</string>
+    <string name="session_context_loading_title">Seans konteksti yuklanmoqda</string>
     <string name="session_context_loading_subtitle">Kontekst olinmoqda…</string>
-    <string name="session_context_load_failed">Sessiya kontekstini yuklab bo‘lmadi</string>
+    <string name="session_context_load_failed">Seans kontekstini yuklab bo‘lmadi</string>
     <string name="session_context_load_failed_message">Kontekst yuklanmadi.</string>
-    <string name="session_context_refresh_failed">Sessiya kontekstini yangilab bo‘lmadi</string>
-    <string name="session_context_refreshing">Sessiya konteksti yangilanmoqda</string>
+    <string name="session_context_refresh_failed">Seans kontekstini yangilab bo‘lmadi</string>
+    <string name="session_context_refreshing">Seans konteksti yangilanmoqda</string>
     <string name="session_context_retry">Qayta urinish</string>
-    <string name="session_context_stat_session">Sessiya</string>
+    <string name="session_context_stat_session">Seans</string>
     <string name="session_context_stat_messages">Xabarlar</string>
     <string name="session_context_stat_provider">Provayder</string>
     <string name="session_context_stat_model">Model</string>
@@ -1131,7 +1131,7 @@
     <string name="session_context_stat_user_messages">Foydalanuvchi xabarlari</string>
     <string name="session_context_stat_assistant_messages">Yordamchi xabarlari</string>
     <string name="session_context_stat_total_cost">Umumiy narx</string>
-    <string name="session_context_stat_created">Sessiya yaratilgan</string>
+    <string name="session_context_stat_created">Seans yaratilgan</string>
     <string name="session_context_stat_last_activity">Oxirgi faollik</string>
     <string name="session_context_breakdown_title">Kontekst taqsimoti</string>
     <string name="session_context_breakdown_system">Tizim</string>
@@ -1146,8 +1146,8 @@
     <string name="settings_section_help_feedback">Yordam va fikr-mulohaza</string>
     <string name="settings_section_appearance">Tashqi ko‘rinish</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
-    <string name="settings_section_home">Bosh sahifa</string>
-    <string name="settings_section_session_cache">Sessiya keshi</string>
+    <string name="settings_section_home">Bosh ekran</string>
+    <string name="settings_section_session_cache">Seans keshi</string>
     <string name="settings_section_privacy">Maxfiylik</string>
     <string name="settings_section_about">Ilova haqida</string>
     <string name="settings_servers_summary_none">Saqlangan serverlar yo‘q</string>
@@ -1160,11 +1160,11 @@
         <item quantity="other">%1$d ta saqlangan · %2$s faol</item>
     </plurals>
     <string name="settings_send_feedback_title">Fikr-mulohaza yuborish</string>
-    <string name="settings_send_feedback_subtitle">Xato haqida xabar bering yoki g‘oya bilan o‘rtoqlashing</string>
+    <string name="settings_send_feedback_subtitle">Xato haqida xabar bering yoki g‘oyangizni ulashing</string>
     <string name="settings_hide_user_directory_title">Foydalanuvchi papkasini yashirish</string>
     <string name="settings_hide_user_directory_subtitle">/Users/you/Projects/… o‘rniga ~/Projects/… ko‘rsatiladi</string>
     <string name="settings_recent_window_title">So‘nggilar oynasi</string>
-    <string name="settings_recent_window_message">Sessiyalar ishlayotgan yoki tayyor bo‘lsa, yoki shu oyna ichida yangilangan bo‘lsa, So‘nggilar ro‘yxatida qoladi.</string>
+    <string name="settings_recent_window_message">Seanslar ishlayotgan yoki tayyor bo‘lsa, yoki shu oyna ichida yangilangan bo‘lsa, So‘nggilar ro‘yxatida qoladi.</string>
     <plurals name="settings_recent_window_hours">
         <item quantity="one">%1$d soat</item>
         <item quantity="other">%1$d soat</item>
@@ -1185,20 +1185,20 @@
     <string name="settings_follow_up_subtitle_queue">Navbat · faqat V2 serverlar. V1 buni qo‘llab-quvvatlamaydi.</string>
     <string name="settings_follow_up_unsupported">V1’da qo‘llab-quvvatlanmaydi. Bu server doim darhol yuboradi.</string>
     <string name="settings_worktrees_title">Worktree’lar</string>
-    <string name="settings_worktrees_subtitle">Bosh sahifada har bir loyihaning worktree va branch’larini ko‘rsatadi hamda Yangi sessiyani bosib turganda worktree tanlash imkonini beradi.</string>
-    <string name="settings_session_rows_title">Sessiya qatorlari</string>
+    <string name="settings_worktrees_subtitle">Bosh ekranda har bir loyihaning worktree va branch’larini ko‘rsatadi hamda “Yangi seans”ni bosib turganda worktree tanlash imkonini beradi.</string>
+    <string name="settings_session_rows_title">Seans qatorlari</string>
     <string name="settings_session_rows_compact_title">Ixcham</string>
     <string name="settings_session_rows_compact_subtitle">Ikki qator: sarlavha va vaqt, so‘ng loyiha / worktree</string>
     <string name="settings_session_rows_classic_title">Klassik</string>
     <string name="settings_session_rows_classic_subtitle">Loyiha va worktree alohida qatorlarda</string>
     <string name="settings_session_cache_size">Hajmi</string>
-    <string name="settings_session_cache_size_label">Sessiya keshi hajmi</string>
+    <string name="settings_session_cache_size_label">Seans keshi hajmi</string>
     <string name="settings_session_cache_empty">Bo‘sh</string>
     <string name="settings_session_cache_bytes">%1$d B</string>
-    <string name="settings_clear_session_cache_title">Sessiya keshini tozalash</string>
-    <string name="settings_clear_session_cache_subtitle">Keshdagi sessiya va xabarlarni olib tashlash</string>
-    <string name="settings_clear_session_cache_dialog_title">Sessiya keshi tozalansinmi?</string>
-    <string name="settings_clear_session_cache_dialog_message">Keshdagi sessiya va xabarlar olib tashlanadi. Ulanish va hisob ma’lumotlaringiz saqlanadi.</string>
+    <string name="settings_clear_session_cache_title">Seans keshini tozalash</string>
+    <string name="settings_clear_session_cache_subtitle">Keshdagi seans va xabarlarni olib tashlash</string>
+    <string name="settings_clear_session_cache_dialog_title">Seans keshi tozalansinmi?</string>
+    <string name="settings_clear_session_cache_dialog_message">Keshdagi seanslar va xabarlar olib tashlanadi. Ulanish va hisob ma’lumotlaringiz saqlanadi.</string>
     <string name="settings_clear">Tozalash</string>
     <string name="settings_app_lock_title">Ilova qulfi</string>
     <string name="settings_app_lock_subtitle_available">Ilova fondan qaytganda barmoq izi, yuz yoki ekran qulfini talab qilish</string>
@@ -1206,7 +1206,7 @@
     <string name="settings_privacy_policy_title">Maxfiylik siyosati</string>
     <string name="settings_privacy_policy_subtitle">Ilovalar ma’lumotlar bilan qanday ishlaydi</string>
     <string name="settings_analytics_title">Analitika va nosozlik hisobotlari</string>
-    <string name="settings_analytics_subtitle">Ixtiyoriy mahsulot foydalanish hodisalari va nosozlik hisobotlariga ruxsat berish. O‘chiq bo‘lsa, Firebase’ga hech narsa yuborilmaydi.</string>
+    <string name="settings_analytics_subtitle">Ixtiyoriy mahsulotdan foydalanish hodisalari va nosozlik hisobotlariga ruxsat berish. O‘chiq bo‘lsa, Firebase’ga hech narsa yuborilmaydi.</string>
     <string name="settings_analytics_label">Mahsulot analitikasi</string>
     <string name="settings_diagnostic_logs_subtitle">Maxfiy ma’lumotlari yashirilgan, oxirgi ish jurnali oynasini ulashish</string>
     <string name="settings_clear_all_data_title">Barcha ma’lumotlarni tozalash</string>
@@ -1278,7 +1278,7 @@
     <string name="appearance_preview_sample_reply">Bir marta yangilanyapti, so‘ng qayta urinaman.</string>
     <string name="appearance_more_options">Boshqa parametrlar</string>
     <string name="appearance_reset_text_sizes">Matn o‘lchamlarini tiklash</string>
-    <string name="appearance_reset_all">Butun ko‘rinishni tiklash</string>
+    <string name="appearance_reset_all">Tashqi ko‘rinishni to‘liq tiklash</string>
     <string name="appearance_mode_title">Rejim</string>
     <string name="appearance_mode_system">Tizim</string>
     <string name="appearance_mode_light">Yorug‘</string>
@@ -1286,8 +1286,8 @@
     <string name="appearance_mode_note_system">Telefonning yorug‘ yoki qorong‘i sozlamasiga ergashadi.</string>
     <string name="appearance_mode_note_light">Telefon sozlamasidan qat’i nazar, doim yorug‘.</string>
     <string name="appearance_mode_note_dark">Telefon sozlamasidan qat’i nazar, doim qorong‘i.</string>
-    <string name="appearance_text_home_title">Bosh sahifa ro‘yxati matni</string>
-    <string name="appearance_text_session_chat_title">Sessiya suhbati matni</string>
+    <string name="appearance_text_home_title">Bosh ekran ro‘yxati matni</string>
+    <string name="appearance_text_session_chat_title">Seans suhbati matni</string>
     <string name="appearance_text_code_title">Kod matni</string>
     <string name="appearance_text_size_label">O‘lcham</string>
     <string name="appearance_text_size_accessibility">%1$s o‘lchami</string>
@@ -1298,7 +1298,7 @@
     <string name="appearance_text_size_large">Katta</string>
     <string name="appearance_text_size_extra_large">Juda katta</string>
     <string name="appearance_text_code_note">Terminal, O‘zgarishlar, fayl ko‘rish oynasi va vosita natijasi.</string>
-    <string name="appearance_text_session_chat_note">Xabarlar va yozish maydonidagi kod bloklari Sessiya suhbati o‘lchamiga ergashadi.</string>
+    <string name="appearance_text_session_chat_note">Xabarlar va yozish maydonidagi kod bloklari Seans suhbati o‘lchamiga ergashadi.</string>
     <string name="appearance_sample_session_one">Beqaror login redirect testini tuzatish</string>
     <string name="appearance_sample_session_two">Sozlamalarni yangi omborga ko‘chirish</string>
     <string name="appearance_sample_time_now">hozir</string>
@@ -1378,16 +1378,16 @@
     <string name="feedback_dictation_microphone_off">Mikrofonga ruxsat o‘chiq</string>
     <string name="feedback_dictation_listening">Tinglanmoqda · %1$s</string>
     <string name="feedback_dictation_listening_on_device">Tinglanmoqda · %1$s · qurilmada</string>
-    <string name="session_search_title">Sessiyalarni qidirish</string>
+    <string name="session_search_title">Seanslarni qidirish</string>
     <string name="session_search_clear">Qidiruvni tozalash</string>
     <string name="session_search_placeholder">%1$s ichida qidirish</string>
-    <string name="session_search_hint">%1$s ichidagi sessiya sarlavhalari bo‘yicha qidiradi.</string>
+    <string name="session_search_hint">%1$s ichidagi seans sarlavhalari bo‘yicha qidiradi.</string>
     <string name="session_search_searching">Qidirilmoqda…</string>
     <plurals name="session_search_results">
         <item quantity="one">%1$d ta natija</item>
         <item quantity="other">%1$d ta natija</item>
     </plurals>
-    <string name="session_search_no_match_title">“%1$s”ga mos sessiya yo‘q</string>
+    <string name="session_search_no_match_title">“%1$s”ga mos seans yo‘q</string>
     <string name="session_search_no_match_message">%1$s ichida</string>
     <string name="session_search_search_all_projects">Barcha loyihalarda qidirish</string>
     <string name="session_search_include_archived">Arxivdagilarni qo‘shish</string>
@@ -1395,10 +1395,10 @@
     <string name="session_search_archived_section">Arxivlangan</string>
     <string name="session_search_archived_tag">Arxivlangan</string>
     <string name="session_search_scope_selected">%1$s, tanlangan</string>
-    <string name="keyboard_shortcuts_group_session">Sessiya</string>
-    <string name="keyboard_shortcuts_group_prompt">Tezkor</string>
+    <string name="keyboard_shortcuts_group_session">Seans</string>
+    <string name="keyboard_shortcuts_group_prompt">Prompt</string>
     <string name="keyboard_shortcuts_group_go">O‘tish</string>
-    <string name="keyboard_shortcuts_new_session">Yangi sessiya</string>
+    <string name="keyboard_shortcuts_new_session">Yangi seans</string>
     <string name="keyboard_shortcuts_command_palette">Buyruqlar paneli</string>
     <string name="keyboard_shortcuts_choose_model">Modelni tanlash</string>
     <string name="keyboard_shortcuts_settings">Sozlamalar</string>
@@ -1413,10 +1413,10 @@
     <string name="keyboard_shortcuts_submit_answers">Javoblarni yuborish</string>
     <string name="keyboard_shortcuts_dismiss_question">Savolni yopish</string>
     <string name="keyboard_shortcuts_toggle_sidebar">Yon panelni ko‘rsatish/yashirish</string>
-    <string name="keyboard_shortcuts_next_session">Keyingi sessiya</string>
-    <string name="keyboard_shortcuts_previous_session">Oldingi sessiya</string>
+    <string name="keyboard_shortcuts_next_session">Keyingi seans</string>
+    <string name="keyboard_shortcuts_previous_session">Oldingi seans</string>
     <string name="keyboard_shortcuts_focus_composer">Yozish maydoniga o‘tish</string>
-    <string name="keyboard_shortcuts_search_sessions">Sessiyalarni qidirish</string>
+    <string name="keyboard_shortcuts_search_sessions">Seanslarni qidirish</string>
     <string name="changes_title">O‘zgarishlar</string>
     <string name="changes_source_menu_label">O‘zgarishlar manbasini tanlash</string>
     <string name="changes_source_menu_selected">%1$s, tanlangan</string>
@@ -1485,8 +1485,8 @@
     <string name="component_todo_item_status_in_progress">jarayonda</string>
     <string name="component_todo_item_status_completed">bajarilgan</string>
     <string name="component_todo_item_status_cancelled">bekor qilingan</string>
-    <string name="component_todos_pill_accessibility_label">Sessiya vazifalari, %2$d tadan %1$d tasi bajarilgan</string>
-    <string name="component_todos_pill_accessibility_label_active">Sessiya vazifalari, %2$d tadan %1$d tasi bajarilgan, %3$s</string>
+    <string name="component_todos_pill_accessibility_label">Seans vazifalari, %2$d tadan %1$d tasi bajarilgan</string>
+    <string name="component_todos_pill_accessibility_label_active">Seans vazifalari, %2$d tadan %1$d tasi bajarilgan, %3$s</string>
     <string name="component_reasoning_row_thought_duration">O‘ylandi · %1$s</string>
     <string name="component_reasoning_row_duration_seconds">%1$s s</string>
     <string name="component_reasoning_row_duration_ms">%1$d ms</string>
@@ -1520,8 +1520,8 @@
     <string name="component_filter_tabs_unseen">yangi</string>
     <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_message_time_yesterday">Kecha</string>
-    <string name="component_composer_reverting_title">Bu xabar ortga qaytarilmoqda</string>
-    <string name="session_new_title">Yangi sessiya</string>
+    <string name="component_composer_reverting_title">Bu xabar qaytarilmoqda</string>
+    <string name="session_new_title">Yangi seans</string>
     <string name="session_list_dock_add_project">Loyiha qo‘shish</string>
     <string name="theme_error_preset_not_found">Mavzu andozasi topilmadi</string>
     <string name="component_composer_submit">Yuborish</string>
@@ -1531,7 +1531,7 @@
     <string name="component_top_bar_project_subtitle">Loyiha %1$s %2$s</string>
     <string name="component_composer_dismiss">Yopish</string>
     <string name="dictation_model_downloading_detail">Bu tizim tomonidan yuklab olinmoqda. Kartani yopsangiz ham davom etadi.</string>
-    <string name="session_list_scope_load_loading">Sessiyalar yuklanmoqda…</string>
+    <string name="session_list_scope_load_loading">Seanslar yuklanmoqda…</string>
     <string name="dictation_insert">Kiritish</string>
     <string name="dictation_action_check_again">Qayta tekshirish</string>
     <string name="component_activity_sheet_steps">Qadamlar</string>
@@ -1549,10 +1549,10 @@
     <string name="component_activity_card_working">Ishlamoqda</string>
     <string name="component_activity_card_opens_activity">%1$s, faoliyatni ochadi</string>
     <string name="component_image_loading_label">%1$s, yuklanmoqda</string>
-    <string name="session_list_dock_new_session">Yangi sessiya</string>
+    <string name="session_list_dock_new_session">Yangi seans</string>
     <string name="component_composer_always_allows">Doim ruxsat beriladi: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">Yon savol rejimidan chiqish</string>
-    <string name="session_list_worktree_empty_other_projects">Boshqa loyihalardagi sessiyalarni ko‘rish uchun filtrni tozalang.</string>
+    <string name="component_composer_leave_side_question_mode">Qo‘shimcha savol rejimidan chiqish</string>
+    <string name="session_list_worktree_empty_other_projects">Boshqa loyihalardagi seanslarni ko‘rish uchun filtrni tozalang.</string>
     <string name="component_attachment_uploading">Yuklanmoqda…</string>
     <string name="component_composer_deny">Rad etish</string>
     <string name="component_composer_deny_options">Rad etishning boshqa parametrlari</string>
@@ -1571,7 +1571,7 @@
     <string name="session_list_status_ready">Tayyor</string>
     <string name="session_list_dock_hint_swipe">Loyiha filtrini ochadi. Loyihalarni almashtirish uchun suring.</string>
     <string name="component_composer_select_one">Bittasini tanlang</string>
-    <string name="component_session_list_skeleton_row">Sessiya yuklanmoqda</string>
+    <string name="component_session_list_skeleton_row">Seans yuklanmoqda</string>
     <string name="component_split_pane_resize_sidebar">Yon panel o‘lchamini o‘zgartirish</string>
     <string name="session_list_section_recent">So‘nggi</string>
     <string name="session_list_section_recent_hint">Ko‘z tashlash kerak</string>
@@ -1583,8 +1583,8 @@
     <string name="component_image_could_not_load_label">%1$s, yuklanmadi</string>
     <string name="component_composer_question">Savol</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Boshqa worktree’lardagi sessiyalarni ko‘rish uchun filtrni tozalang.</string>
-    <string name="component_composer_side_question_mode">Yon savol rejimi</string>
+    <string name="session_list_worktree_empty_other_worktrees">Boshqa worktree’lardagi seanslarni ko‘rish uchun filtrni tozalang.</string>
+    <string name="component_composer_side_question_mode">Qo‘shimcha savol rejimi</string>
     <string name="component_page_indicator_label">%2$d tadan %1$d-sahifa</string>
     <string name="component_composer_next">Keyingi</string>
     <string name="component_message_image_label">Rasm %1$s</string>
@@ -1594,7 +1594,7 @@
     <string name="session_list_status_failed">Xato</string>
     <string name="component_composer_custom_answer_title">O‘z javobingizni yozing</string>
     <string name="component_composer_always">Doim</string>
-    <string name="component_composer_send_side_question">Yon savol berish</string>
+    <string name="component_composer_send_side_question">Qo‘shimcha savol berish</string>
     <string name="component_composer_select_exactly">%1$d ta tanlang</string>
     <string name="dictation_action_open_settings">Sozlamalarni ochish</string>
     <string name="component_composer_open_commands">Buyruqlarni ochish</string>
@@ -1640,13 +1640,13 @@
     <string name="component_composer_previous_question">Oldingi savol</string>
     <string name="component_activity_card_agent">Agent</string>
     <string name="session_list_section_today">Bugun</string>
-    <string name="component_composer_child_lockout">Ichki sessiyalarga prompt yuborib bo‘lmaydi.</string>
+    <string name="component_composer_child_lockout">Ichki seanslarga prompt yuborib bo‘lmaydi.</string>
     <string name="component_attachment_uploading_percent">Yuklanmoqda %1$d%%</string>
     <string name="component_composer_custom_answer_hint">O‘z javobingizni kiriting</string>
     <string name="component_composer_cancel_revert">Qaytarishni bekor qilish</string>
     <string name="session_list_scope_load_slow_caption">Hali yuklanmoqda — katta loyihalar biroz vaqt olishi mumkin</string>
     <string name="component_outgoing_message_label_with_actions">Yuborilgan xabar. Xabar amallarini ko‘rsatadi</string>
-    <string name="session_list_scope_load_failed_subtitle">Sessiyalarni yuklab bo‘lmadi</string>
+    <string name="session_list_scope_load_failed_subtitle">Seanslarni yuklab bo‘lmadi</string>
     <plurals name="component_activity_card_more_running">
         <item quantity="one">yana %1$d tasi bajarilmoqda</item>
         <item quantity="other">yana %1$d tasi bajarilmoqda</item>
@@ -1659,7 +1659,7 @@
     <string name="session_list_scope_load_slow">Hali yuklanmoqda…</string>
     <string name="session_list_dock_hint">Loyiha filtrini ochadi.</string>
     <string name="component_hunk_navigation_next">Keyingi hunk</string>
-    <string name="session_list_scope_load_failed_message">Server bu loyiha sessiyalarini qaytarmadi.</string>
+    <string name="session_list_scope_load_failed_message">Server bu loyiha seanslarini qaytarmadi.</string>
     <string name="component_drop_overlay_accessibility_label">%1$s. %2$s</string>
     <string name="component_image_view_full_screen">To‘liq ekranda ko‘rish</string>
     <string name="component_activity_sheet_back">Faoliyatga qaytish</string>
@@ -1667,8 +1667,8 @@
     <string name="dictation_action_download">Yuklab olish</string>
     <string name="component_attachment_kind_pdf">PDF</string>
     <string name="session_list_dock_next_project">Keyingi loyiha</string>
-    <string name="component_composer_allow_once">Bir marta ruxsat</string>
-    <string name="session_list_worktree_empty_title">Bu worktree’da sessiyalar yo‘q</string>
+    <string name="component_composer_allow_once">Bir marta ruxsat berish</string>
+    <string name="session_list_worktree_empty_title">Bu worktree’da seanslar yo‘q</string>
     <string name="component_activity_card_opens_activity_hint">Faoliyatni ochadi</string>
     <string name="dictation_speech_model">nutq modeli</string>
     <string name="session_list_dock_previous_project">Oldingi loyiha</string>
@@ -1677,7 +1677,7 @@
         <item quantity="other">%1$d daq oldin</item>
     </plurals>
     <string name="component_composer_request_position">%2$d tadan %1$d-so‘rov</string>
-    <string name="component_composer_side_question_placeholder">Yon savol, chatga qo‘shilmaydi</string>
+    <string name="component_composer_side_question_placeholder">Qo‘shimcha savol, chatga qo‘shilmaydi</string>
     <string name="session_list_worktree_empty_every_project">Barcha loyihalarni ko‘rish uchun filtrni tozalang.</string>
     <string name="component_image_viewer_could_not_load_named">%1$s yuklanmadi</string>
     <string name="component_composer_select_up_to">%1$d tagacha tanlang</string>
@@ -1697,7 +1697,7 @@
     <string name="session_list_section_week_of">Hafta: %1$s – %2$s</string>
     <string name="dictation_model_download_failed_title">%1$s yuklab ola olmadi: %2$s</string>
     <string name="component_activity_status_pending">kutilmoqda</string>
-    <string name="component_composer_revert_tag">Ortga qaytarish</string>
+    <string name="component_composer_revert_tag">Qaytarish</string>
     <string name="component_composer_model">Model %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
         <item quantity="one">%1$d ta oldingi qadam</item>
@@ -1730,16 +1730,16 @@
     <string name="relative_time_now">hozir</string>
     <string name="component_composer_previous_permission">Oldingi ruxsat so‘rovi</string>
     <string name="component_composer_dictate">Ovozli kiritish</string>
-    <string name="component_composer_side_question_mode_description">Yon savol rejimi. Yon savol rejimidan chiqish</string>
+    <string name="component_composer_side_question_mode_description">Qo‘shimcha savol rejimi. Qo‘shimcha savol rejimidan chiqish</string>
     <string name="component_composer_abort">Faol ishni to‘xtatish</string>
     <string name="component_server_address_scheme_button">Sxema %1$s</string>
-    <string name="component_composer_open_subagent_session">Subagent sessiyasini ochish</string>
+    <string name="component_composer_open_subagent_session">Subagent seansini ochish</string>
     <string name="component_composer_question_step">%2$d tadan %1$d-qadam</string>
     <string name="share_feedback_subject_bug">OpenCode Mobile xato haqida xabar</string>
-    <string name="component_activity_card_opens_child_session_hint">Ichki sessiyani ochadi</string>
+    <string name="component_activity_card_opens_child_session_hint">Ichki seansni ochadi</string>
     <string name="component_activity_status_failed">xato bilan tugadi</string>
     <string name="dictation_model_not_installed_title">%1$s uchun %2$s kerak</string>
-    <string name="component_composer_back_to_main_session">Asosiy sessiyaga qaytish</string>
+    <string name="component_composer_back_to_main_session">Asosiy seansga qaytish</string>
     <string name="component_activity_sheet_working_count">Ishlamoqda %1$d</string>
     <string name="session_list_status_retrying">Qayta urinilmoqda</string>
     <string name="component_attachment_remove">Olib tashlash: %1$s</string>
@@ -1782,12 +1782,12 @@
         <item quantity="one">%1$d ta o‘zgargan</item>
         <item quantity="other">%1$d ta o‘zgargan</item>
     </plurals>
-    <string name="worktrees_none_in_project">Worktree yo‘q. Yangi sessiya → Loyiha yoki worktree tanlash orqali yaratiladi.</string>
-    <string name="worktrees_footer">Worktree’ni olib tashlash serverdagi papkasini o‘chiradi. Sessiyalari qoladi, lekin unda qayta ishlay olmaydi.</string>
+    <string name="worktrees_none_in_project">Worktree yo‘q. Yangi seans → Loyiha yoki worktree tanlash orqali yaratiladi.</string>
+    <string name="worktrees_footer">Worktree’ni olib tashlash serverdagi papkasini o‘chiradi. Seanslari qoladi, lekin unda qayta ishlay olmaydi.</string>
     <string name="worktrees_more">%1$s uchun boshqa amallar</string>
     <string name="worktrees_removing">Olib tashlanmoqda…</string>
-    <string name="worktrees_actions_show_on_home">Sessiyalarni Bosh sahifada ko‘rsatish</string>
-    <string name="worktrees_actions_new_session">Bu yerda yangi sessiya</string>
+    <string name="worktrees_actions_show_on_home">Seanslarni Bosh ekranda ko‘rsatish</string>
+    <string name="worktrees_actions_new_session">Bu yerda yangi seans</string>
     <string name="worktrees_actions_remove">Worktree’ni olib tashlash…</string>
     <string name="worktrees_remove_title">“%1$s” worktree’ni olib tashlaysizmi?</string>
     <string name="worktrees_remove_message">Serverdagi %1$s o‘chiriladi.</string>
@@ -1797,12 +1797,12 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">Commit qilinmagan o‘zgarishlar yo‘qoladi.</string>
     <string name="worktrees_remove_changes_unchecked">Commit qilinmagan o‘zgarishlarni tekshirib bo‘lmadi. Agar bo‘lsa, yo‘qoladi.</string>
-    <string name="worktrees_remove_sessions_stay">Bu worktree’dan foydalanadigan sessiyalar Bosh sahifada qoladi, lekin bu yerda qayta ishlay olmaydi.</string>
+    <string name="worktrees_remove_sessions_stay">Bu worktree’dan foydalanadigan seanslar Bosh ekranda qoladi, lekin bu yerda qayta ishlay olmaydi.</string>
     <string name="worktrees_remove_confirm_anyway">Baribir olib tashlash</string>
     <string name="worktrees_blocked_title">“%1$s”ni hozircha olib tashlab bo‘lmaydi</string>
-    <string name="worktrees_blocked_message">Bu worktree’da sessiya ishlayapti. Uni to‘xtating, so‘ng worktree’ni olib tashlang.</string>
+    <string name="worktrees_blocked_message">Bu worktree’da seans ishlayapti. Uni to‘xtating, so‘ng worktree’ni olib tashlang.</string>
     <string name="worktrees_blocked_ok">OK</string>
-    <string name="worktrees_blocked_show_session">Sessiyani ko‘rsatish</string>
+    <string name="worktrees_blocked_show_session">Seansni ko‘rsatish</string>
     <string name="worktrees_removed">“%1$s” worktree olib tashlandi</string>
     <string name="worktrees_remove_failed">“%1$s”ni olib tashlab bo‘lmadi. %2$s</string>
     <string name="worktrees_remove_failed_connection">“%1$s”ni olib tashlab bo‘lmadi. Ulanishni tekshirib, qayta urining.</string>

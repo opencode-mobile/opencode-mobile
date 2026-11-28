@@ -1187,7 +1187,7 @@
     <string name="settings_worktrees_title">Worktree-ներ</string>
     <string name="settings_worktrees_subtitle">Ցույց տալ յուրաքանչյուր նախագծի worktree-ներն ու ճյուղերը գլխավոր էջում և թույլ տալ ընտրել worktree՝ «Նոր նիստ» կոճակը երկար սեղմելիս։</string>
     <string name="settings_session_rows_title">Նիստերի տողեր</string>
-    <string name="settings_session_rows_compact_title">Կոմպակտ</string>
+    <string name="settings_session_rows_compact_title">Սեղմ</string>
     <string name="settings_session_rows_compact_subtitle">Երկու տող՝ վերնագիր և ժամանակ, ապա նախագիծ / worktree</string>
     <string name="settings_session_rows_classic_title">Դասական</string>
     <string name="settings_session_rows_classic_subtitle">Նախագիծը և worktree-ն առանձին տողերում</string>
@@ -1267,7 +1267,7 @@
     <string name="appearance_theme_blurb_hotline">Չեզոք շրջանակ, վառ վարդագույն</string>
     <string name="appearance_theme_blurb_phosphor">Չեզոք շրջանակ, CRT կանաչ</string>
     <string name="appearance_syntax_name_match">Ըստ թեմայի</string>
-    <string name="appearance_syntax_blurb_match">Օգտագործել ինտերֆեյսի թեմայի սեփական գույները</string>
+    <string name="appearance_syntax_blurb_match">Օգտագործել ինտերֆեյսի թեմայի սեփական տոկենները</string>
     <string name="appearance_syntax_blurb_nocturne">One Dark ընտանիք</string>
     <string name="appearance_syntax_blurb_citrus">Solarized ընտանիք</string>
     <string name="appearance_syntax_blurb_paper">GitHub ընտանիք</string>

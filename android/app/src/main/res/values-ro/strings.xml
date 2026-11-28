@@ -93,7 +93,7 @@
     <string name="onboarding_features_sessions_title">Sesiuni</string>
     <string name="onboarding_features_sessions_detail">Listează, deschide, creează, redenumește, bifurcă, arhivează, șterge</string>
     <string name="onboarding_features_chat_title">Chat și oprire</string>
-    <string name="onboarding_features_chat_detail">Trimite prompturi și oprește lucrul în curs</string>
+    <string name="onboarding_features_chat_detail">Trimite solicitări și oprește lucrul în curs</string>
     <string name="onboarding_features_permissions_title">Permisiuni</string>
     <string name="onboarding_features_permissions_detail">Aprobă sau refuză cereri (fără memorare permanentă)</string>
     <string name="onboarding_features_changes_title">Modificări</string>
@@ -1846,7 +1846,7 @@
     <string name="session_list_dock_project_filter">Filtru de proiecte</string>
     <string name="component_split_pane_resize_hint">Atinge de două ori pentru a ascunde bara laterală</string>
     <string name="component_branch_pill_shows_details_hint">Arată detaliile branch-ului</string>
-    <string name="component_composer_permission_requested">Permisiune solicitată</string>
+    <string name="component_composer_permission_requested">Cerere de permisiune</string>
     <string name="component_thinking">Se gândește</string>
     <string name="dictation_model_downloading_title">%1$s descarcă %2$s</string>
     <string name="component_hunk_navigation_expand_context">Extinde contextul</string>

@@ -481,7 +481,7 @@
     <string name="session_chat_commands_redo_label">Ulangi</string>
     <string name="session_chat_commands_redo_description">Ulangi pesan yang diurungkan</string>
     <string name="session_chat_commands_compact_label">Padatkan</string>
-    <string name="session_chat_commands_compact_description">Kompakkan konteks sesi</string>
+    <string name="session_chat_commands_compact_description">Padatkan konteks sesi</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">Buka shell proyek</string>
     <string name="session_chat_commands_files_label">Berkas</string>

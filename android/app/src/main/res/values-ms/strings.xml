@@ -143,8 +143,8 @@
     <string name="server_health_legend_median">Median</string>
     <string name="server_health_legend_p95">p95</string>
     <string name="server_health_legend_offline">Luar talian</string>
-    <string name="server_health_legend_app_closed">Apl ditutup</string>
-    <string name="server_health_no_open_time">Apl tidak dibuka dalam julat ini.</string>
+    <string name="server_health_legend_app_closed">Aplikasi ditutup</string>
+    <string name="server_health_no_open_time">Aplikasi tidak dibuka dalam julat ini.</string>
     <string name="server_health_connection">Sambungan</string>
     <string name="server_health_connection_summary">%1$s langsung</string>
     <string name="server_health_legend_live">Langsung</string>
@@ -180,9 +180,9 @@
     <string name="server_health_restarts_seen_value">%1$d</string>
     <string name="server_health_event_streams">Strim peristiwa</string>
     <string name="server_health_event_streams_value">%1$d daripada %2$d langsung</string>
-    <string name="server_health_footnote">Diukur hanya semasa apl dibuka. Disimpan pada peranti ini selama 7 hari.</string>
+    <string name="server_health_footnote">Diukur hanya semasa aplikasi dibuka. Disimpan pada peranti ini selama 7 hari.</string>
     <string name="server_health_empty_title">Belum ada ukuran</string>
-    <string name="server_health_empty_message">Kesihatan diukur semasa apl dibuka dan disambungkan ke pelayan ini.</string>
+    <string name="server_health_empty_message">Kesihatan diukur semasa aplikasi dibuka dan disambungkan ke pelayan ini.</string>
     <string name="server_health_status_live">Langsung</string>
     <string name="server_health_status_connecting">Menyambung</string>
     <string name="server_health_status_reconnecting">Menyambung semula</string>

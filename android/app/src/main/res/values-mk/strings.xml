@@ -493,7 +493,7 @@
     <string name="session_chat_commands_undo_description">Поништи ја последната порака</string>
     <string name="session_chat_commands_redo_label">Повтори</string>
     <string name="session_chat_commands_redo_description">Повтори ја вратената порака</string>
-    <string name="session_chat_commands_compact_label">Компактен</string>
+    <string name="session_chat_commands_compact_label">Резимирај</string>
     <string name="session_chat_commands_compact_description">Резимирај го контекстот на сесијата</string>
     <string name="session_chat_commands_terminal_label">Терминал</string>
     <string name="session_chat_commands_terminal_description">Отвори shell на проектот</string>
@@ -512,7 +512,7 @@
     <string name="session_chat_move_worktree_menu_title">Премести во worktree…</string>
     <string name="session_chat_move_worktree_sheet_title">Премести во worktree</string>
     <string name="session_chat_move_worktree_no_other">Овој проект нема други worktree</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Се префрла во %1$s откако ќе заврши овој одговор.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Се префрла во %1$s откако ќе заврши овој потег.</string>
     <string name="session_chat_move_worktree_failed">Сесијата не може да се премести: %1$s</string>
     <string name="session_chat_variant_default">Стандардно</string>
     <string name="session_chat_model_chip_placeholder">Модел</string>
@@ -1429,16 +1429,16 @@
         <item quantity="other">Git промените имаат %1$d изменети датотеки.</item>
     </plurals>
     <plurals name="changes_other_source_last_turn">
-        <item quantity="one">Последниот чекор измени %1$d датотека.</item>
-        <item quantity="other">Последниот чекор измени %1$d датотеки.</item>
+        <item quantity="one">Последниот потег измени %1$d датотека.</item>
+        <item quantity="other">Последниот потег измени %1$d датотеки.</item>
     </plurals>
     <string name="changes_other_source_show">Прикажи: %1$s</string>
     <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
     <string name="changes_source_last_turn_empty_title">Нема промени</string>
-    <string name="changes_source_last_turn_empty_message">Последниот завршен чекор не измени ниедна датотека.</string>
+    <string name="changes_source_last_turn_empty_message">Последниот завршен потег не измени ниедна датотека.</string>
     <string name="changes_loading_title">Се вчитуваат промените</string>
     <string name="changes_loading_message">Се презема diff…</string>
-    <string name="changes_no_turn_title">Нема завршен чекор</string>
+    <string name="changes_no_turn_title">Нема завршен потег</string>
     <string name="changes_no_turn_message">Испратете промпт, почекајте да заврши и обидете се повторно.</string>
     <string name="changes_error_title">Промените не можат да се вчитаат</string>
     <string name="changes_error_fallback">Промените не се вчитаа.</string>

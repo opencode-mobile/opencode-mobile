@@ -311,7 +311,7 @@
     <string name="add_project_list_error_message">Prüfe den Pfad und versuche es erneut.</string>
     <string name="add_project_no_other_projects">Keine weiteren Projekte auf diesem Server.</string>
     <string name="add_project_folder_path">Ordnerpfad</string>
-    <string name="add_project_up_one_folder">Eine Ebene höher</string>
+    <string name="add_project_up_one_folder">Einen Ordner nach oben</string>
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">Ordner wählen</string>
     <string name="add_project_already_on_home">Bereits auf der Startseite</string>
@@ -1748,7 +1748,7 @@
     <string name="session_list_dock_project_filter">Projektfilter</string>
     <string name="component_split_pane_resize_hint">Doppeltippen, um die Seitenleiste auszublenden</string>
     <string name="component_branch_pill_shows_details_hint">Zeigt Branch-Details</string>
-    <string name="component_composer_permission_requested">Berechtigung angefragt</string>
+    <string name="component_composer_permission_requested">Berechtigungsanfrage</string>
     <string name="component_thinking">Denkt nach</string>
     <string name="dictation_model_downloading_title">%1$s lädt das %2$s herunter</string>
     <string name="component_hunk_navigation_expand_context">Kontext ausklappen</string>

@@ -21,7 +21,7 @@
     <string name="connection_setup_action_scan_qr">ស្កេន QR</string>
     <string name="connection_setup_action_scan_new_qr">ស្កេន QR ថ្មី</string>
     <string name="connection_setup_action_enter_pairing_code">បញ្ចូលកូដផ្គូផ្គង</string>
-    <string name="connection_setup_action_use_host_password">ប្រើម៉ាស៊ីន និងពាក្យសម្ងាត់</string>
+    <string name="connection_setup_action_use_host_password">ប្រើហូស្ត និងពាក្យសម្ងាត់</string>
     <string name="connection_setup_action_scan_qr_instead">ស្កេន QR ជំនួសវិញ</string>
     <string name="connection_setup_scan_qr_instead_hint">ពី opencode pair</string>
     <string name="connection_setup_remove_server">ដកម៉ាស៊ីនមេចេញ</string>
@@ -31,7 +31,7 @@
     <string name="connection_setup_instructions_same_wifi_title">ប្រើ Wi-Fi ដូចគ្នាជំនួសវិញ</string>
     <string name="connection_setup_instructions_same_wifi_body">pair ធម្មតាបង្ហាញ QR បន្ទាប់ពីម៉ាស៊ីនមេអាចភ្ជាប់បានហួសពី localhost ប៉ុណ្ណោះ។</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
-    <string name="connection_setup_host_label">ម៉ាស៊ីន</string>
+    <string name="connection_setup_host_label">ហូស្ត</string>
     <string name="connection_setup_host_help">LAN, Tailscale MagicDNS ឬ tunnel — មិនមែន localhost លើទូរសព្ទទេ។</string>
     <string name="connection_setup_name_hint">ឈ្មោះ (ជាជម្រើស)</string>
     <string name="connection_setup_username_hint">ឈ្មោះអ្នកប្រើ</string>
@@ -61,11 +61,11 @@
     <string name="connection_error_localhost_qr">QR នោះមានតែអាសយដ្ឋាន localhost ប៉ុណ្ណោះ</string>
     <string name="connection_error_camera_denied">សូមអនុញ្ញាតការចូលប្រើកាមេរ៉ា ដើម្បីស្កេន QR ផ្គូផ្គង</string>
     <string name="connection_error_camera_unavailable">កាមេរ៉ាមិនមាននៅលើឧបករណ៍នេះទេ</string>
-    <string name="connection_error_enter_host">បញ្ចូលម៉ាស៊ីន</string>
+    <string name="connection_error_enter_host">បញ្ចូលហូស្ត</string>
     <string name="connection_error_enter_pairing_code">បញ្ចូលកូដផ្គូផ្គង</string>
     <string name="connection_error_pairing_link_expired">តំណផ្គូផ្គងនេះបានផុតកំណត់ ឬត្រូវបានប្រើរួចហើយ</string>
-    <string name="connection_error_duplicate_profile">ម៉ាស៊ីនមេដែលមានម៉ាស៊ីន និងឈ្មោះអ្នកប្រើនេះ ត្រូវបានរក្សាទុករួចហើយ</string>
-    <string name="connection_error_qr_scan_failed">QR មិនបានភ្ជាប់ទេ។ API ផ្គូផ្គងរបស់ OpenCode 2 នៅតែកំពុងផ្លាស់ប្តូរ ដូច្នេះការស្កេនអាចបរាជ័យ ទោះកម្មវិធីនេះដំណើរការល្អក៏ដោយ។ សូមបញ្ចូលម៉ាស៊ីន រួចភ្ជាប់។ ពាក្យសម្ងាត់ជាជម្រើស។ កូដផ្គូផ្គងក៏ប្រើបានដែរ។</string>
+    <string name="connection_error_duplicate_profile">ម៉ាស៊ីនមេដែលមានហូស្ត និងឈ្មោះអ្នកប្រើនេះ ត្រូវបានរក្សាទុករួចហើយ</string>
+    <string name="connection_error_qr_scan_failed">QR មិនបានភ្ជាប់ទេ។ API ផ្គូផ្គងរបស់ OpenCode 2 នៅតែកំពុងផ្លាស់ប្តូរ ដូច្នេះការស្កេនអាចបរាជ័យ ទោះកម្មវិធីនេះដំណើរការល្អក៏ដោយ។ សូមបញ្ចូលហូស្ត រួចភ្ជាប់។ ពាក្យសម្ងាត់ជាជម្រើស។ កូដផ្គូផ្គងក៏ប្រើបានដែរ។</string>
     <string name="connection_error_unreachable">មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេបានទេ</string>
     <string name="server_error_pairing_expired">ការផ្គូផ្គងផុតកំណត់ សូមផ្គូផ្គងម្តងទៀត</string>
     <string name="server_error_not_found">រកមិនឃើញថត ឬឯកសារ</string>
@@ -87,11 +87,11 @@
     <string name="onboarding_unofficial_body">OpenCode Mobile គឺជាកម្មវិធីដើមសម្រាប់សម័យ opencode — កំពុងអភិវឌ្ឍ។ វាមិនមែនជាផលិតផលផ្លូវការរបស់ OpenCode ទេ។</string>
     <string name="onboarding_unofficial_badge">មិនផ្លូវការ</string>
     <string name="onboarding_connect_page_title">ភ្ជាប់ទៅ\nម៉ាស៊ីនមេរបស់អ្នក</string>
-    <string name="onboarding_connect_page_body">ចង្អុលកម្មវិធីទៅម៉ាស៊ីនមេ opencode នៅលើម៉ាស៊ីនរបស់អ្នក។ យើងណែនាំ Tailscale ដើម្បីឱ្យទូរសព្ទរបស់អ្នកភ្ជាប់បានដោយសុវត្ថិភាពពីគ្រប់ទីកន្លែង។</string>
+    <string name="onboarding_connect_page_body">សូមចង្អុលកម្មវិធីទៅម៉ាស៊ីនមេ opencode នៅលើម៉ាស៊ីនរបស់អ្នក។ យើងណែនាំ Tailscale ដើម្បីឱ្យទូរសព្ទរបស់អ្នកភ្ជាប់បានដោយសុវត្ថិភាពពីគ្រប់ទីកន្លែង។</string>
     <string name="onboarding_connect_page_setup_link">ត្រូវការម៉ាស៊ីនមេជាមុនសិនឬ?</string>
     <string name="onboarding_features_title">អ្វីដែលអ្នកអាច\nធ្វើពីទីនេះ</string>
     <string name="onboarding_features_sessions_title">សម័យ</string>
-    <string name="onboarding_features_sessions_detail">មើលបញ្ជី បើក បង្កើត ប្តូរឈ្មោះ ចម្លង រក្សាទុកក្នុងបណ្ណសារ លុប</string>
+    <string name="onboarding_features_sessions_detail">មើលបញ្ជី បើក បង្កើត ប្តូរឈ្មោះ fork ដាក់ក្នុងបណ្ណសារ លុប</string>
     <string name="onboarding_features_chat_title">ជជែក និងបញ្ឈប់</string>
     <string name="onboarding_features_chat_detail">ផ្ញើ prompt និងបញ្ឈប់ការងារដែលកំពុងដំណើរការ</string>
     <string name="onboarding_features_permissions_title">ការអនុញ្ញាត</string>
@@ -104,13 +104,13 @@
     <string name="onboarding_setup_intro">កម្មវិធីនិយាយជាមួយម៉ាស៊ីនមេ opencode ដែលអ្នកដំណើរការ។ ជំហានសង្ខេបនៅខាងក្រោម — សូមមើលព័ត៌មានលម្អិតទាំងអស់នៅក្នុងឯកសារផ្លូវការ។</string>
     <string name="onboarding_setup_step_number">ជំហាន %1$d</string>
     <string name="onboarding_setup_step1_title">ចាប់ផ្ដើមម៉ាស៊ីនមេលើម៉ាស៊ីនរបស់អ្នក</string>
-    <string name="onboarding_setup_step1_body">នៅក្នុងគម្រោងរបស់អ្នក សូមដំណើរការម៉ាស៊ីនមេ opencode (headless)។ ទុកឱ្យវាដំណើរការ ខណៈពេលអ្នកប្រើទូរសព្ទ។</string>
+    <string name="onboarding_setup_step1_body">នៅក្នុងគម្រោងរបស់អ្នក សូមដំណើរការម៉ាស៊ីនមេ opencode (headless)។ សូមទុកឱ្យវាដំណើរការ ខណៈពេលអ្នកប្រើទូរសព្ទ។</string>
     <string name="onboarding_setup_step2_title">តម្រូវឱ្យមានពាក្យសម្ងាត់</string>
-    <string name="onboarding_setup_step2_body">កំណត់ OPENCODE_SERVER_PASSWORD។ ឈ្មោះអ្នកប្រើលំនាំដើមគឺ opencode លុះត្រាតែអ្នកកំណត់ OPENCODE_SERVER_USERNAME។</string>
+    <string name="onboarding_setup_step2_body">សូមកំណត់ OPENCODE_SERVER_PASSWORD។ ឈ្មោះអ្នកប្រើលំនាំដើមគឺ opencode លុះត្រាតែអ្នកកំណត់ OPENCODE_SERVER_USERNAME។</string>
     <string name="onboarding_setup_step3_title">ភ្ជាប់ពីទូរសព្ទរបស់អ្នក</string>
     <string name="onboarding_setup_step3_body">ណែនាំ៖ Tailscale — ដំឡើង Tailscale លើម៉ាស៊ីន និងទូរសព្ទ បន្ទាប់មកប្រើ IP Tailscale ឬឈ្មោះ MagicDNS របស់ម៉ាស៊ីនជា URL ម៉ាស៊ីនមេ។\n\nក៏អាចប្រើ LAN តែមួយ, VPN, HTTPS ឬ tunnel ផ្សេងដែលអ្នកគ្រប់គ្រងបាន។ កម្មវិធីមិនបង្កើត relay ឱ្យអ្នកទេ។</string>
     <string name="onboarding_setup_step4_title">ភ្ជាប់នៅក្នុងកម្មវិធី</string>
-    <string name="onboarding_setup_step4_body">បញ្ចូល base URL + ពាក្យសម្ងាត់។ កម្មវិធីពិនិត្យ GET /global/health បន្ទាប់មករក្សាទុកការតភ្ជាប់ម៉ាស៊ីនមេនៅលើឧបករណ៍នេះ។</string>
+    <string name="onboarding_setup_step4_body">សូមបញ្ចូល base URL + ពាក្យសម្ងាត់។ កម្មវិធីពិនិត្យ GET /global/health បន្ទាប់មករក្សាទុកការតភ្ជាប់ម៉ាស៊ីនមេនៅលើឧបករណ៍នេះ។</string>
     <string name="onboarding_setup_open_docs">បើកឯកសារម៉ាស៊ីនមេ</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile ត្រូវបានចាក់សោ</string>
@@ -220,7 +220,7 @@
     <string name="home_more_options">ជម្រើសបន្ថែម</string>
     <string name="home_filter_sheet_title">ត្រងតាមគម្រោង</string>
     <string name="home_empty_title">មិនទាន់មានគម្រោងទេ</string>
-    <string name="home_empty_message">ចុចរូបតំណាងបន្ថែមគម្រោងខាងក្រោម ដើម្បីជ្រើសរើសថតនៅលើម៉ាស៊ីនមេរបស់អ្នក។</string>
+    <string name="home_empty_message">សូមចុចរូបតំណាងបន្ថែមគម្រោងខាងក្រោម ដើម្បីជ្រើសរើសថតនៅលើម៉ាស៊ីនមេរបស់អ្នក។</string>
     <string name="home_no_session_selected_title">មិនបានជ្រើសសម័យ</string>
     <string name="home_no_session_selected_message">ជ្រើសរើសសម័យមួយពីបញ្ជី</string>
     <string name="home_probe_failed_title">មិនអាចភ្ជាប់បាន</string>
@@ -238,7 +238,7 @@
     <plurals name="home_project_count">
         <item quantity="other">%1$d គម្រោង</item>
     </plurals>
-    <string name="home_main_checkout">main checkout</string>
+    <string name="home_main_checkout">checkout ចម្បង</string>
     <plurals name="home_worktree_count">
         <item quantity="other">%1$d worktree</item>
     </plurals>
@@ -258,7 +258,7 @@
     <string name="home_session_actions_title">សកម្មភាពសម័យ</string>
     <string name="home_session_actions_rename">ប្តូរឈ្មោះសម័យ</string>
     <string name="home_session_actions_fork">Fork សម័យ</string>
-    <string name="home_session_actions_archive">បណ្ណសារ</string>
+    <string name="home_session_actions_archive">ដាក់ក្នុងបណ្ណសារ</string>
     <string name="home_rename_title">ប្តូរឈ្មោះសម័យ</string>
     <string name="home_session_title_hint">ចំណងជើង</string>
     <string name="home_fork_title">Fork សម័យ</string>
@@ -284,11 +284,11 @@
     <string name="archived_sessions_delete_dialog_message">“%1$s” នឹងត្រូវលុបចេញពីម៉ាស៊ីនមេ។ មិនអាចត្រឡប់វិញបានទេ។</string>
     <string name="archived_sessions_archived_at">បានដាក់ក្នុងបណ្ណសារ %1$s</string>
     <string name="archived_sessions_unarchived">បានដក “%1$s” ចេញពីបណ្ណសារ</string>
-    <string name="archived_sessions_undo">មិនធ្វើវិញ</string>
+    <string name="archived_sessions_undo">ដកថយ</string>
     <string name="archived_sessions_empty_title">គ្មានសម័យក្នុងបណ្ណសារ</string>
     <string name="archived_sessions_empty_message">សម័យដែលអ្នកដាក់ក្នុងបណ្ណសារនៅ %1$s នឹងបង្ហាញនៅទីនេះ។</string>
     <string name="archived_sessions_show_all_projects">បង្ហាញគម្រោងទាំងអស់</string>
-    <string name="archived_sessions_footer">ចុចសម័យមួយដើម្បីមើលបន្ថែម។ ការដកចេញពីបណ្ណសារនឹងដាក់វាត្រឡប់ទៅទំព័រដើមវិញ។</string>
+    <string name="archived_sessions_footer">សូមចុចសម័យមួយដើម្បីមើលបន្ថែម។ ការដកចេញពីបណ្ណសារនឹងដាក់វាត្រឡប់ទៅទំព័រដើមវិញ។</string>
     <string name="archived_sessions_load_failed">មិនអាចផ្ទុកសម័យក្នុងបណ្ណសារបានទេ។</string>
     <string name="archived_sessions_unarchive_failed">មិនអាចដកសម័យចេញពីបណ្ណសារបានទេ។</string>
     <string name="session_chat_archived_banner">បានដាក់ក្នុងបណ្ណសារ %1$s</string>
@@ -300,7 +300,7 @@
     <string name="add_project_loading_projects">កំពុងផ្ទុកគម្រោង</string>
     <string name="add_project_loading_folders">កំពុងផ្ទុកថត</string>
     <string name="add_project_list_error_title">មិនអាចបង្ហាញបញ្ជីថតនេះបានទេ</string>
-    <string name="add_project_list_error_message">ពិនិត្យផ្លូវ រួចព្យាយាមម្តងទៀត។</string>
+    <string name="add_project_list_error_message">សូមពិនិត្យផ្លូវ រួចព្យាយាមម្តងទៀត។</string>
     <string name="add_project_no_other_projects">គ្មានគម្រោងផ្សេងទៀតនៅលើម៉ាស៊ីនមេនេះទេ។</string>
     <string name="add_project_folder_path">ផ្លូវថត</string>
     <string name="add_project_up_one_folder">ឡើងមួយថត</string>
@@ -329,7 +329,7 @@
     <string name="worktree_run_in_subtitle">បង្កើត checkout រួចចាប់ផ្ដើមនៅទីនោះ</string>
     <string name="worktree_move_subtitle">បង្កើត checkout រួចផ្លាស់ទៅទីនោះ</string>
     <string name="worktree_needs_v2">ត្រូវការម៉ាស៊ីនមេ opencode v2</string>
-    <string name="worktree_turn_on">បើក Worktrees នៅក្នុងការកំណត់</string>
+    <string name="worktree_turn_on">បើក Worktree នៅក្នុងការកំណត់</string>
     <string name="worktree_not_git">ត្រូវការឃ្លាំង git</string>
     <string name="worktree_no_commit">ត្រូវការឃ្លាំង git ដែលមាន commit</string>
     <string name="worktree_unsupported">ម៉ាស៊ីនមេនេះមិនអាចបង្កើត worktree បានទេ</string>
@@ -347,9 +347,9 @@
     <string name="worktree_base_loading">កំពុងផ្ទុកសាខា…</string>
     <string name="worktree_base_failed">មិនអាចផ្ទុកសាខាបានទេ</string>
     <string name="worktree_name_empty">បញ្ចូលឈ្មោះ</string>
-    <string name="worktree_name_chars">ប្រើអក្សរ លេខ ចំណុច សញ្ញាដក ឬសញ្ញាគូសក្រោម</string>
+    <string name="worktree_name_chars">សូមប្រើអក្សរ លេខ ចំណុច សញ្ញាដក ឬសញ្ញាគូសក្រោម</string>
     <plurals name="worktree_name_long">
-        <item quantity="other">ប្រើយ៉ាងច្រើន %1$d តួអក្សរ</item>
+        <item quantity="other">សូមប្រើយ៉ាងច្រើន %1$d តួអក្សរ</item>
     </plurals>
     <string name="worktree_submit_run_in">បង្កើត និងចាប់ផ្ដើម</string>
     <string name="worktree_submit_move">បង្កើត និងផ្លាស់ទី</string>
@@ -375,7 +375,7 @@
     <string name="files_find_error">មិនអាចស្វែងរកឯកសារបានទេ</string>
     <string name="files_find_no_match">គ្មានឯកសារត្រូវនឹង “%1$s” ទេ</string>
     <string name="files_find_no_match_detail">ការស្វែងរករបស់ម៉ាស៊ីនមេរំលងថតដែលមិនអើពើ។</string>
-    <string name="files_error_check_server_connection">ពិនិត្យការតភ្ជាប់ទៅម៉ាស៊ីនមេ រួចព្យាយាមម្តងទៀត។</string>
+    <string name="files_error_check_server_connection">សូមពិនិត្យការតភ្ជាប់ទៅម៉ាស៊ីនមេ រួចព្យាយាមម្តងទៀត។</string>
     <string name="files_error_server_status">ម៉ាស៊ីនមេឆ្លើយតបថា %1$d។</string>
     <string name="files_no_file_title">បើកឯកសារពីបញ្ជីថត</string>
     <string name="files_no_file_message">ឯកសារដែលបានបើកនឹងនៅជាផ្ទាំង</string>
@@ -447,7 +447,7 @@
     <string name="session_chat_menu_browse_files">រកមើលឯកសារ</string>
     <string name="session_chat_menu_session_context">បរិបទសម័យ</string>
     <string name="session_chat_menu_copy_session_id">ចម្លងលេខសម្គាល់សម័យ</string>
-    <string name="session_chat_menu_archive">បណ្ណសារ</string>
+    <string name="session_chat_menu_archive">ដាក់ក្នុងបណ្ណសារ</string>
     <string name="session_chat_menu_report_problem">រាយការណ៍បញ្ហា</string>
     <string name="session_chat_menu_delete">លុប</string>
     <string name="session_chat_delete_dialog_title">លុបសម័យ</string>
@@ -476,8 +476,8 @@
     <string name="session_chat_commands_new_description">ចាប់ផ្ដើមសម័យថ្មី</string>
     <string name="session_chat_commands_fork_label">Fork</string>
     <string name="session_chat_commands_fork_description">Fork សម័យនេះ</string>
-    <string name="session_chat_commands_undo_label">មិនធ្វើវិញ</string>
-    <string name="session_chat_commands_undo_description">មិនធ្វើសារចុងក្រោយវិញ</string>
+    <string name="session_chat_commands_undo_label">ដកថយ</string>
+    <string name="session_chat_commands_undo_description">ដកថយសារចុងក្រោយ</string>
     <string name="session_chat_commands_redo_label">ធ្វើឡើងវិញ</string>
     <string name="session_chat_commands_redo_description">ធ្វើឡើងវិញនូវសារដែលបានមិនធ្វើវិញ</string>
     <string name="session_chat_commands_compact_label">បង្រួម</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_model_chip_loading">កំពុងផ្ទុកម៉ូដែល…</string>
     <string name="session_chat_model_notice_load_failed">មិនអាចផ្ទុកម៉ូដែលបានទេ។ ចុចម៉ូដែល ដើម្បីព្យាយាមម្តងទៀត។</string>
     <string name="session_chat_model_notice_none_usable">គ្មានម៉ូដែលដែលអាចប្រើបានទេ។ ចុចម៉ូដែល ដើម្បីព្យាយាមម្តងទៀត។</string>
-    <string name="session_chat_model_notice_variant_unavailable">វ៉ារ្យ៉ង់ដែលបានចងចាំមិនមានទេ។ កំពុងប្រើលំនាំដើម។</string>
+    <string name="session_chat_model_notice_variant_unavailable">ទម្រង់ដែលបានចងចាំមិនមានទេ។ កំពុងប្រើលំនាំដើម។</string>
     <string name="session_chat_model_notice_model_unavailable">ម៉ូដែលដែលបានជ្រើសមិនមានទេ។ កំពុងប្រើ %1$s។</string>
     <string name="session_chat_side_question_unsupported">/btw ត្រូវការម៉ាស៊ីនមេ opencode v2 ដែលឆ្លើយសំណួរបន្ថែម។ ម៉ាស៊ីនមេនេះមិនអាចឆ្លើយបានទេ ដោយមិនបន្ថែមទៅក្នុងការសន្ទនា។</string>
     <string name="session_chat_side_question_unavailable">/btw ត្រូវការម៉ាស៊ីនមេ opencode ថ្មីជាងនេះ។</string>
@@ -516,8 +516,8 @@
     <string name="attachment_error_duplicate">ឯកសារនេះត្រូវបានផ្ទុកឡើងរួចហើយ</string>
     <string name="attachment_error_too_large">ឯកសារនេះធំជាង %1$d MB។</string>
     <string name="attachment_error_unsupported_type">អាចភ្ជាប់បានតែរូបភាព PDF ឬឯកសារអត្ថបទប៉ុណ្ណោះនៅទីនេះ។</string>
-    <string name="attachment_error_model_no_images">ម៉ូដែលនេះមិនគាំទ្រការភ្ជាប់រូបភាពទេ។</string>
-    <string name="attachment_error_model_no_pdf">ម៉ូដែលនេះមិនគាំទ្រការភ្ជាប់ PDF ទេ។</string>
+    <string name="attachment_error_model_no_images">ម៉ូដែលនេះមិនគាំទ្រឯកសារភ្ជាប់ជារូបភាពទេ។</string>
+    <string name="attachment_error_model_no_pdf">ម៉ូដែលនេះមិនគាំទ្រឯកសារភ្ជាប់ PDF ទេ។</string>
     <string name="attachment_error_model_some">ម៉ូដែលនេះមិនគាំទ្រឯកសារភ្ជាប់មួយចំនួនដែលបានជ្រើសទេ។</string>
     <string name="attachment_error_unreadable">មិនអាចអានឯកសារភ្ជាប់បានទេ។</string>
     <string name="attachment_error_upload_failed">ការផ្ទុកឡើងបរាជ័យ</string>
@@ -549,7 +549,7 @@
         <item quantity="other">%1$d នៅក្នុងជួរ</item>
     </plurals>
     <plurals name="session_chat_activity_queued_prompts">
-        <item quantity="other">ប្រអប់បញ្ចូល %1$d នៅក្នុងជួរ</item>
+        <item quantity="other">prompt %1$d នៅក្នុងជួរ</item>
     </plurals>
     <string name="session_chat_activity_side_question_failed">សំណួរបន្ថែមបរាជ័យ</string>
     <plurals name="session_chat_activity_side_questions_failed">
@@ -606,13 +606,13 @@
     <string name="new_session_run_in_project">ដំណើរការនៅក្នុង %1$s</string>
     <string name="new_session_current_checkout">%1$s · checkout បច្ចុប្បន្ន</string>
     <string name="new_session_new_worktree_subtitle">ច្បាប់ចម្លងដាច់ដោយឡែក បង្កើតពេលអ្នកផ្ញើ</string>
-    <string name="new_session_worktrees_section">Worktrees</string>
+    <string name="new_session_worktrees_section">Worktree</string>
     <string name="timeline_state_loading_title">កំពុងផ្ទុកសារ</string>
     <string name="timeline_state_loading_subtitle">កំពុងទាញយកខ្សែពេលវេលា…</string>
     <string name="timeline_state_error_title">មិនអាចផ្ទុកសារបានទេ</string>
     <string name="timeline_state_error_fallback">ខ្សែពេលវេលាមិនបានផ្ទុកទេ។</string>
     <string name="timeline_state_retry">ព្យាយាមម្តងទៀត</string>
-    <string name="timeline_state_empty">មិនទាន់មានសារទេ។ ផ្ញើ prompt ដើម្បីចាប់ផ្តើម។</string>
+    <string name="timeline_state_empty">មិនទាន់មានសារទេ។ សូមផ្ញើ prompt ដើម្បីចាប់ផ្តើម។</string>
     <string name="timeline_state_refreshing">កំពុងផ្ទុកសារឡើងវិញ</string>
     <string name="timeline_message_assistant">សាររបស់ជំនួយការ</string>
     <string name="timeline_message_actions_hint_long_press">ចុចឱ្យយូរដើម្បីបង្ហាញសកម្មភាពសារ</string>
@@ -795,8 +795,8 @@
     <string name="timeline_notice_agent_changed">បានប្តូរភ្នាក់ងារ</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
     <string name="timeline_notice_switched_to">បានប្តូរទៅ</string>
-    <string name="timeline_notice_variant_switched">បានប្តូរវ៉ារ្យ៉ង់ទៅ</string>
-    <string name="timeline_notice_variant_default">បានប្តូរវ៉ារ្យ៉ង់ទៅលំនាំដើម</string>
+    <string name="timeline_notice_variant_switched">បានប្តូរទម្រង់ទៅ</string>
+    <string name="timeline_notice_variant_default">បានប្តូរទម្រង់ទៅលំនាំដើម</string>
     <string name="timeline_notice_instructions_updated">បានធ្វើបច្ចុប្បន្នភាពការណែនាំ</string>
     <string name="timeline_notice_restart">បន្តបន្ទាប់ពីចាប់ផ្តើមឡើងវិញ</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
@@ -813,13 +813,13 @@
     <string name="session_chat_compact_success">បានបង្រួមសម័យ។</string>
     <string name="session_chat_compact_success_usage">បានបង្រួមបរិបទ · %1$d%% → %2$d%%</string>
     <string name="session_chat_compact_failure">មិនអាចបង្រួមបរិបទសម័យបានទេ។</string>
-    <string name="session_chat_revert_undo_failed">មិនអាចមិនធ្វើវិញសារចុងក្រោយបានទេ។</string>
+    <string name="session_chat_revert_undo_failed">មិនអាចដកថយសារចុងក្រោយបានទេ។</string>
     <string name="session_chat_revert_failed">មិនអាចត្រឡប់សារវិញបានទេ។</string>
     <string name="session_chat_revert_redo_failed">មិនអាចធ្វើឡើងវិញបានទេ។</string>
     <string name="session_chat_revert_cancel_failed">មិនអាចបោះបង់ការត្រឡប់វិញបានទេ។</string>
     <string name="session_chat_revert_commit_failed">មិនអាចបញ្ជាក់ការត្រឡប់វិញបានទេ។</string>
     <string name="session_chat_fork_rename_failed">បានបង្កើត fork ប៉ុន្តែមិនអាចប្តូរឈ្មោះបានទេ។</string>
-    <string name="session_chat_pending_prompt_update_failed">មិនអាចធ្វើបច្ចុប្បន្នភាពប្រអប់បញ្ចូលដែលកំពុងរង់ចាំបានទេ</string>
+    <string name="session_chat_pending_prompt_update_failed">មិនអាចធ្វើបច្ចុប្បន្នភាព prompt ដែលកំពុងរង់ចាំបានទេ</string>
     <string name="session_chat_shell_stop_failed">មិនអាចបញ្ឈប់ shell បានទេ។ សូមព្យាយាមម្តងទៀត។</string>
     <string name="session_chat_shell_status_running">កំពុងដំណើរការ</string>
     <string name="session_chat_shell_status_exited">បានចេញ</string>
@@ -868,7 +868,7 @@
     <string name="session_chat_sheet_pending_prompts_delete">លុប</string>
     <string name="session_chat_sheet_side_question_done">រួចរាល់</string>
     <string name="session_chat_sheet_side_question_not_added">មិនបានបន្ថែមទៅក្នុងការសន្ទនាទេ</string>
-    <string name="session_chat_sheet_todos_title">បញ្ជីការងារនៃសម័យ</string>
+    <string name="session_chat_sheet_todos_title">បញ្ជីការងារត្រូវធ្វើនៃសម័យ</string>
     <string name="session_chat_sheet_todos_progress">បានបញ្ចប់ %1$d ក្នុងចំណោម %2$d</string>
     <string name="session_chat_goal_pill">គោលដៅ</string>
     <string name="session_chat_goal_pill_paused">គោលដៅត្រូវបានផ្អាក</string>
@@ -925,7 +925,7 @@
     <string name="session_chat_goal_ended">បានបញ្ចប់</string>
     <string name="session_chat_goal_set_earlier">គោលដៅមុន។ វាត្រូវបានសម្អាត ឬជំនួស។</string>
     <string name="session_chat_goal_bubble_label">គោលដៅ</string>
-    <string name="session_chat_goal_objective_hint">ពិពណ៌នាថា “រួចរាល់” មើលទៅដូចម្តេច…</string>
+    <string name="session_chat_goal_objective_hint">សូមពិពណ៌នាថា “រួចរាល់” មើលទៅដូចម្តេច…</string>
     <string name="session_chat_goal_resume_placeholder">ឆ្លើយតប រួចបន្តគោលដៅ…</string>
     <string name="session_chat_goal_count">%1$s / %2$s តួអក្សរ</string>
     <string name="session_chat_goal_count_over">%1$s / %2$s តួអក្សរ · បង្រួមគោលបំណងដើម្បីផ្ញើ</string>
@@ -939,7 +939,7 @@
     <string name="session_chat_goal_clear_failed">មិនអាចសម្អាតគោលដៅបានទេ</string>
     <string name="session_chat_goal_clear_failed_reason">មិនអាចសម្អាតគោលដៅបានទេ៖ %1$s</string>
     <string name="session_chat_timeline_style_notice">ខ្សែពេលវេលា៖ %1$s។ ប្តូរបានគ្រប់ពេលនៅក្នុងការកំណត់។</string>
-    <string name="session_chat_branch_copied">បានចម្លងឈ្មោះ branch</string>
+    <string name="session_chat_branch_copied">បានចម្លងឈ្មោះសាខា</string>
     <string name="session_chat_follow_up_switched_steer">បានប្តូរទៅ ណែនាំ</string>
     <string name="session_chat_follow_up_switched_queue">បានប្តូរទៅ ជួររង់ចាំ</string>
     <string name="session_chat_failure_retry_after_seconds">ព្យាយាមម្តងទៀតក្នុង %1$d វិ</string>
@@ -955,13 +955,13 @@
     <plurals name="component_branch_pill_uncommitted_files">
         <item quantity="other">%1$d ឯកសារមិនទាន់ commit</item>
     </plurals>
-    <string name="component_branch_pill_a11y_branch">Branch %1$s</string>
-    <string name="component_branch_pill_a11y_worktree_branch">Branch របស់ worktree %1$s</string>
+    <string name="component_branch_pill_a11y_branch">សាខា %1$s</string>
+    <string name="component_branch_pill_a11y_worktree_branch">សាខារបស់ worktree %1$s</string>
     <string name="component_branch_pill_a11y_no_changes">%1$s, គ្មានការផ្លាស់ប្តូរ</string>
     <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
     <string name="component_branch_pill_a11y_added">%1$s, បានបន្ថែម %2$d</string>
     <string name="component_branch_pill_a11y_removed">%1$s, បានលុប %2$d</string>
-    <string name="session_chat_archive_failed">មិនអាចរក្សាទុកសម័យក្នុងបណ្ណសារបានទេ។</string>
+    <string name="session_chat_archive_failed">មិនអាចដាក់សម័យក្នុងបណ្ណសារបានទេ។</string>
     <string name="session_chat_delete_failed">មិនអាចលុបសម័យបានទេ។</string>
     <string name="session_chat_mcp_load_failed">មិនអាចផ្ទុកម៉ាស៊ីនមេ MCP បានទេ។ សូមពិនិត្យការតភ្ជាប់ រួចព្យាយាមម្តងទៀត។</string>
     <string name="session_chat_create_failed">មិនអាចបង្កើតសម័យបានទេ</string>
@@ -973,10 +973,10 @@
     <string name="session_chat_reply_error_question_reason">មិនអាចផ្ញើចម្លើយរបស់អ្នកបានទេ។ %1$s។</string>
     <string name="session_chat_reply_error_dismiss">មិនអាចបិទសំណួរបានទេ។ សូមព្យាយាមម្តងទៀត។</string>
     <string name="session_chat_reply_error_dismiss_reason">មិនអាចបិទសំណួរបានទេ។ %1$s។</string>
-    <string name="session_chat_permission_unavailable">សំណើសិទ្ធិលែងមានទៀតហើយ</string>
+    <string name="session_chat_permission_unavailable">សំណើសុំការអនុញ្ញាតលែងមានទៀតហើយ</string>
     <string name="session_chat_question_unavailable">សំណើសំណួរលែងមានទៀតហើយ</string>
-    <string name="session_chat_permission_tree_failed">មិនអាចផ្ទុកដើមឈើសម័យនៃសិទ្ធិឡើងវិញបានទេ</string>
-    <string name="session_chat_question_tree_failed">មិនអាចផ្ទុកដើមឈើសម័យនៃសំណួរឡើងវិញបានទេ</string>
+    <string name="session_chat_permission_tree_failed">មិនអាចផ្ទុកឋានានុក្រមសម័យនៃការអនុញ្ញាតឡើងវិញបានទេ</string>
+    <string name="session_chat_question_tree_failed">មិនអាចផ្ទុកឋានានុក្រមសម័យនៃសំណួរឡើងវិញបានទេ</string>
     <string name="session_chat_sheet_timeline_style_picker_title">ថ្មី៖ ជ្រើសរើសខ្សែពេលវេលារបស់អ្នក</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">ការធ្វើបច្ចុប្បន្នភាពនេះបន្ថែមវិធីថ្មីដើម្បីតាមដានអ្វីដែលភ្នាក់ងារកំពុងធ្វើ។</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">អ្នកអាចប្តូរបានគ្រប់ពេលនៅក្នុង ការកំណត់ → រចនាប័ទ្មខ្សែពេលវេលា។</string>
@@ -991,7 +991,7 @@
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">ជំហានដែលកំពុងដំណើរការលើកាតផ្ទាល់មួយ ដែលបត់ជាសេចក្តីសង្ខេប</string>
     <string name="session_chat_sheet_picker_model">ម៉ូដែល</string>
     <string name="session_chat_sheet_picker_agent_mode">របៀបភ្នាក់ងារ</string>
-    <string name="session_chat_sheet_picker_variant">វ៉ារ្យ៉ង់</string>
+    <string name="session_chat_sheet_picker_variant">ទម្រង់</string>
     <string name="session_chat_sheet_picker_back_to_providers">ត្រឡប់ទៅអ្នកផ្តល់សេវា</string>
     <string name="session_chat_sheet_picker_no_models_match">គ្មានម៉ូដែលត្រូវនឹងតម្រងរបស់អ្នកទេ</string>
     <string name="session_chat_sheet_picker_filter_models_hint">តម្រងម៉ូដែល...</string>
@@ -1112,8 +1112,8 @@
     <string name="settings_follow_up_subtitle_steer">ណែនាំ · សម្រាប់តែម៉ាស៊ីនមេ V2 ប៉ុណ្ណោះ។ V1 មិនគាំទ្រទេ។</string>
     <string name="settings_follow_up_subtitle_queue">ជួររង់ចាំ · សម្រាប់តែម៉ាស៊ីនមេ V2 ប៉ុណ្ណោះ។ V1 មិនគាំទ្រទេ។</string>
     <string name="settings_follow_up_unsupported">មិនគាំទ្រលើ V1 ទេ។ ម៉ាស៊ីនមេនេះផ្ញើភ្លាមៗជានិច្ច។</string>
-    <string name="settings_worktrees_title">Worktrees</string>
-    <string name="settings_worktrees_subtitle">បង្ហាញ worktrees និង branches របស់គម្រោងនីមួយៗនៅទំព័រដើម ហើយឱ្យសម័យថ្មីជ្រើស worktree ពេលអ្នកចុចឱ្យយូរ។</string>
+    <string name="settings_worktrees_title">Worktree</string>
+    <string name="settings_worktrees_subtitle">បង្ហាញ worktree និងសាខារបស់គម្រោងនីមួយៗនៅទំព័រដើម ហើយឱ្យសម័យថ្មីជ្រើស worktree ពេលអ្នកចុចឱ្យយូរ។</string>
     <string name="settings_session_rows_title">ជួរសម័យ</string>
     <string name="settings_session_rows_compact_title">បង្រួម</string>
     <string name="settings_session_rows_compact_subtitle">ពីរបន្ទាត់៖ ចំណងជើង និងពេលវេលា បន្ទាប់មកគម្រោង / worktree</string>
@@ -1183,7 +1183,7 @@
     <string name="diagnostics_error_save">មិនអាចរក្សាទុកកំណត់ហេតុវិនិច្ឆ័យបានទេ។</string>
     <string name="diagnostics_saved">បានរក្សាទុកកំណត់ហេតុវិនិច្ឆ័យ។</string>
     <string name="appearance_title">រូបរាង</string>
-    <string name="appearance_theme_title">ស្បែក</string>
+    <string name="appearance_theme_title">ប្រធានបទ</string>
     <string name="appearance_theme_subtitle">%1$s · %2$s</string>
     <string name="appearance_code_highlight_title">ការបន្លិចកូដ</string>
     <string name="appearance_theme_blurb_porcelain">ស្ទើរតែស / ស្ទើរតែខ្មៅ</string>
@@ -1191,8 +1191,8 @@
     <string name="appearance_theme_blurb_signal">សសុទ្ធ / ខ្មៅសុទ្ធ</string>
     <string name="appearance_theme_blurb_hotline">ស៊ុមអព្យាក្រឹត ផ្កាឈូកភ្លឺ</string>
     <string name="appearance_theme_blurb_phosphor">ស៊ុមអព្យាក្រឹត បៃតង CRT</string>
-    <string name="appearance_syntax_name_match">ត្រូវនឹងស្បែក</string>
-    <string name="appearance_syntax_blurb_match">ប្រើថូខឹនរបស់ស្បែក UI ផ្ទាល់</string>
+    <string name="appearance_syntax_name_match">ត្រូវនឹងប្រធានបទ</string>
+    <string name="appearance_syntax_blurb_match">ប្រើថូខឹនរបស់ប្រធានបទ UI ផ្ទាល់</string>
     <string name="appearance_syntax_blurb_nocturne">ក្រុម One Dark</string>
     <string name="appearance_syntax_blurb_citrus">ក្រុម Solarized</string>
     <string name="appearance_syntax_blurb_paper">ក្រុម GitHub</string>
@@ -1253,7 +1253,7 @@
     <string name="feedback_error_failed">មិនអាចផ្ញើរបាយការណ៍បានទេ។</string>
     <string name="feedback_action_try_again">ព្យាយាមម្តងទៀត</string>
     <string name="feedback_action_share_instead">ចែករំលែកជំនួសវិញ</string>
-    <string name="feedback_undo">មិនធ្វើវិញ</string>
+    <string name="feedback_undo">ដកថយ</string>
     <string name="feedback_done">រួចរាល់</string>
     <string name="feedback_add_attachment">បន្ថែមឯកសារភ្ជាប់</string>
     <string name="feedback_dictate">សរសេរតាមសំឡេង</string>
@@ -1312,7 +1312,7 @@
     <string name="session_search_archived_tag">បណ្ណសារ</string>
     <string name="session_search_scope_selected">%1$s, បានជ្រើសរើស</string>
     <string name="keyboard_shortcuts_group_session">សម័យ</string>
-    <string name="keyboard_shortcuts_group_prompt">ប្រអប់បញ្ចូល</string>
+    <string name="keyboard_shortcuts_group_prompt">Prompt</string>
     <string name="keyboard_shortcuts_group_go">ទៅ</string>
     <string name="keyboard_shortcuts_new_session">សម័យថ្មី</string>
     <string name="keyboard_shortcuts_command_palette">ផ្ទាំងពាក្យបញ្ជា</string>
@@ -1353,7 +1353,7 @@
     <string name="changes_loading_title">កំពុងផ្ទុកការផ្លាស់ប្តូរ</string>
     <string name="changes_loading_message">កំពុងទាញយក diff…</string>
     <string name="changes_no_turn_title">គ្មានវេនដែលបានបញ្ចប់</string>
-    <string name="changes_no_turn_message">ផ្ញើប្រអប់បញ្ចូល ហើយរង់ចាំឱ្យវាបញ្ចប់ រួចព្យាយាមម្តងទៀត។</string>
+    <string name="changes_no_turn_message">សូមផ្ញើ prompt ហើយរង់ចាំឱ្យវាបញ្ចប់ រួចព្យាយាមម្តងទៀត។</string>
     <string name="changes_error_title">មិនអាចផ្ទុកការផ្លាស់ប្តូរបានទេ</string>
     <string name="changes_error_fallback">ការផ្លាស់ប្តូរមិនបានផ្ទុកទេ។</string>
     <string name="changes_error_request_failed">សំណើបរាជ័យ</string>
@@ -1362,7 +1362,7 @@
     <string name="changes_filter_hint">តម្រង</string>
     <string name="changes_filter_accessibility_label">តម្រងឯកសារដែលបានផ្លាស់ប្តូរ</string>
     <string name="changes_no_matches_title">គ្មានឯកសារដែលត្រូវគ្នា</string>
-    <string name="changes_no_matches_message">សាកល្បងផ្លូវផ្សេង ឬសម្អាតតម្រង។</string>
+    <string name="changes_no_matches_message">សូមសាកល្បងផ្លូវផ្សេង ឬសម្អាតតម្រង។</string>
     <string name="changes_no_matches_clear_filter">សម្អាតតម្រង</string>
     <string name="changes_select_file_title">ជ្រើសរើសឯកសារ</string>
     <string name="changes_select_file_message">ជ្រើសរើសឯកសារដែលបានផ្លាស់ប្តូរ ដើម្បីមើល diff។</string>
@@ -1395,8 +1395,8 @@
     <string name="component_todo_item_status_in_progress">កំពុងដំណើរការ</string>
     <string name="component_todo_item_status_completed">បានបញ្ចប់</string>
     <string name="component_todo_item_status_cancelled">បានបោះបង់</string>
-    <string name="component_todos_pill_accessibility_label">ការងារត្រូវធ្វើនៃសម័យ បានបញ្ចប់ %1$d ក្នុងចំណោម %2$d</string>
-    <string name="component_todos_pill_accessibility_label_active">ការងារត្រូវធ្វើនៃសម័យ បានបញ្ចប់ %1$d ក្នុងចំណោម %2$d, %3$s</string>
+    <string name="component_todos_pill_accessibility_label">បញ្ជីការងារត្រូវធ្វើនៃសម័យ បានបញ្ចប់ %1$d ក្នុងចំណោម %2$d</string>
+    <string name="component_todos_pill_accessibility_label_active">បញ្ជីការងារត្រូវធ្វើនៃសម័យ បានបញ្ចប់ %1$d ក្នុងចំណោម %2$d, %3$s</string>
     <string name="component_reasoning_row_thought_duration">បានគិត · %1$s</string>
     <string name="component_reasoning_row_duration_seconds">%1$s វិ</string>
     <string name="component_reasoning_row_duration_ms">%1$dms</string>
@@ -1405,7 +1405,7 @@
     <string name="component_reasoning_row_shows_thought_hint">បង្ហាញគំនិតពេញលេញ</string>
     <string name="component_unified_diff_row_kind_hunk">ផ្នែកកែប្រែ</string>
     <string name="component_unified_diff_row_kind_metadata">ទិន្នន័យមេតា</string>
-    <string name="component_unified_diff_row_kind_context">បរិបទ</string>
+    <string name="component_unified_diff_row_kind_context">បន្ទាត់មិនផ្លាស់ប្តូរ</string>
     <string name="component_unified_diff_row_kind_addition">ការបន្ថែម</string>
     <string name="component_unified_diff_row_kind_deletion">ការលុប</string>
     <string name="component_unified_diff_old_line">បន្ទាត់ចាស់ %1$d</string>
@@ -1433,11 +1433,11 @@
     <string name="component_composer_reverting_title">កំពុងត្រឡប់សារនេះ</string>
     <string name="session_new_title">សម័យថ្មី</string>
     <string name="session_list_dock_add_project">បន្ថែមគម្រោង</string>
-    <string name="theme_error_preset_not_found">រកមិនឃើញស្បែកដែលបានកំណត់ទុកជាមុនទេ</string>
+    <string name="theme_error_preset_not_found">រកមិនឃើញប្រធានបទដែលបានកំណត់ទុកជាមុនទេ</string>
     <string name="component_composer_submit">បញ្ជូន</string>
     <string name="component_composer_select_all_that_apply">ជ្រើសរើសទាំងអស់ដែលសមស្រប</string>
     <string name="component_unified_diff_summary_modified">ឯកសារបានកែប្រែ %1$s, %2$s, %3$s</string>
-    <string name="component_hunk_navigation_collapse_context">បង្រួមបរិបទ</string>
+    <string name="component_hunk_navigation_collapse_context">លាក់បន្ទាត់ដែលមិនផ្លាស់ប្តូរ</string>
     <string name="component_top_bar_project_subtitle">គម្រោង %1$s %2$s</string>
     <string name="component_composer_dismiss">បិទ</string>
     <string name="dictation_model_downloading_detail">នេះជាការទាញយករបស់ប្រព័ន្ធ។ វានឹងបន្តទោះបិទកាតនេះក៏ដោយ។</string>
@@ -1461,7 +1461,7 @@
     <string name="component_image_loading_label">%1$s, កំពុងផ្ទុក</string>
     <string name="session_list_dock_new_session">សម័យថ្មី</string>
     <string name="component_composer_always_allows">អនុញ្ញាតជានិច្ច៖ %1$s</string>
-    <string name="component_composer_leave_side_question_mode">ចាកចេញពីរបៀបសំណួរចំហៀង</string>
+    <string name="component_composer_leave_side_question_mode">ចាកចេញពីរបៀបសំណួរបន្ថែម</string>
     <string name="session_list_worktree_empty_other_projects">សម្អាតតម្រង ដើម្បីមើលសម័យនៅលើគម្រោងផ្សេងទៀត។</string>
     <string name="component_attachment_uploading">កំពុងផ្ទុកឡើង…</string>
     <string name="component_composer_deny">បដិសេធ</string>
@@ -1493,7 +1493,7 @@
     <string name="component_composer_question">សំណួរ</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">សម្អាតតម្រង ដើម្បីមើលសម័យនៅលើ worktree ផ្សេងទៀត។</string>
-    <string name="component_composer_side_question_mode">របៀបសំណួរចំហៀង</string>
+    <string name="component_composer_side_question_mode">របៀបសំណួរបន្ថែម</string>
     <string name="component_page_indicator_label">ទំព័រ %1$d ក្នុងចំណោម %2$d</string>
     <string name="component_composer_next">បន្ទាប់</string>
     <string name="component_message_image_label">រូបភាព %1$s</string>
@@ -1503,7 +1503,7 @@
     <string name="session_list_status_failed">បរាជ័យ</string>
     <string name="component_composer_custom_answer_title">វាយចម្លើយរបស់អ្នកផ្ទាល់</string>
     <string name="component_composer_always">ជានិច្ច</string>
-    <string name="component_composer_send_side_question">សួរសំណួរចំហៀង</string>
+    <string name="component_composer_send_side_question">សួរសំណួរបន្ថែម</string>
     <string name="component_composer_select_exactly">ជ្រើសរើស %1$d</string>
     <string name="dictation_action_open_settings">បើកការកំណត់</string>
     <string name="component_composer_open_commands">បើកពាក្យបញ្ជា</string>
@@ -1525,14 +1525,14 @@
     <string name="component_composer_next_question">សំណួរបន្ទាប់</string>
     <string name="component_split_pane_show_sidebar">បង្ហាញរបារចំហៀង</string>
     <string name="component_composer_placeholder">សួរអ្វីក៏បាន...</string>
-    <string name="component_server_address_host">ម៉ាស៊ីនមេ</string>
+    <string name="component_server_address_host">ហូស្ត</string>
     <plurals name="relative_time_hours_ago">
         <item quantity="other">%1$d ម៉ោងមុន</item>
     </plurals>
     <plurals name="component_activity_card_step_count">
         <item quantity="other">%1$d ជំហាន</item>
     </plurals>
-    <string name="theme_error_apply_failed">អនុវត្តស្បែកដែលបានកំណត់ទុកជាមុនមិនបានទេ</string>
+    <string name="theme_error_apply_failed">អនុវត្តប្រធានបទដែលបានកំណត់ទុកជាមុនមិនបានទេ</string>
     <string name="component_unified_diff_summary_deleted">ឯកសារបានលុប %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">កំពុងដំណើរការ</string>
     <string name="component_step_rail_expands">%1$s, ពង្រីកបាន</string>
@@ -1546,7 +1546,7 @@
     <string name="component_composer_previous_question">សំណួរមុន</string>
     <string name="component_activity_card_agent">ភ្នាក់ងារ</string>
     <string name="session_list_section_today">ថ្ងៃនេះ</string>
-    <string name="component_composer_child_lockout">មិនអាចផ្ញើសារទៅសម័យកូនបានទេ។</string>
+    <string name="component_composer_child_lockout">មិនអាចផ្ញើ prompt ទៅសម័យរងបានទេ។</string>
     <string name="component_attachment_uploading_percent">កំពុងផ្ទុកឡើង %1$d%%</string>
     <string name="component_composer_custom_answer_hint">បញ្ចូលចម្លើយផ្ទាល់ខ្លួន</string>
     <string name="component_composer_cancel_revert">បោះបង់ការត្រឡប់</string>
@@ -1580,7 +1580,7 @@
         <item quantity="other">%1$d នាទីមុន</item>
     </plurals>
     <string name="component_composer_request_position">%1$d ក្នុងចំណោម %2$d</string>
-    <string name="component_composer_side_question_placeholder">សំណួរចំហៀង មិនត្រូវបានបន្ថែមទៅការជជែកទេ</string>
+    <string name="component_composer_side_question_placeholder">សំណួរបន្ថែម មិនដាក់ក្នុងការជជែកទេ</string>
     <string name="session_list_worktree_empty_every_project">សម្អាតតម្រង ដើម្បីមើលគម្រោងទាំងអស់។</string>
     <string name="component_image_viewer_could_not_load_named">មិនអាចផ្ទុក %1$s បានទេ</string>
     <string name="component_composer_select_up_to">ជ្រើសរើសរហូតដល់ %1$d</string>
@@ -1591,7 +1591,7 @@
     <string name="component_image_viewer_loading_full">កំពុងផ្ទុករូបភាពពេញលេញ</string>
     <string name="session_list_worktree_empty_action">សម្អាតតម្រង</string>
     <string name="dictation_model_download_failed_detail">សូមពិនិត្យការតភ្ជាប់ និងទំហំផ្ទុកទំនេរលើឧបករណ៍នេះ រួចព្យាយាមម្តងទៀត។</string>
-    <string name="component_composer_send_queue">ផ្ញើក្នុងជួរ</string>
+    <string name="component_composer_send_queue">ផ្ញើក្នុងជួររង់ចាំ</string>
     <string name="session_list_dock_new_session_hint">ប្រើ ជ្រើសរើសគម្រោង ឬ worktree ដើម្បីចាប់ផ្តើមនៅកន្លែងផ្សេង។</string>
     <string name="session_list_section_yesterday">ម្សិលមិញ</string>
     <string name="component_code_file_line_label">បន្ទាត់ %1$d, %2$s</string>
@@ -1606,7 +1606,7 @@
         <item quantity="other">%1$d ជំហានមុន</item>
     </plurals>
     <string name="component_outgoing_message_long_press_hint">ចុចឱ្យយូរដើម្បីបង្ហាញសកម្មភាពនៃសារ</string>
-    <string name="component_composer_hide_permission">លាក់សំណើសិទ្ធិ</string>
+    <string name="component_composer_hide_permission">លាក់សំណើសុំការអនុញ្ញាត</string>
     <string name="dictation_downloading_model_progress">កំពុងទាញយកម៉ូដែលសំឡេង, %1$s</string>
     <string name="component_branch_pill_copy_branch_name">ចម្លងឈ្មោះសាខា</string>
     <string name="component_truncation_row_full_message_title">បង្ហាញសារពេញលេញ</string>
@@ -1630,15 +1630,15 @@
     <string name="component_session_list_skeleton_slow_label">%1$s។ %2$s</string>
     <string name="component_close">បិទ</string>
     <string name="relative_time_now">ឥឡូវនេះ</string>
-    <string name="component_composer_previous_permission">សំណើសិទ្ធិមុន</string>
+    <string name="component_composer_previous_permission">សំណើសុំការអនុញ្ញាតមុន</string>
     <string name="component_composer_dictate">សរសេរតាមសំឡេង</string>
-    <string name="component_composer_side_question_mode_description">របៀបសំណួរចំហៀង។ ចាកចេញពីរបៀបសំណួរចំហៀង</string>
+    <string name="component_composer_side_question_mode_description">របៀបសំណួរបន្ថែម។ ចាកចេញពីរបៀបសំណួរបន្ថែម</string>
     <string name="component_composer_abort">បញ្ឈប់ការងារដែលកំពុងដំណើរការ</string>
     <string name="component_server_address_scheme_button">ប្រូតូកូល %1$s</string>
     <string name="component_composer_open_subagent_session">បើកសម័យភ្នាក់ងាររង</string>
     <string name="component_composer_question_step">ជំហាន %1$d ក្នុងចំណោម %2$d</string>
     <string name="share_feedback_subject_bug">របាយការណ៍បញ្ហារបស់ OpenCode Mobile</string>
-    <string name="component_activity_card_opens_child_session_hint">បើកសម័យកូន</string>
+    <string name="component_activity_card_opens_child_session_hint">បើកសម័យរង</string>
     <string name="component_activity_status_failed">បរាជ័យ</string>
     <string name="dictation_model_not_installed_title">%1$s ត្រូវការ %2$s របស់វា</string>
     <string name="component_composer_back_to_main_session">ត្រឡប់ទៅសម័យមេ</string>
@@ -1646,14 +1646,14 @@
     <string name="session_list_status_retrying">កំពុងព្យាយាមម្តងទៀត</string>
     <string name="component_attachment_remove">ដក %1$s ចេញ</string>
     <string name="component_composer_send_steer">ផ្ញើជាការណែនាំ</string>
-    <string name="component_composer_next_permission">សំណើសិទ្ធិបន្ទាប់</string>
+    <string name="component_composer_next_permission">សំណើសុំការអនុញ្ញាតបន្ទាប់</string>
     <string name="session_list_dock_project_filter">តម្រងគម្រោង</string>
     <string name="component_split_pane_resize_hint">ចុចពីរដងដើម្បីលាក់របារចំហៀង</string>
     <string name="component_branch_pill_shows_details_hint">បង្ហាញព័ត៌មានលម្អិតនៃសាខា</string>
-    <string name="component_composer_permission_requested">បានស្នើសុំសិទ្ធិ</string>
+    <string name="component_composer_permission_requested">មានសំណើសុំការអនុញ្ញាត</string>
     <string name="component_thinking">ការគិត</string>
     <string name="dictation_model_downloading_title">%1$s កំពុងទាញយក %2$s</string>
-    <string name="component_hunk_navigation_expand_context">ពង្រីកបរិបទ</string>
+    <string name="component_hunk_navigation_expand_context">បង្ហាញបន្ទាត់ដែលមិនផ្លាស់ប្តូរ</string>
     <string name="dictation_listening_placeholder">កំពុងស្តាប់…</string>
     <string name="component_skeleton_illustration_unofficial">មិនផ្លូវការ</string>
     <string name="dictation_status_ready">រួចរាល់ដើម្បីបញ្ចូល</string>

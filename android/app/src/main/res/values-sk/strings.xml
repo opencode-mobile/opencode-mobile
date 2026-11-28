@@ -538,7 +538,7 @@
     <string name="session_chat_move_worktree_menu_title">Presunúť do worktree…</string>
     <string name="session_chat_move_worktree_sheet_title">Presunúť do worktree</string>
     <string name="session_chat_move_worktree_no_other">Tento projekt nemá žiadne iné worktree</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Po tomto kroku sa presunie do %1$s.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Po tomto ťahu sa presunie do %1$s.</string>
     <string name="session_chat_move_worktree_failed">Reláciu sa nepodarilo presunúť: %1$s</string>
     <string name="session_chat_variant_default">Predvolený</string>
     <string name="session_chat_model_chip_placeholder">Model</string>
@@ -1599,18 +1599,18 @@
         <item quantity="other">Zmeny v Gite obsahujú %1$d zmenených súborov.</item>
     </plurals>
     <plurals name="changes_other_source_last_turn">
-        <item quantity="one">Posledné kolo zmenilo %1$d súbor.</item>
-        <item quantity="few">Posledné kolo zmenilo %1$d súbory.</item>
-        <item quantity="many">Posledné kolo zmenilo %1$d súboru.</item>
-        <item quantity="other">Posledné kolo zmenilo %1$d súborov.</item>
+        <item quantity="one">Posledný ťah zmenil %1$d súbor.</item>
+        <item quantity="few">Posledný ťah zmenil %1$d súbory.</item>
+        <item quantity="many">Posledný ťah zmenil %1$d súboru.</item>
+        <item quantity="other">Posledný ťah zmenil %1$d súborov.</item>
     </plurals>
     <string name="changes_other_source_show">Zobraziť: %1$s</string>
     <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
     <string name="changes_source_last_turn_empty_title">Žiadne zmeny</string>
-    <string name="changes_source_last_turn_empty_message">Posledné dokončené kolo nezmenilo žiadne súbory.</string>
+    <string name="changes_source_last_turn_empty_message">Posledný dokončený ťah nezmenil žiadne súbory.</string>
     <string name="changes_loading_title">Načítavajú sa zmeny</string>
     <string name="changes_loading_message">Sťahuje sa diff…</string>
-    <string name="changes_no_turn_title">Žiadne dokončené kolo</string>
+    <string name="changes_no_turn_title">Žiadny dokončený ťah</string>
     <string name="changes_no_turn_message">Odošlite výzvu, počkajte na dokončenie a skúste to znova.</string>
     <string name="changes_error_title">Zmeny sa nepodarilo načítať</string>
     <string name="changes_error_fallback">Zmeny sa nenačítali.</string>
@@ -1620,8 +1620,8 @@
     <string name="changes_filter_hint">Filtrovať</string>
     <string name="changes_filter_accessibility_label">Filtrovať zmenené súbory</string>
     <string name="changes_no_matches_title">Žiadne zodpovedajúce súbory</string>
-    <string name="changes_no_matches_message">Skúste inú cestu alebo zrušte filter.</string>
-    <string name="changes_no_matches_clear_filter">Zrušiť filter</string>
+    <string name="changes_no_matches_message">Skúste inú cestu alebo vymažte filter.</string>
+    <string name="changes_no_matches_clear_filter">Vymazať filter</string>
     <string name="changes_select_file_title">Vyberte súbor</string>
     <string name="changes_select_file_message">Vyberte zmenený súbor a zobrazí sa diff.</string>
     <string name="changes_preview_unavailable_title">Ukážka nie je k dispozícii</string>
@@ -1732,7 +1732,7 @@
     <string name="session_list_dock_new_session">Nová relácia</string>
     <string name="component_composer_always_allows">Vždy povolí: %1$s</string>
     <string name="component_composer_leave_side_question_mode">Opustiť režim vedľajšej otázky</string>
-    <string name="session_list_worktree_empty_other_projects">Zrušte filter a zobrazia sa relácie z iných projektov.</string>
+    <string name="session_list_worktree_empty_other_projects">Vymažte filter a zobrazia sa relácie z iných projektov.</string>
     <string name="component_attachment_uploading">Nahráva sa…</string>
     <string name="component_composer_deny">Odmietnuť</string>
     <string name="component_composer_deny_options">Ďalšie možnosti odmietnutia</string>
@@ -1765,7 +1765,7 @@
     <string name="component_image_could_not_load_label">%1$s, nepodarilo sa načítať</string>
     <string name="component_composer_question">Otázka</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">Zrušte filter a zobrazia sa relácie z iných worktree.</string>
+    <string name="session_list_worktree_empty_other_worktrees">Vymažte filter a zobrazia sa relácie z iných worktree.</string>
     <string name="component_composer_side_question_mode">Režim vedľajšej otázky</string>
     <string name="component_page_indicator_label">Strana %1$d z %2$d</string>
     <string name="component_composer_next">Ďalej</string>
@@ -1793,7 +1793,7 @@
     <string name="session_list_scope_load_failed_title">Nepodarilo sa načítať: %1$s</string>
     <string name="dictation_status_listening">Počúva sa</string>
     <string name="dictation_downloading_model">Sťahuje sa model rozpoznávania reči</string>
-    <string name="session_list_worktree_empty_every_worktree">Zrušte filter a zobrazia sa všetky worktree.</string>
+    <string name="session_list_worktree_empty_every_worktree">Vymažte filter a zobrazia sa všetky worktree.</string>
     <string name="component_overflow_menu_more_options">Ďalšie možnosti</string>
     <string name="session_list_status_retrying_attempt">Opakuje sa · %1$d</string>
     <string name="live_updates_status_offline">offline</string>
@@ -1872,7 +1872,7 @@
     </plurals>
     <string name="component_composer_request_position">%1$d z %2$d</string>
     <string name="component_composer_side_question_placeholder">Vedľajšia otázka, nepridá sa do chatu</string>
-    <string name="session_list_worktree_empty_every_project">Zrušte filter a zobrazia sa všetky projekty.</string>
+    <string name="session_list_worktree_empty_every_project">Vymažte filter a zobrazia sa všetky projekty.</string>
     <string name="component_image_viewer_could_not_load_named">Nepodarilo sa načítať %1$s</string>
     <string name="component_composer_select_up_to">Vyberte najviac %1$d</string>
     <string name="live_updates_status_live">naživo</string>
@@ -1880,7 +1880,7 @@
     <string name="component_image_viewer_could_not_load_full">Celý obrázok sa nepodarilo načítať</string>
     <string name="component_image_viewer_retry">Skúste znova</string>
     <string name="component_image_viewer_loading_full">Načítava sa celý obrázok</string>
-    <string name="session_list_worktree_empty_action">Zrušiť filter</string>
+    <string name="session_list_worktree_empty_action">Vymazať filter</string>
     <string name="dictation_model_download_failed_detail">Skontrolujte pripojenie a voľné miesto v tomto zariadení a skúste to znova.</string>
     <string name="component_composer_send_queue">Odoslať do fronty</string>
     <string name="session_list_dock_new_session_hint">Ak chcete začať inde, použite Vybrať projekt alebo worktree.</string>

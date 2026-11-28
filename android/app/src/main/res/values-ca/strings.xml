@@ -101,7 +101,7 @@
     <string name="onboarding_features_live_title">En directe mentre és oberta</string>
     <string name="onboarding_features_live_detail">Flux d\'esdeveniments en primer pla; actualitza després de reconnectar</string>
     <string name="onboarding_setup_title">Configura opencode serve</string>
-    <string name="onboarding_setup_intro">L\'aplicació es comunica amb un servidor opencode que executes tu. Aquí tens el camí curt — tots els detalls, a la documentació oficial.</string>
+    <string name="onboarding_setup_intro">L\'aplicació es comunica amb un servidor opencode que executes tu. Aquí tens la ruta curta — tots els detalls, a la documentació oficial.</string>
     <string name="onboarding_setup_step_number">Pas %1$d</string>
     <string name="onboarding_setup_step1_title">Inicia el servidor a la teva màquina</string>
     <string name="onboarding_setup_step1_body">Al teu projecte, executa el servidor opencode (headless). Deixa\'l en marxa mentre facis servir el telèfon.</string>
@@ -1276,7 +1276,7 @@
     <string name="settings_app_lock_subtitle_available">Demana l\'empremta, la cara o el bloqueig de pantalla quan l\'aplicació torna des del segon pla</string>
     <string name="settings_app_lock_subtitle_unavailable">Configura un bloqueig de pantalla en aquest dispositiu per utilitzar el bloqueig de l\'aplicació</string>
     <string name="settings_privacy_policy_title">Política de privadesa</string>
-    <string name="settings_privacy_policy_subtitle">Com tracten les dades les apps</string>
+    <string name="settings_privacy_policy_subtitle">Com tracten les dades les aplicacions</string>
     <string name="settings_analytics_title">Analítiques i informes d\'errors</string>
     <string name="settings_analytics_subtitle">Permet esdeveniments d\'ús del producte opcionals i informes d\'errors. Si està desactivat, no s\'envia res a Firebase.</string>
     <string name="settings_analytics_label">Analítiques del producte</string>
@@ -1290,7 +1290,7 @@
     <string name="settings_source_code_title">Codi font</string>
     <string name="settings_source_code_subtitle">GPL-3.0 a GitHub</string>
     <string name="settings_rate_app_title">Valora a Google Play</string>
-    <string name="settings_rate_app_subtitle">Una ressenya ajuda altres persones a trobar l\'app</string>
+    <string name="settings_rate_app_subtitle">Una ressenya ajuda altres persones a trobar l\'aplicació</string>
     <string name="settings_star_on_github_title">Marca amb una estrella a GitHub</string>
     <string name="settings_follow_on_x_title">Segueix-nos a X</string>
     <string name="diagnostics_title">Registres de diagnòstic</string>

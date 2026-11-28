@@ -1267,7 +1267,7 @@
     <string name="appearance_theme_blurb_hotline">Ουδέτερο περίβλημα, έντονο ροζ</string>
     <string name="appearance_theme_blurb_phosphor">Ουδέτερο περίβλημα, πράσινο CRT</string>
     <string name="appearance_syntax_name_match">Ίδιο με το θέμα</string>
-    <string name="appearance_syntax_blurb_match">Χρήση των χρωμάτων του θέματος της διεπαφής</string>
+    <string name="appearance_syntax_blurb_match">Χρήση των tokens του θέματος της διεπαφής</string>
     <string name="appearance_syntax_blurb_nocturne">Οικογένεια One Dark</string>
     <string name="appearance_syntax_blurb_citrus">Οικογένεια Solarized</string>
     <string name="appearance_syntax_blurb_paper">Οικογένεια GitHub</string>

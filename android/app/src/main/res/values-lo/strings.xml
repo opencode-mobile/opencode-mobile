@@ -67,7 +67,7 @@
     <string name="connection_error_duplicate_profile">ມີເຊີບເວີທີ່ໃຊ້ໂຮສ ແລະ ຊື່ຜູ້ໃຊ້ນີ້ບັນທຶກໄວ້ແລ້ວ</string>
     <string name="connection_error_qr_scan_failed">QR ເຊື່ອມຕໍ່ບໍ່ໄດ້. API ຈັບຄູ່ຂອງ OpenCode 2 ຍັງປ່ຽນແປງຢູ່, ການສະແກນຈຶ່ງອາດລົ້ມເຫຼວທັງທີ່ແອັບເຮັດວຽກປົກກະຕິ. ໃຫ້ໃສ່ໂຮສ ແລ້ວເຊື່ອມຕໍ່. ລະຫັດຜ່ານເປັນທາງເລືອກ. ໃຊ້ລະຫັດຈັບຄູ່ກໍໄດ້.</string>
     <string name="connection_error_unreachable">ເຂົ້າເຖິງເຊີບເວີບໍ່ໄດ້</string>
-    <string name="server_error_pairing_expired">ການຈັບຄູ່ໝົດອາຍຸ, ກະລຸນາຈັບຄູ່ໃໝ່</string>
+    <string name="server_error_pairing_expired">ການຈັບຄູ່ໝົດອາຍຸ, ຈັບຄູ່ໃໝ່</string>
     <string name="server_error_not_found">ບໍ່ພົບໂຟນເດີ ຫຼື ໄຟລ໌</string>
     <string name="server_error_not_found_path">ບໍ່ພົບໂຟນເດີ ຫຼື ໄຟລ໌ · %1$s</string>
     <string name="server_error_session_busy">ເຊດຊັນບໍ່ຫວ່າງ</string>
@@ -91,9 +91,9 @@
     <string name="onboarding_connect_page_setup_link">ຕ້ອງການເຊີບເວີກ່ອນບໍ?</string>
     <string name="onboarding_features_title">ສິ່ງທີ່ທ່ານ\nເຮັດໄດ້ຈາກບ່ອນນີ້</string>
     <string name="onboarding_features_sessions_title">ເຊດຊັນ</string>
-    <string name="onboarding_features_sessions_detail">ເບິ່ງລາຍການ, ເປີດ, ສ້າງ, ປ່ຽນຊື່, ແຍກສາຂາ, ຮວບຮວມ, ລຶບ</string>
+    <string name="onboarding_features_sessions_detail">ເບິ່ງລາຍການ, ເປີດ, ສ້າງ, ປ່ຽນຊື່, ແຍກ, ຈັດເກັບ, ລຶບ</string>
     <string name="onboarding_features_chat_title">ແຊັດ ແລະ ຢຸດ</string>
-    <string name="onboarding_features_chat_detail">ສົ່ງຄຳສັ່ງ ແລະ ຢຸດງານທີ່ກຳລັງເຮັດຢູ່</string>
+    <string name="onboarding_features_chat_detail">ສົ່ງ prompt ແລະ ຢຸດງານທີ່ກຳລັງເຮັດຢູ່</string>
     <string name="onboarding_features_permissions_title">ການອະນຸຍາດ</string>
     <string name="onboarding_features_permissions_detail">ອະນຸມັດ ຫຼື ປະຕິເສດຄຳຮ້ອງ (ບໍ່ຈື່ຖາວອນ)</string>
     <string name="onboarding_features_changes_title">ການປ່ຽນແປງ</string>
@@ -211,7 +211,7 @@
     <string name="common_new">ໃໝ່</string>
     <string name="common_open">ເປີດ</string>
     <string name="common_settings">ການຕັ້ງຄ່າ</string>
-    <string name="common_terminal">ສະຖານີ</string>
+    <string name="common_terminal">Terminal</string>
     <string name="common_selected">ເລືອກແລ້ວ</string>
     <string name="home_sessions_title">ເຊດຊັນ</string>
     <string name="home_servers_sheet_using_now">ກຳລັງໃຊ້</string>
@@ -238,7 +238,7 @@
     <plurals name="home_project_count">
         <item quantity="other">%1$d ໂຄງການ</item>
     </plurals>
-    <string name="home_main_checkout">main checkout</string>
+    <string name="home_main_checkout">checkout ຫຼັກ</string>
     <plurals name="home_worktree_count">
         <item quantity="other">%1$d worktree</item>
     </plurals>
@@ -257,25 +257,25 @@
     <string name="home_reorder_note">ລາກເພື່ອຈັດລຽງໃໝ່. Worktree ຢູ່ກັບໂຄງການຂອງມັນ.</string>
     <string name="home_session_actions_title">ການດຳເນີນການເຊດຊັນ</string>
     <string name="home_session_actions_rename">ປ່ຽນຊື່ເຊດຊັນ</string>
-    <string name="home_session_actions_fork">ແຍກສາຂາເຊດຊັນ</string>
-    <string name="home_session_actions_archive">ຮວບຮວມ</string>
+    <string name="home_session_actions_fork">ແຍກເຊດຊັນ</string>
+    <string name="home_session_actions_archive">ຈັດເກັບ</string>
     <string name="home_rename_title">ປ່ຽນຊື່ເຊດຊັນ</string>
     <string name="home_session_title_hint">ຫົວຂໍ້</string>
-    <string name="home_fork_title">ແຍກສາຂາເຊດຊັນ</string>
-    <string name="home_fork_confirm">ແຍກສາຂາ</string>
-    <string name="home_fork_result_title">ແຍກສາຂາເຊດຊັນແລ້ວ</string>
+    <string name="home_fork_title">ແຍກເຊດຊັນ</string>
+    <string name="home_fork_confirm">ແຍກ</string>
+    <string name="home_fork_result_title">ແຍກເຊດຊັນແລ້ວ</string>
     <string name="home_fork_result_message">“%1$s” ພ້ອມແລ້ວ.</string>
     <string name="home_fork_result_stay">ຢູ່ບ່ອນນີ້</string>
     <string name="home_delete_title">ລຶບເຊດຊັນ</string>
     <string name="home_delete_message">ລຶບເຊດຊັນ “%1$s” ບໍ?</string>
     <string name="home_session_error_empty_title">ໃສ່ຫົວຂໍ້ເຊດຊັນ</string>
-    <string name="home_session_error_nothing_to_fork">ຍັງບໍ່ມີຫຍັງໃຫ້ແຍກສາຂາ</string>
-    <string name="home_session_error_archive_failed">ຮວບຮວມເຊດຊັນບໍ່ໄດ້.</string>
+    <string name="home_session_error_nothing_to_fork">ຍັງບໍ່ມີຫຍັງໃຫ້ແຍກ</string>
+    <string name="home_session_error_archive_failed">ຈັດເກັບເຊດຊັນບໍ່ໄດ້.</string>
     <string name="home_session_error_delete_failed">ລຶບເຊດຊັນບໍ່ໄດ້.</string>
     <string name="home_session_error_request_failed">ຄຳຮ້ອງຂໍລົ້ມເຫຼວ</string>
     <string name="home_session_error_unreadable_response">ອ່ານການຕອບຮັບຂອງເຊີບເວີບໍ່ໄດ້</string>
     <string name="home_session_error_generic">ມີບາງຢ່າງຜິດພາດ</string>
-    <string name="archived_sessions_title">ເຊດຊັນທີ່ຮວບຮວມ</string>
+    <string name="archived_sessions_title">ເຊດຊັນທີ່ຈັດເກັບ</string>
     <string name="home_menu_archived_count">%1$d ໃນ %2$s</string>
     <string name="archived_sessions_section_this_week">ອາທິດນີ້</string>
     <string name="archived_sessions_section_earlier">ກ່ອນໜ້ານີ້</string>
@@ -285,10 +285,10 @@
     <string name="archived_sessions_archived_at">ຮວບຮວມເມື່ອ %1$s</string>
     <string name="archived_sessions_unarchived">ເລີກຮວບຮວມ “%1$s” ແລ້ວ</string>
     <string name="archived_sessions_undo">ຍົກເລີກ</string>
-    <string name="archived_sessions_empty_title">ບໍ່ມີເຊດຊັນທີ່ຮວບຮວມ</string>
-    <string name="archived_sessions_empty_message">ເຊດຊັນທີ່ທ່ານຮວບຮວມໃນ %1$s ຈະສະແດງຢູ່ບ່ອນນີ້.</string>
+    <string name="archived_sessions_empty_title">ບໍ່ມີເຊດຊັນທີ່ຈັດເກັບ</string>
+    <string name="archived_sessions_empty_message">ເຊດຊັນທີ່ທ່ານຈັດເກັບໃນ %1$s ຈະສະແດງຢູ່ບ່ອນນີ້.</string>
     <string name="archived_sessions_show_all_projects">ສະແດງທຸກໂຄງການ</string>
-    <string name="archived_sessions_footer">ແຕະເຊດຊັນເພື່ອເບິ່ງເພີ່ມເຕີມ. ເລີກຮວບຮວມຈະສົ່ງມັນກັບໄປໜ້າຫຼັກ.</string>
+    <string name="archived_sessions_footer">ແຕະເຊດຊັນເພື່ອເບິ່ງເພີ່ມເຕີມ. ຍົກເລີກການຈັດເກັບຈະສົ່ງມັນກັບໄປໜ້າຫຼັກ.</string>
     <string name="archived_sessions_load_failed">ໂຫຼດເຊດຊັນທີ່ຮວບຮວມບໍ່ໄດ້.</string>
     <string name="archived_sessions_unarchive_failed">ເລີກຮວບຮວມເຊດຊັນບໍ່ໄດ້.</string>
     <string name="session_chat_archived_banner">ຮວບຮວມເມື່ອ %1$s</string>
@@ -411,9 +411,9 @@
     <plurals name="file_viewer_size_bytes">
         <item quantity="other">%1$d ໄບຕ໌</item>
     </plurals>
-    <string name="terminal_title">ສະຖານີ</string>
-    <string name="terminal_catalog_title">ສະຖານີ</string>
-    <string name="terminal_catalog_loading">ກຳລັງໂຫຼດສະຖານີ</string>
+    <string name="terminal_title">Terminal</string>
+    <string name="terminal_catalog_title">Terminal</string>
+    <string name="terminal_catalog_loading">ກຳລັງໂຫຼດ Terminal</string>
     <string name="terminal_catalog_empty_title">ບໍ່ມີ shell ທີ່ກຳລັງແລ່ນ</string>
     <string name="terminal_catalog_empty_message">ເລີ່ມໜຶ່ງອັນສຳລັບໂຄງການ. ມັນບໍ່ຜູກກັບເຊດຊັນແຊັດ.</string>
     <string name="terminal_select_title">ເລືອກ shell</string>
@@ -443,11 +443,11 @@
     <string name="session_chat_more_options">ຕົວເລືອກເພີ່ມເຕີມ</string>
     <string name="session_chat_menu_rename">ປ່ຽນຊື່ເຊດຊັນ</string>
     <string name="session_chat_menu_review_changes">ກວດສອບການປ່ຽນແປງ</string>
-    <string name="session_chat_menu_fork">ແຍກສາຂາເຊດຊັນ</string>
+    <string name="session_chat_menu_fork">ແຍກເຊດຊັນ</string>
     <string name="session_chat_menu_browse_files">ເບິ່ງໄຟລ໌</string>
     <string name="session_chat_menu_session_context">ບໍລິບົດເຊດຊັນ</string>
     <string name="session_chat_menu_copy_session_id">ສຳເນົາ ID ເຊດຊັນ</string>
-    <string name="session_chat_menu_archive">ຮວບຮວມ</string>
+    <string name="session_chat_menu_archive">ຈັດເກັບ</string>
     <string name="session_chat_menu_report_problem">ລາຍງານບັນຫາ</string>
     <string name="session_chat_menu_delete">ລຶບ</string>
     <string name="session_chat_delete_dialog_title">ລຶບເຊດຊັນ</string>
@@ -456,11 +456,11 @@
     <string name="session_chat_rename_dialog_title">ປ່ຽນຊື່ເຊດຊັນ</string>
     <string name="session_chat_rename_dialog_save">ບັນທຶກ</string>
     <string name="session_chat_title_hint">ຫົວຂໍ້</string>
-    <string name="session_chat_fork_dialog_title">ແຍກສາຂາເຊດຊັນ</string>
-    <string name="session_chat_fork_dialog_confirm">ແຍກສາຂາ</string>
+    <string name="session_chat_fork_dialog_title">ແຍກເຊດຊັນ</string>
+    <string name="session_chat_fork_dialog_confirm">ແຍກ</string>
     <string name="session_chat_fork_dialog_error_empty_title">ໃສ່ຫົວຂໍ້ເຊດຊັນ</string>
-    <string name="session_chat_fork_dialog_error_failed">ແຍກສາຂາເຊດຊັນບໍ່ໄດ້.</string>
-    <string name="session_chat_fork_result_title">ແຍກສາຂາເຊດຊັນແລ້ວ</string>
+    <string name="session_chat_fork_dialog_error_failed">ແຍກເຊດຊັນບໍ່ໄດ້.</string>
+    <string name="session_chat_fork_result_title">ແຍກເຊດຊັນແລ້ວ</string>
     <string name="session_chat_fork_result_message_ready">“%1$s” ພ້ອມແລ້ວ.</string>
     <string name="session_chat_fork_result_open">ເປີດ</string>
     <string name="session_chat_fork_result_stay_here">ຢູ່ບ່ອນນີ້</string>
@@ -469,30 +469,30 @@
     <string name="session_chat_attachment_source_media">ສື່</string>
     <string name="session_chat_attachment_source_files">ໄຟລ໌</string>
     <string name="session_chat_attachment_source_log_file">ໄຟລ໌ບັນທຶກ</string>
-    <string name="session_chat_commands_title">ຄໍາສັ່ງ</string>
+    <string name="session_chat_commands_title">ຄຳສັ່ງ</string>
     <string name="session_chat_commands_mcp_title">ເຊີບເວີ MCP</string>
-    <string name="session_chat_commands_back">ກັບໄປຄໍາສັ່ງ</string>
+    <string name="session_chat_commands_back">ກັບໄປຄຳສັ່ງ</string>
     <string name="session_chat_commands_new_label">ໃໝ່</string>
     <string name="session_chat_commands_new_description">ເລີ່ມເຊດຊັນໃໝ່</string>
-    <string name="session_chat_commands_fork_label">ແຍກສາຂາ</string>
-    <string name="session_chat_commands_fork_description">ແຍກສາຂາເຊດຊັນນີ້</string>
+    <string name="session_chat_commands_fork_label">ແຍກ</string>
+    <string name="session_chat_commands_fork_description">ແຍກເຊດຊັນນີ້</string>
     <string name="session_chat_commands_undo_label">ຍົກເລີກ</string>
     <string name="session_chat_commands_undo_description">ຍົກເລີກຂໍ້ຄວາມຫຼ້າສຸດ</string>
     <string name="session_chat_commands_redo_label">ເຮັດຄືນ</string>
     <string name="session_chat_commands_redo_description">ເຮັດຄືນຂໍ້ຄວາມທີ່ຍົກເລີກ</string>
-    <string name="session_chat_commands_compact_label">ກະທັດຮັດ</string>
+    <string name="session_chat_commands_compact_label">ຫຍໍ້ບໍລິບົດ</string>
     <string name="session_chat_commands_compact_description">ຫຍໍ້ບໍລິບົດເຊດຊັນ</string>
-    <string name="session_chat_commands_terminal_label">ສະຖານີ</string>
+    <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">ເປີດ shell ຂອງໂຄງການ</string>
     <string name="session_chat_commands_files_label">ໄຟລ໌</string>
     <string name="session_chat_commands_files_description">ເບິ່ງໄຟລ໌ໂຄງການ</string>
     <string name="session_chat_commands_mcp_label">ເຊີບເວີ MCP</string>
     <string name="session_chat_commands_mcp_description">ສະແດງສະຖານະເຊີບເວີ MCP</string>
     <string name="session_chat_commands_btw_label">Btw</string>
-    <string name="session_chat_commands_btw_description">ຖາມຄຳຖາມແຍກ</string>
+    <string name="session_chat_commands_btw_description">ຖາມຄຳຖາມຂ້າງ</string>
     <string name="session_chat_suggestion_file">ໄຟລ໌</string>
     <string name="session_chat_suggestion_no_matches">ບໍ່ພົບທີ່ກົງກັນ</string>
-    <string name="session_chat_suggestion_no_commands">ບໍ່ມີຄໍາສັ່ງ</string>
+    <string name="session_chat_suggestion_no_commands">ບໍ່ມີຄຳສັ່ງ</string>
     <string name="session_chat_suggestion_badge_skill">ທັກສະ</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
     <string name="session_chat_move_worktree_current">worktree ປັດຈຸບັນ</string>
@@ -506,9 +506,9 @@
     <string name="session_chat_model_chip_loading">ກຳລັງໂຫຼດຕົວແບບ…</string>
     <string name="session_chat_model_notice_load_failed">ໂຫຼດຕົວແບບບໍ່ໄດ້. ແຕະຕົວແບບເພື່ອລອງໃໝ່.</string>
     <string name="session_chat_model_notice_none_usable">ບໍ່ມີຕົວແບບທີ່ໃຊ້ໄດ້. ແຕະຕົວແບບເພື່ອລອງໃໝ່.</string>
-    <string name="session_chat_model_notice_variant_unavailable">ຕົວແປທີ່ຈື່ໄວ້ໃຊ້ບໍ່ໄດ້. ກຳລັງໃຊ້ຄ່າເລີ່ມຕົ້ນ.</string>
+    <string name="session_chat_model_notice_variant_unavailable">ລະດັບການໃຫ້ເຫດຜົນທີ່ຈື່ໄວ້ໃຊ້ບໍ່ໄດ້. ກຳລັງໃຊ້ຄ່າເລີ່ມຕົ້ນ.</string>
     <string name="session_chat_model_notice_model_unavailable">ຕົວແບບທີ່ເລືອກໃຊ້ບໍ່ໄດ້. ກຳລັງໃຊ້ %1$s.</string>
-    <string name="session_chat_side_question_unsupported">/btw ຕ້ອງໃຊ້ເຊີບເວີ opencode v2 ທີ່ຕອບຄຳຖາມແຍກໄດ້. ເຊີບເວີນີ້ຕອບບໍ່ໄດ້ ໂດຍບໍ່ເພີ່ມເຂົ້າໃນການສົນທະນາ.</string>
+    <string name="session_chat_side_question_unsupported">/btw ຕ້ອງໃຊ້ເຊີບເວີ opencode v2 ທີ່ຕອບຄຳຖາມຂ້າງໄດ້. ເຊີບເວີນີ້ຕອບບໍ່ໄດ້ ໂດຍບໍ່ເພີ່ມເຂົ້າໃນການສົນທະນາ.</string>
     <string name="session_chat_side_question_unavailable">/btw ຕ້ອງໃຊ້ເຊີບເວີ opencode ທີ່ໃໝ່ກວ່າ.</string>
     <string name="session_chat_side_question_copied">ສຳເນົາຄຳຕອບແລ້ວ</string>
     <string name="session_chat_side_question_failed">/btw ລົ້ມເຫຼວ: “%1$s”</string>
@@ -538,7 +538,7 @@
     <string name="attachment_drop_some_skipped">ບາງອັນຈະຖືກຂ້າມ</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
     <string name="session_chat_activity_review_permission">ກວດສອບການອະນຸຍາດ</string>
-    <string name="session_chat_activity_review_permission_request">ກວດສອບຄຳຮ້ອງຂໍການອະນຸຍາດ</string>
+    <string name="session_chat_activity_review_permission_request">ກວດສອບຄຳຂໍອະນຸຍາດ</string>
     <string name="session_chat_activity_answer_question">ຕອບຄຳຖາມ</string>
     <string name="session_chat_activity_request_failed">ຄຳຮ້ອງຂໍລົ້ມເຫຼວ</string>
     <string name="session_chat_activity_btw_failed">/btw ລົ້ມເຫຼວ · ລອງໃໝ່</string>
@@ -549,19 +549,19 @@
         <item quantity="other">%1$d ໃນຄິວ</item>
     </plurals>
     <plurals name="session_chat_activity_queued_prompts">
-        <item quantity="other">%1$d ຄຳສັ່ງໃນຄິວ</item>
+        <item quantity="other">%1$d prompt ໃນຄິວ</item>
     </plurals>
-    <string name="session_chat_activity_side_question_failed">ຄຳຖາມແຍກລົ້ມເຫຼວ</string>
+    <string name="session_chat_activity_side_question_failed">ຄຳຖາມຂ້າງລົ້ມເຫຼວ</string>
     <plurals name="session_chat_activity_side_questions_failed">
-        <item quantity="other">ຄຳຖາມແຍກລົ້ມເຫຼວ %1$d ຂໍ້</item>
+        <item quantity="other">ຄຳຖາມຂ້າງລົ້ມເຫຼວ %1$d ຂໍ້</item>
     </plurals>
-    <string name="session_chat_activity_side_question_ready">ຄຳຕອບຄຳຖາມແຍກພ້ອມແລ້ວ</string>
+    <string name="session_chat_activity_side_question_ready">ຄຳຕອບຄຳຖາມຂ້າງພ້ອມແລ້ວ</string>
     <plurals name="session_chat_activity_side_questions_ready">
-        <item quantity="other">ຄຳຕອບຄຳຖາມແຍກພ້ອມແລ້ວ %1$d ຂໍ້</item>
+        <item quantity="other">ຄຳຕອບຄຳຖາມຂ້າງພ້ອມແລ້ວ %1$d ຂໍ້</item>
     </plurals>
-    <string name="session_chat_activity_side_question_running">ຄຳຖາມແຍກກຳລັງແລ່ນ</string>
+    <string name="session_chat_activity_side_question_running">ຄຳຖາມຂ້າງກຳລັງແລ່ນ</string>
     <plurals name="session_chat_activity_side_questions_running">
-        <item quantity="other">ຄຳຖາມແຍກກຳລັງແລ່ນ %1$d ຂໍ້</item>
+        <item quantity="other">ຄຳຖາມຂ້າງກຳລັງແລ່ນ %1$d ຂໍ້</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
     <string name="session_chat_activity_action_open_request">ເປີດຄຳຮ້ອງຂໍ</string>
@@ -586,7 +586,7 @@
     <plurals name="session_chat_navigation_scroll_to_end_new_messages">
         <item quantity="other">ເລື່ອນໄປທ້າຍ, ມີຂໍ້ຄວາມໃໝ່ %1$d ຂໍ້</item>
     </plurals>
-    <string name="home_error_reconnect_to_create">ເຊື່ອມຕໍ່ໃໝ່ເພື່ອສ້າງເຊດຊັນ</string>
+    <string name="home_error_reconnect_to_create">ເຊື່ອມຕໍ່ຄືນເພື່ອສ້າງເຊດຊັນ</string>
     <string name="timeline_state_creating_title">ກຳລັງເລີ່ມເຊດຊັນ…</string>
     <string name="timeline_state_creating_subtitle">ກຳລັງສ້າງຢູ່ເຊີບເວີ…</string>
     <string name="new_session_title">ເຊດຊັນໃໝ່</string>
@@ -771,7 +771,7 @@
     <string name="timeline_list_separator">%1$s · %2$s</string>
     <string name="timeline_role_you">ທ່ານ</string>
     <string name="timeline_role_assistant">ຜູ້ຊ່ວຍ</string>
-    <string name="timeline_role_command">ຄໍາສັ່ງ</string>
+    <string name="timeline_role_command">ຄຳສັ່ງ</string>
     <string name="timeline_role_tool">ເຄື່ອງມື</string>
     <string name="timeline_role_notice">ແຈ້ງການ</string>
     <string name="timeline_role_message">ຂໍ້ຄວາມ</string>
@@ -780,7 +780,7 @@
         <item quantity="other">%1$d ຂັ້ນຕອນ</item>
     </plurals>
     <plurals name="timeline_activity_count_command">
-        <item quantity="other">%1$d ຄໍາສັ່ງ</item>
+        <item quantity="other">%1$d ຄຳສັ່ງ</item>
     </plurals>
     <plurals name="timeline_activity_count_thought">
         <item quantity="other">ຄິດ %1$d ຄັ້ງ</item>
@@ -795,30 +795,30 @@
     <string name="timeline_notice_agent_changed">ປ່ຽນຕົວແທນແລ້ວ</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
     <string name="timeline_notice_switched_to">ປ່ຽນໄປ</string>
-    <string name="timeline_notice_variant_switched">ປ່ຽນຕົວແປໄປ</string>
-    <string name="timeline_notice_variant_default">ປ່ຽນຕົວແປເປັນຄ່າເລີ່ມຕົ້ນ</string>
+    <string name="timeline_notice_variant_switched">ປ່ຽນລະດັບການໃຫ້ເຫດຜົນໄປ</string>
+    <string name="timeline_notice_variant_default">ປ່ຽນລະດັບການໃຫ້ເຫດຜົນເປັນຄ່າເລີ່ມຕົ້ນ</string>
     <string name="timeline_notice_instructions_updated">ອັບເດດຄຳແນະນຳແລ້ວ</string>
     <string name="timeline_notice_restart">ສືບຕໍ່ຫຼັງຈາກເລີ່ມໃໝ່</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">ບີບອັດບໍລິບົດແລ້ວ</string>
+    <string name="timeline_compaction_title">ຫຍໍ້ບໍລິບົດແລ້ວ</string>
     <string name="timeline_compaction_automatic">ອັດຕະໂນມັດ</string>
     <string name="timeline_syncing">ກຳລັງຊິງຄ໌…</string>
     <string name="timeline_failure_session_work_failed">ວຽກຂອງເຊດຊັນລົ້ມເຫຼວ</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">ເລືອກຕົວແບບ</string>
-    <string name="timeline_failure_compact">ກະທັດຮັດ</string>
-    <string name="session_chat_compact_status">ກຳລັງບີບອັດ…</string>
+    <string name="timeline_failure_compact">ຫຍໍ້ບໍລິບົດ</string>
+    <string name="session_chat_compact_status">ກຳລັງຫຍໍ້ບໍລິບົດ…</string>
     <string name="session_chat_turn_sending">ກຳລັງສົ່ງ…</string>
     <string name="session_chat_turn_sending_percent">ກຳລັງສົ່ງ %1$d%%</string>
-    <string name="session_chat_compact_success">ບີບອັດເຊດຊັນແລ້ວ.</string>
-    <string name="session_chat_compact_success_usage">ບີບອັດບໍລິບົດແລ້ວ · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">ບີບອັດບໍລິບົດຂອງເຊດຊັນບໍ່ໄດ້.</string>
+    <string name="session_chat_compact_success">ຫຍໍ້ບໍລິບົດຂອງເຊດຊັນແລ້ວ.</string>
+    <string name="session_chat_compact_success_usage">ຫຍໍ້ບໍລິບົດແລ້ວ · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">ຫຍໍ້ບໍລິບົດຂອງເຊດຊັນບໍ່ໄດ້.</string>
     <string name="session_chat_revert_undo_failed">ຍົກເລີກຂໍ້ຄວາມຫຼ້າສຸດບໍ່ໄດ້.</string>
     <string name="session_chat_revert_failed">ຍ້ອນຂໍ້ຄວາມກັບບໍ່ໄດ້.</string>
     <string name="session_chat_revert_redo_failed">ເຮັດຄືນບໍ່ໄດ້.</string>
     <string name="session_chat_revert_cancel_failed">ຍົກເລີກການຍ້ອນກັບບໍ່ໄດ້.</string>
     <string name="session_chat_revert_commit_failed">ຢືນຢັນການຍ້ອນກັບບໍ່ໄດ້.</string>
-    <string name="session_chat_fork_rename_failed">ສ້າງ Fork ແລ້ວ, ແຕ່ປ່ຽນຊື່ບໍ່ໄດ້.</string>
+    <string name="session_chat_fork_rename_failed">ແຍກເຊດຊັນແລ້ວ, ແຕ່ປ່ຽນຊື່ບໍ່ໄດ້.</string>
     <string name="session_chat_pending_prompt_update_failed">ອັບເດດ prompt ທີ່ລໍຖ້າບໍ່ໄດ້</string>
     <string name="session_chat_shell_stop_failed">ຢຸດ shell ບໍ່ໄດ້. ລອງໃໝ່.</string>
     <string name="session_chat_shell_status_running">ກຳລັງແລ່ນ</string>
@@ -834,7 +834,7 @@
     <string name="session_chat_sheet_copy_output">ສຳເນົາຜົນລັບ</string>
     <string name="session_chat_sheet_message_actions_title">ຂໍ້ຄວາມ</string>
     <string name="session_chat_sheet_message_actions_revert">ຍ້ອນຂໍ້ຄວາມກັບ</string>
-    <string name="session_chat_sheet_message_actions_fork">Fork ຈາກບ່ອນນີ້</string>
+    <string name="session_chat_sheet_message_actions_fork">ແຍກຈາກບ່ອນນີ້</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">ສຳເນົາບລັອກໂຄດ</string>
     <string name="session_chat_sheet_message_actions_copy_message">ສຳເນົາຂໍ້ຄວາມ</string>
     <string name="session_chat_sheet_message_actions_select_text">ເລືອກຂໍ້ຄວາມ</string>
@@ -900,7 +900,7 @@
     <string name="session_chat_goal_waiting_permission">ມີຄຳຂໍອະນຸຍາດທີ່ຍັງເປີດຢູ່. ເປົ້າໝາຍຈະດຳເນີນຕໍ່ເມື່ອທ່ານຕອບ.</string>
     <string name="session_chat_goal_waiting_question">ມີຄຳຖາມທີ່ຍັງເປີດຢູ່. ເປົ້າໝາຍຈະດຳເນີນຕໍ່ເມື່ອທ່ານຕອບ.</string>
     <string name="session_chat_goal_evidence">ຫຼັກຖານ</string>
-    <string name="session_chat_goal_reconnecting">ກຳລັງເຊື່ອມຕໍ່ໃໝ່. ສະແດງເປົ້າໝາຍທີ່ຮູ້ຫຼ້າສຸດ.</string>
+    <string name="session_chat_goal_reconnecting">ກຳລັງເຊື່ອມຕໍ່ຄືນ. ສະແດງເປົ້າໝາຍທີ່ຮູ້ຫຼ້າສຸດ.</string>
     <string name="session_chat_goal_pause">ຢຸດຊົ່ວຄາວ</string>
     <string name="session_chat_goal_pausing">ກຳລັງຢຸດຊົ່ວຄາວ…</string>
     <string name="session_chat_goal_resume">ສືບຕໍ່</string>
@@ -908,12 +908,12 @@
     <string name="session_chat_goal_clear">ລ້າງ</string>
     <string name="session_chat_goal_clearing">ກຳລັງລ້າງ…</string>
     <string name="session_chat_goal_new">ເປົ້າໝາຍໃໝ່…</string>
-    <string name="session_chat_goal_footnote_active">ຫຼັງແຕ່ລະຄັ້ງ ຜູ້ກວດສອບຈະກວດວຽກກັບເປົ້າໝາຍ. ຕົວແທນຈະເຮັດຕໍ່ຈົນກວ່າຈະບັນລຸ, ຕ້ອງການທ່ານ, ຫຼືຜ່ານໄປ %1$d ຮອບ.</string>
+    <string name="session_chat_goal_footnote_active">ຫຼັງແຕ່ລະຮອບ ຜູ້ກວດສອບຈະກວດວຽກກັບເປົ້າໝາຍ. ຕົວແທນຈະເຮັດຕໍ່ຈົນກວ່າຈະບັນລຸ, ຕ້ອງການທ່ານ, ຫຼືຜ່ານໄປ %1$d ຮອບ.</string>
     <string name="session_chat_goal_footnote_paused">ການສືບຕໍ່ຈະເລີ່ມຮອບໃໝ່ອີກ %1$d ຮອບ.</string>
     <string name="session_chat_goal_footnote_met">ເປົ້າໝາຍໃໝ່ຈະມາແທນອັນນີ້.</string>
     <string name="session_chat_goal_paused">ເປົ້າໝາຍຢຸດຊົ່ວຄາວ</string>
     <string name="session_chat_goal_paused_by_user">ທ່ານຢຸດເປົ້າໝາຍຊົ່ວຄາວ</string>
-    <string name="session_chat_goal_paused_stopped">ທ່ານຢຸດຄັ້ງນີ້ ເປົ້າໝາຍຈຶ່ງຢຸດຊົ່ວຄາວ</string>
+    <string name="session_chat_goal_paused_stopped">ທ່ານຢຸດຮອບນີ້ ເປົ້າໝາຍຈຶ່ງຢຸດຊົ່ວຄາວ</string>
     <string name="session_chat_goal_paused_failed">ເປົ້າໝາຍຢຸດຊົ່ວຄາວຫຼັງເກີດຂໍ້ຜິດພາດ</string>
     <string name="session_chat_goal_paused_no_progress">ເປົ້າໝາຍຢຸດຊົ່ວຄາວ: ບໍ່ມີຄວາມຄືບໜ້າ %1$d ຮອບ</string>
     <string name="session_chat_goal_paused_round_limit">ເປົ້າໝາຍຢຸດຊົ່ວຄາວຫຼັງ %1$d ຮອບ</string>
@@ -961,7 +961,7 @@
     <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
     <string name="component_branch_pill_a11y_added">%1$s, ເພີ່ມ %2$d</string>
     <string name="component_branch_pill_a11y_removed">%1$s, ລຶບ %2$d</string>
-    <string name="session_chat_archive_failed">ຮວບຮວມເຊດຊັນບໍ່ໄດ້.</string>
+    <string name="session_chat_archive_failed">ຈັດເກັບເຊດຊັນບໍ່ໄດ້.</string>
     <string name="session_chat_delete_failed">ລຶບເຊດຊັນບໍ່ໄດ້.</string>
     <string name="session_chat_mcp_load_failed">ໂຫຼດເຊີບເວີ MCP ບໍ່ໄດ້. ກວດສອບການເຊື່ອມຕໍ່ແລ້ວລອງໃໝ່.</string>
     <string name="session_chat_create_failed">ສ້າງເຊດຊັນບໍ່ໄດ້</string>
@@ -973,13 +973,13 @@
     <string name="session_chat_reply_error_question_reason">ສົ່ງຄຳຕອບຂອງທ່ານບໍ່ໄດ້. %1$s.</string>
     <string name="session_chat_reply_error_dismiss">ປິດຄຳຖາມບໍ່ໄດ້. ລອງໃໝ່.</string>
     <string name="session_chat_reply_error_dismiss_reason">ປິດຄຳຖາມບໍ່ໄດ້. %1$s.</string>
-    <string name="session_chat_permission_unavailable">ຄຳຂໍສິດທິບໍ່ມີແລ້ວ</string>
+    <string name="session_chat_permission_unavailable">ຄຳຂໍອະນຸຍາດບໍ່ມີແລ້ວ</string>
     <string name="session_chat_question_unavailable">ຄຳຖາມບໍ່ມີແລ້ວ</string>
-    <string name="session_chat_permission_tree_failed">ໂຫຼດໂຄງສ້າງເຊດຊັນຂອງສິດທິຄືນໃໝ່ບໍ່ໄດ້</string>
+    <string name="session_chat_permission_tree_failed">ໂຫຼດໂຄງສ້າງເຊດຊັນຂອງການອະນຸຍາດຄືນໃໝ່ບໍ່ໄດ້</string>
     <string name="session_chat_question_tree_failed">ໂຫຼດໂຄງສ້າງເຊດຊັນຂອງຄຳຖາມຄືນໃໝ່ບໍ່ໄດ້</string>
-    <string name="session_chat_sheet_timeline_style_picker_title">ໃໝ່: ເລືອກໄທມ໌ລາຍຂອງທ່ານ</string>
+    <string name="session_chat_sheet_timeline_style_picker_title">ໃໝ່: ເລືອກໄທມ໌ໄລນ໌ຂອງທ່ານ</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">ການອັບເດດນີ້ເພີ່ມວິທີໃໝ່ໃນການຕິດຕາມສິ່ງທີ່ຕົວແທນກຳລັງເຮັດ.</string>
-    <string name="session_chat_sheet_timeline_style_picker_footnote">ທ່ານປ່ຽນໄດ້ທຸກເວລາໃນການຕັ້ງຄ່າ → ຮູບແບບໄທມ໌ລາຍ.</string>
+    <string name="session_chat_sheet_timeline_style_picker_footnote">ທ່ານປ່ຽນໄດ້ທຸກເວລາໃນການຕັ້ງຄ່າ → ຮູບແບບໄທມ໌ໄລນ໌.</string>
     <string name="session_chat_sheet_timeline_style_picker_use">ໃຊ້ %1$s</string>
     <string name="session_chat_sheet_timeline_style_picker_recommended">ແນະນຳ</string>
     <string name="session_chat_sheet_timeline_style_picker_current">ປັດຈຸບັນ</string>
@@ -991,10 +991,10 @@
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">ຂັ້ນຕອນທີ່ກຳລັງແລ່ນຢູ່ໃນບັດສົດໃບດຽວ ແລ້ວຍຸບເປັນສະຫຼຸບ</string>
     <string name="session_chat_sheet_picker_model">ຕົວແບບ</string>
     <string name="session_chat_sheet_picker_agent_mode">ໂໝດຕົວແທນ</string>
-    <string name="session_chat_sheet_picker_variant">ຕົວເລືອກ</string>
+    <string name="session_chat_sheet_picker_variant">ລະດັບການໃຫ້ເຫດຜົນ</string>
     <string name="session_chat_sheet_picker_back_to_providers">ກັບໄປຜູ້ໃຫ້ບໍລິການ</string>
-    <string name="session_chat_sheet_picker_no_models_match">ບໍ່ມີຕົວແບບທີ່ກົງກັບຕົວກອງ</string>
-    <string name="session_chat_sheet_picker_filter_models_hint">ກອງຕົວແບບ...</string>
+    <string name="session_chat_sheet_picker_no_models_match">ບໍ່ມີຕົວແບບທີ່ກົງກັບຕົວກັ່ນຕອງ</string>
+    <string name="session_chat_sheet_picker_filter_models_hint">ກັ່ນຕອງຕົວແບບ...</string>
     <string name="session_chat_sheet_tool_detail_provider_response">ຄຳຕອບຂອງຜູ້ໃຫ້ບໍລິການ</string>
     <string name="session_chat_sheet_tool_detail_tool">ເຄື່ອງມື</string>
     <string name="session_chat_sheet_tool_result_exit_code">ລະຫັດອອກ %1$d</string>
@@ -1090,7 +1090,7 @@
     </plurals>
     <string name="settings_send_feedback_title">ສົ່ງຄຳຕິຊົມ</string>
     <string name="settings_send_feedback_subtitle">ລາຍງານບັກ ຫຼື ແບ່ງປັນແນວຄິດ</string>
-    <string name="settings_hide_user_directory_title">ເຊື່ອງໄດເຣັກທໍຣີຜູ້ໃຊ້</string>
+    <string name="settings_hide_user_directory_title">ເຊື່ອງໂຟນເດີຜູ້ໃຊ້</string>
     <string name="settings_hide_user_directory_subtitle">ສະແດງ ~/Projects/… ແທນ /Users/you/Projects/…</string>
     <string name="settings_recent_window_title">ຊ່ວງເວລາຫຼ້າສຸດ</string>
     <string name="settings_recent_window_message">ເຊດຊັນຈະຢູ່ໃນຫຼ້າສຸດໃນຂະນະທີ່ກຳລັງແລ່ນ ຫຼື ພ້ອມ, ຫຼືເມື່ອອັບເດດພາຍໃນຊ່ວງເວລານີ້.</string>
@@ -1183,7 +1183,7 @@
     <string name="diagnostics_error_save">ເກັບບັນທຶກການວິນິດໄສບໍ່ໄດ້.</string>
     <string name="diagnostics_saved">ເກັບບັນທຶກການວິນິດໄສແລ້ວ.</string>
     <string name="appearance_title">ຮູບລັກສະນະ</string>
-    <string name="appearance_theme_title">ຫົວຂໍ້</string>
+    <string name="appearance_theme_title">ຊຸດຕົກແຕ່ງ</string>
     <string name="appearance_theme_subtitle">%1$s · %2$s</string>
     <string name="appearance_code_highlight_title">ໄຮໄລ້ໂຄດ</string>
     <string name="appearance_theme_blurb_porcelain">ເກືອບຂາວ / ເກືອບດຳ</string>
@@ -1191,8 +1191,8 @@
     <string name="appearance_theme_blurb_signal">ຂາວແທ້ / ດຳແທ້</string>
     <string name="appearance_theme_blurb_hotline">ກອບກາງ, ສີບົວສົດ</string>
     <string name="appearance_theme_blurb_phosphor">ກອບກາງ, ສີຂຽວ CRT</string>
-    <string name="appearance_syntax_name_match">ຕາມຫົວຂໍ້</string>
-    <string name="appearance_syntax_blurb_match">ໃຊ້ token ຂອງຫົວຂໍ້ UI ເອງ</string>
+    <string name="appearance_syntax_name_match">ຕາມຊຸດຕົກແຕ່ງ</string>
+    <string name="appearance_syntax_blurb_match">ໃຊ້ token ຂອງຊຸດຕົກແຕ່ງ UI ເອງ</string>
     <string name="appearance_syntax_blurb_nocturne">ຕະກູນ One Dark</string>
     <string name="appearance_syntax_blurb_citrus">ຕະກູນ Solarized</string>
     <string name="appearance_syntax_blurb_paper">ຕະກູນ GitHub</string>
@@ -1222,7 +1222,7 @@
     <string name="appearance_text_size_default">ຄ່າເລີ່ມຕົ້ນ</string>
     <string name="appearance_text_size_large">ໃຫຍ່</string>
     <string name="appearance_text_size_extra_large">ໃຫຍ່ຫຼາຍ</string>
-    <string name="appearance_text_code_note">ສະຖານີ, ການປ່ຽນແປງ, ຕົວເບິ່ງໄຟລ໌ ແລະຜົນລັບຂອງເຄື່ອງມື.</string>
+    <string name="appearance_text_code_note">Terminal, ການປ່ຽນແປງ, ຕົວເບິ່ງໄຟລ໌ ແລະຜົນລັບຂອງເຄື່ອງມື.</string>
     <string name="appearance_text_session_chat_note">ບລັອກໂຄດໃນຂໍ້ຄວາມແລະຊ່ອງພິມຂໍ້ຄວາມຈະຕາມຂະໜາດແຊັດເຊດຊັນ.</string>
     <string name="appearance_sample_session_one">ແກ້ການທົດສອບການປ່ຽນເສັ້ນທາງເຂົ້າສູ່ລະບົບທີ່ບໍ່ສະຖຽນ</string>
     <string name="appearance_sample_session_two">ຍ້າຍການຕັ້ງຄ່າໄປບ່ອນເກັບໃໝ່</string>
@@ -1433,7 +1433,7 @@
     <string name="component_composer_reverting_title">ກຳລັງຍ້ອນກັບຂໍ້ຄວາມນີ້</string>
     <string name="session_new_title">ເຊດຊັນໃໝ່</string>
     <string name="session_list_dock_add_project">ເພີ່ມໂຄງການ</string>
-    <string name="theme_error_preset_not_found">ບໍ່ພົບຊຸດຫົວຂໍ້ທີ່ຕັ້ງໄວ້</string>
+    <string name="theme_error_preset_not_found">ບໍ່ພົບຊຸດຕົກແຕ່ງທີ່ຕັ້ງໄວ້</string>
     <string name="component_composer_submit">ສົ່ງ</string>
     <string name="component_composer_select_all_that_apply">ເລືອກທັງໝົດທີ່ກ່ຽວຂ້ອງ</string>
     <string name="component_unified_diff_summary_modified">ໄຟລ໌ທີ່ແກ້ໄຂ %1$s, %2$s, %3$s</string>
@@ -1455,7 +1455,7 @@
     <string name="component_outgoing_message_shows_actions_hint">ສະແດງການດຳເນີນການຂອງຂໍ້ຄວາມ</string>
     <string name="component_activity_status_stopped">ຢຸດແລ້ວ</string>
     <string name="dictation_action_try_again">ລອງໃໝ່</string>
-    <string name="component_composer_model_effort">ຕົວແບບ %1$s, ລະດັບຄວາມພະຍາຍາມ %2$s</string>
+    <string name="component_composer_model_effort">ຕົວແບບ %1$s, ລະດັບການໃຫ້ເຫດຜົນ %2$s</string>
     <string name="component_activity_card_working">ກຳລັງເຮັດວຽກ</string>
     <string name="component_activity_card_opens_activity">%1$s, ເປີດກິດຈະກຳ</string>
     <string name="component_image_loading_label">%1$s, ກຳລັງໂຫຼດ</string>
@@ -1532,7 +1532,7 @@
     <plurals name="component_activity_card_step_count">
         <item quantity="other">%1$d ຂັ້ນຕອນ</item>
     </plurals>
-    <string name="theme_error_apply_failed">ນຳໃຊ້ຊຸດຫົວຂໍ້ບໍ່ສຳເລັດ</string>
+    <string name="theme_error_apply_failed">ນຳໃຊ້ຊຸດຕົກແຕ່ງທີ່ຕັ້ງໄວ້ບໍ່ສຳເລັດ</string>
     <string name="component_unified_diff_summary_deleted">ໄຟລ໌ທີ່ລຶບ %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">ກຳລັງແລ່ນ</string>
     <string name="component_step_rail_expands">%1$s, ຂະຫຍາຍ</string>
@@ -1606,7 +1606,7 @@
         <item quantity="other">%1$d ຂັ້ນຕອນກ່ອນໜ້າ</item>
     </plurals>
     <string name="component_outgoing_message_long_press_hint">ກົດຄ້າງເພື່ອສະແດງການດຳເນີນການຂອງຂໍ້ຄວາມ</string>
-    <string name="component_composer_hide_permission">ເຊື່ອງຄຳຂໍສິດທິ</string>
+    <string name="component_composer_hide_permission">ເຊື່ອງຄຳຂໍອະນຸຍາດ</string>
     <string name="dictation_downloading_model_progress">ກຳລັງດາວໂຫຼດຕົວແບບການຮັບຮູ້ສຽງ, %1$s</string>
     <string name="component_branch_pill_copy_branch_name">ສຳເນົາຊື່ branch</string>
     <string name="component_truncation_row_full_message_title">ສະແດງຂໍ້ຄວາມທັງໝົດ</string>
@@ -1630,7 +1630,7 @@
     <string name="component_session_list_skeleton_slow_label">%1$s. %2$s</string>
     <string name="component_close">ປິດ</string>
     <string name="relative_time_now">ຕອນນີ້</string>
-    <string name="component_composer_previous_permission">ຄຳຂໍສິດທິກ່ອນໜ້າ</string>
+    <string name="component_composer_previous_permission">ຄຳຂໍອະນຸຍາດກ່ອນໜ້າ</string>
     <string name="component_composer_dictate">ເວົ້າເປັນຂໍ້ຄວາມ</string>
     <string name="component_composer_side_question_mode_description">ໂໝດຄຳຖາມຂ້າງ. ອອກຈາກໂໝດຄຳຖາມຂ້າງ</string>
     <string name="component_composer_abort">ຢຸດວຽກທີ່ກຳລັງເຮັດ</string>
@@ -1646,11 +1646,11 @@
     <string name="session_list_status_retrying">ກຳລັງລອງໃໝ່</string>
     <string name="component_attachment_remove">ລຶບ %1$s</string>
     <string name="component_composer_send_steer">ສົ່ງເປັນການຊີ້ນຳ</string>
-    <string name="component_composer_next_permission">ຄຳຂໍສິດທິຖັດໄປ</string>
+    <string name="component_composer_next_permission">ຄຳຂໍອະນຸຍາດຖັດໄປ</string>
     <string name="session_list_dock_project_filter">ຕົວກັ່ນຕອງໂຄງການ</string>
     <string name="component_split_pane_resize_hint">ແຕະສອງເທື່ອເພື່ອເຊື່ອງແຖບດ້ານຂ້າງ</string>
     <string name="component_branch_pill_shows_details_hint">ສະແດງລາຍລະອຽດ branch</string>
-    <string name="component_composer_permission_requested">ມີຄຳຂໍສິດທິ</string>
+    <string name="component_composer_permission_requested">ມີຄຳຂໍອະນຸຍາດ</string>
     <string name="component_thinking">ກຳລັງຄິດ</string>
     <string name="dictation_model_downloading_title">%1$s ກຳລັງດາວໂຫຼດ %2$s</string>
     <string name="component_hunk_navigation_expand_context">ຂະຫຍາຍບໍລິບົດ</string>

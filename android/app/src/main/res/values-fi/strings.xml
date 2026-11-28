@@ -74,7 +74,7 @@
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Todennus epäonnistui</string>
     <string name="connection_error_unhealthy">Palvelin ilmoitti olevansa epäkunnossa</string>
-    <string name="connection_scanner_title">Skannaa QR-koodi</string>
+    <string name="connection_scanner_title">Skannaa laiteparin QR-koodi</string>
     <string name="connection_scanner_card_title">OpenCoden laiteparin QR-koodi</string>
     <string name="connection_scanner_card_body">Komennosta opencode pair --remote. Pelkkä pair näyttää QR-koodin vain, kun palvelin on tavoitettavissa localhostin ulkopuolelta.</string>
     <string name="connection_onboarding_title">Yhdistä palvelimeesi</string>
@@ -287,7 +287,7 @@
     <string name="home_menu_archived_count">%2$s: %1$d</string>
     <string name="archived_sessions_section_this_week">Tällä viikolla</string>
     <string name="archived_sessions_section_earlier">Aiemmin</string>
-    <string name="archived_sessions_unarchive">Palauta arkistosta</string>
+    <string name="archived_sessions_unarchive">Pura arkistointi</string>
     <string name="archived_sessions_delete">Poista…</string>
     <string name="archived_sessions_delete_dialog_message">”%1$s” poistetaan palvelimelta. Tätä ei voi kumota.</string>
     <string name="archived_sessions_archived_at">Arkistoitu %1$s</string>
@@ -298,7 +298,7 @@
     <string name="archived_sessions_show_all_projects">Näytä kaikki projektit</string>
     <string name="archived_sessions_footer">Napauta istuntoa nähdäksesi lisää. Arkistoinnin purku tuo sen takaisin kotinäkymään.</string>
     <string name="archived_sessions_load_failed">Arkistoitujen istuntojen lataus epäonnistui.</string>
-    <string name="archived_sessions_unarchive_failed">Istunnon palauttaminen arkistosta epäonnistui.</string>
+    <string name="archived_sessions_unarchive_failed">Istunnon arkistoinnin purku epäonnistui.</string>
     <string name="session_chat_archived_banner">Arkistoitu %1$s</string>
     <string name="add_project_title">Lisää projekti</string>
     <string name="add_project_browse_folders">Selaa kansioita</string>
@@ -617,7 +617,7 @@
     <string name="new_session_title">Uusi istunto</string>
     <string name="new_session_draft_subtitle">Luonnos · luodaan lähetettäessä</string>
     <string name="new_session_discard_draft">Hylkää luonnos</string>
-    <string name="new_session_run_in_caption">Suorituspaikka</string>
+    <string name="new_session_run_in_caption">Istunnon suorituspaikka</string>
     <string name="new_session_project">Projekti</string>
     <string name="new_session_worktree">Worktree</string>
     <string name="new_session_starts_from">Lähtökohta</string>

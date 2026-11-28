@@ -489,7 +489,7 @@
     <string name="session_chat_commands_mcp_label">MCP 服务器</string>
     <string name="session_chat_commands_mcp_description">显示 MCP 服务器状态</string>
     <string name="session_chat_commands_btw_label">顺便问</string>
-    <string name="session_chat_commands_btw_description">问一个附带的问题</string>
+    <string name="session_chat_commands_btw_description">问一个附带问题</string>
     <string name="session_chat_suggestion_file">文件</string>
     <string name="session_chat_suggestion_no_matches">无匹配项</string>
     <string name="session_chat_suggestion_no_commands">没有命令</string>
@@ -1461,7 +1461,7 @@
     <string name="component_image_loading_label">%1$s，正在加载</string>
     <string name="session_list_dock_new_session">新建会话</string>
     <string name="component_composer_always_allows">始终允许：%1$s</string>
-    <string name="component_composer_leave_side_question_mode">退出附带提问模式</string>
+    <string name="component_composer_leave_side_question_mode">退出附带问题模式</string>
     <string name="session_list_worktree_empty_other_projects">清除筛选即可查看其他项目的会话。</string>
     <string name="component_attachment_uploading">正在上传…</string>
     <string name="component_composer_deny">拒绝</string>
@@ -1493,7 +1493,7 @@
     <string name="component_composer_question">问题</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">清除筛选即可查看其他 worktree 的会话。</string>
-    <string name="component_composer_side_question_mode">附带提问模式</string>
+    <string name="component_composer_side_question_mode">附带问题模式</string>
     <string name="component_page_indicator_label">第 %1$d 页，共 %2$d 页</string>
     <string name="component_composer_next">下一步</string>
     <string name="component_message_image_label">图片 %1$s</string>
@@ -1580,7 +1580,7 @@
         <item quantity="other">%1$d 分钟前</item>
     </plurals>
     <string name="component_composer_request_position">第 %1$d 个，共 %2$d 个</string>
-    <string name="component_composer_side_question_placeholder">附带提问，不会加入聊天</string>
+    <string name="component_composer_side_question_placeholder">附带问题，不会加入聊天</string>
     <string name="session_list_worktree_empty_every_project">清除筛选即可查看所有项目。</string>
     <string name="component_image_viewer_could_not_load_named">无法加载 %1$s</string>
     <string name="component_composer_select_up_to">最多选择 %1$d 项</string>
@@ -1632,7 +1632,7 @@
     <string name="relative_time_now">刚刚</string>
     <string name="component_composer_previous_permission">上一个权限请求</string>
     <string name="component_composer_dictate">听写</string>
-    <string name="component_composer_side_question_mode_description">附带提问模式。退出附带提问模式</string>
+    <string name="component_composer_side_question_mode_description">附带问题模式。退出附带问题模式</string>
     <string name="component_composer_abort">中止当前工作</string>
     <string name="component_server_address_scheme_button">协议 %1$s</string>
     <string name="component_composer_open_subagent_session">打开子智能体会话</string>

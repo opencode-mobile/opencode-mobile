@@ -1689,7 +1689,7 @@
     <string name="session_list_worktree_empty_action">फिल्टर हटाउनुहोस्</string>
     <string name="dictation_model_download_failed_detail">यो डिभाइसको जडान र खाली भण्डारण जाँचेर फेरि प्रयास गर्नुहोस्।</string>
     <string name="component_composer_send_queue">लामबद्ध गरी पठाउनुहोस्</string>
-    <string name="session_list_dock_new_session_hint">अर्कै ठाउँमा सुरु गर्न \"परियोजना वा worktree छान्नुहोस्\" प्रयोग गर्नुहोस्।</string>
+    <string name="session_list_dock_new_session_hint">अर्कै ठाउँमा सुरु गर्न \"परियोजना वा वर्कट्री छान्नुहोस्\" प्रयोग गर्नुहोस्।</string>
     <string name="session_list_section_yesterday">हिजो</string>
     <string name="component_code_file_line_label">लाइन %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">OpenCode Mobile सुझाव रिपोर्ट</string>
@@ -1770,11 +1770,11 @@
     <string name="dictation_status_line_on_device">%1$s · %2$s · डिभाइसमै</string>
     <string name="component_composer_select_at_least">कम्तीमा %1$d छान्नुहोस्</string>
     <string name="dictation_insert_description">ट्रान्सक्रिप्ट सम्मिलित गर्नुहोस्</string>
-    <string name="worktrees_title">Worktree हरू</string>
+    <string name="worktrees_title">वर्कट्रीहरू</string>
     <string name="worktrees_subtitle">%1$s · %2$s</string>
     <plurals name="worktrees_count">
-        <item quantity="one">%1$d worktree</item>
-        <item quantity="other">%1$d worktree</item>
+        <item quantity="one">%1$d वर्कट्री</item>
+        <item quantity="other">%1$d वर्कट्री</item>
     </plurals>
     <string name="worktrees_main_checkout">मुख्य चेकआउट</string>
     <string name="worktrees_cannot_remove">हटाउन मिल्दैन</string>
@@ -1782,7 +1782,7 @@
         <item quantity="one">%1$d परिवर्तित</item>
         <item quantity="other">%1$d परिवर्तित</item>
     </plurals>
-    <string name="worktrees_none_in_project">कुनै worktree छैन। नयाँ सत्र → परियोजना वा worktree छान्नुहोस् बाट एउटा बनाउन सकिन्छ।</string>
+    <string name="worktrees_none_in_project">कुनै वर्कट्री छैन। नयाँ सत्र → परियोजना वा वर्कट्री छान्नुहोस् बाट एउटा बनाउन सकिन्छ।</string>
     <string name="worktrees_footer">वर्कट्री हटाउँदा सर्भरमा यसको फोल्डर मेटिन्छ। यसका सत्रहरू रहन्छन्, तर त्यसमा फेरि चल्न सक्दैनन्।</string>
     <string name="worktrees_more">%1$s का थप कार्यहरू</string>
     <string name="worktrees_removing">हटाउँदैछ…</string>
@@ -1803,12 +1803,12 @@
     <string name="worktrees_blocked_message">यो वर्कट्रीमा एउटा सत्र चलिरहेको छ। त्यसलाई रोक्नुहोस्, अनि वर्कट्री हटाउनुहोस्।</string>
     <string name="worktrees_blocked_ok">ठीक छ</string>
     <string name="worktrees_blocked_show_session">सत्र देखाउनुहोस्</string>
-    <string name="worktrees_removed">Worktree “%1$s” हटाइयो</string>
+    <string name="worktrees_removed">वर्कट्री “%1$s” हटाइयो</string>
     <string name="worktrees_remove_failed">“%1$s” हटाउन सकिएन। %2$s</string>
     <string name="worktrees_remove_failed_connection">“%1$s” हटाउन सकिएन। जडान जाँचेर फेरि प्रयास गर्नुहोस्।</string>
     <string name="worktrees_menu_subtitle">%2$s मा %1$d</string>
     <string name="worktrees_menu_none">कुनै छैन</string>
-    <string name="session_list_worktree_removed">worktree हटाइयो</string>
+    <string name="session_list_worktree_removed">वर्कट्री हटाइयो</string>
     <string name="whats_new_title">के नयाँ छ</string>
     <string name="whats_new_version">संस्करण %1$s</string>
     <string name="whats_new_skipped_one">तपाईंले एउटा अपडेट छुटाउनुभयो, त्यसैले यो तल समावेश छ।</string>

@@ -512,7 +512,7 @@
     <string name="session_chat_move_worktree_menu_title">Kalo te worktree…</string>
     <string name="session_chat_move_worktree_sheet_title">Kalo te worktree</string>
     <string name="session_chat_move_worktree_no_other">Ky projekt nuk ka worktree të tjerë</string>
-    <string name="session_chat_move_worktree_moves_after_turn">Kalon te %1$s pas këtij hapi.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Kalon te %1$s pas këtij raundi.</string>
     <string name="session_chat_move_worktree_failed">Sesioni nuk u zhvendos: %1$s</string>
     <string name="session_chat_variant_default">Parazgjedhja</string>
     <string name="session_chat_model_chip_placeholder">Modeli</string>
@@ -948,7 +948,7 @@
     <string name="session_chat_goal_reviewer_last_round">Rishikuesi, raundi i fundit</string>
     <string name="session_chat_goal_not_met_yet">Ende pa u arritur: %1$s</string>
     <string name="session_chat_goal_reviewer">Rishikuesi</string>
-    <string name="session_chat_goal_reviewer_pending">Kontrollon punën kur mbaron kjo radhë.</string>
+    <string name="session_chat_goal_reviewer_pending">Kontrollon punën kur mbaron ky raund.</string>
     <plurals name="session_chat_goal_stalls">
         <item quantity="one">Pa progres për %1$d raund; pauzohet pas %2$d</item>
         <item quantity="other">Pa progres për %1$d raunde; pauzohet pas %2$d</item>
@@ -1748,7 +1748,7 @@
     <string name="session_list_dock_project_filter">Filtri i projekteve</string>
     <string name="component_split_pane_resize_hint">Trokit dy herë për të fshehur shiritin anësor</string>
     <string name="component_branch_pill_shows_details_hint">Shfaq detajet e degës</string>
-    <string name="component_composer_permission_requested">U kërkua leje</string>
+    <string name="component_composer_permission_requested">Kërkesë për leje</string>
     <string name="component_thinking">Duke menduar</string>
     <string name="dictation_model_downloading_title">%1$s po e shkarkon %2$s</string>
     <string name="component_hunk_navigation_expand_context">Zgjero kontekstin</string>

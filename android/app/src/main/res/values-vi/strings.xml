@@ -93,9 +93,9 @@
     <string name="onboarding_features_sessions_title">Phiên</string>
     <string name="onboarding_features_sessions_detail">Liệt kê, mở, tạo, đổi tên, tách nhánh, lưu trữ, xóa</string>
     <string name="onboarding_features_chat_title">Trò chuyện &amp; dừng</string>
-    <string name="onboarding_features_chat_detail">Gửi prompt và dừng tác vụ đang chạy</string>
+    <string name="onboarding_features_chat_detail">Gửi lời nhắc và dừng tác vụ đang chạy</string>
     <string name="onboarding_features_permissions_title">Quyền</string>
-    <string name="onboarding_features_permissions_detail">Chấp thuận hoặc từ chối yêu cầu (không ghi nhớ lâu dài)</string>
+    <string name="onboarding_features_permissions_detail">Cho phép hoặc từ chối yêu cầu (không ghi nhớ lâu dài)</string>
     <string name="onboarding_features_changes_title">Thay đổi</string>
     <string name="onboarding_features_changes_detail">Xem diff của phiên</string>
     <string name="onboarding_features_live_title">Trực tiếp khi đang mở</string>
@@ -238,7 +238,7 @@
     <plurals name="home_project_count">
         <item quantity="other">%1$d dự án</item>
     </plurals>
-    <string name="home_main_checkout">main checkout</string>
+    <string name="home_main_checkout">bản checkout chính</string>
     <plurals name="home_worktree_count">
         <item quantity="other">%1$d worktree</item>
     </plurals>
@@ -339,7 +339,7 @@
     <string name="worktree_base">Tạo từ</string>
     <string name="worktree_v1_branch_note">opencode v1 đặt tên nhánh theo worktree</string>
     <string name="worktree_v2_no_branch">Không có nhánh (detached)</string>
-    <string name="worktree_v2_branch_note">Checkout của opencode v2 không có nhánh</string>
+    <string name="worktree_v2_branch_note">Bản checkout của opencode v2 không có nhánh</string>
     <string name="worktree_current_checkout">Checkout hiện tại</string>
     <string name="worktree_v1_base_note">opencode v1 dùng checkout hiện tại</string>
     <string name="worktree_base_pick_hint">Chạm để chọn nhánh</string>
@@ -480,8 +480,8 @@
     <string name="session_chat_commands_undo_description">Hoàn tác tin nhắn cuối</string>
     <string name="session_chat_commands_redo_label">Làm lại</string>
     <string name="session_chat_commands_redo_description">Làm lại tin nhắn đã hoàn tác</string>
-    <string name="session_chat_commands_compact_label">Nhỏ gọn</string>
-    <string name="session_chat_commands_compact_description">Thu gọn ngữ cảnh phiên</string>
+    <string name="session_chat_commands_compact_label">Nén</string>
+    <string name="session_chat_commands_compact_description">Nén ngữ cảnh phiên</string>
     <string name="session_chat_commands_terminal_label">Terminal</string>
     <string name="session_chat_commands_terminal_description">Mở shell của dự án</string>
     <string name="session_chat_commands_files_label">Tệp</string>
@@ -800,24 +800,24 @@
     <string name="timeline_notice_instructions_updated">Đã cập nhật hướng dẫn</string>
     <string name="timeline_notice_restart">Tiếp tục sau khi khởi động lại</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">Đã thu gọn ngữ cảnh</string>
+    <string name="timeline_compaction_title">Đã nén ngữ cảnh</string>
     <string name="timeline_compaction_automatic">Tự động</string>
     <string name="timeline_syncing">Đang đồng bộ…</string>
     <string name="timeline_failure_session_work_failed">Phiên làm việc thất bại</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">Chọn mô hình</string>
-    <string name="timeline_failure_compact">Thu gọn</string>
-    <string name="session_chat_compact_status">Đang thu gọn…</string>
+    <string name="timeline_failure_compact">Nén</string>
+    <string name="session_chat_compact_status">Đang nén…</string>
     <string name="session_chat_turn_sending">Đang gửi…</string>
     <string name="session_chat_turn_sending_percent">Đang gửi %1$d%%</string>
-    <string name="session_chat_compact_success">Đã thu gọn phiên.</string>
-    <string name="session_chat_compact_success_usage">Đã thu gọn ngữ cảnh · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">Không thể thu gọn ngữ cảnh phiên.</string>
+    <string name="session_chat_compact_success">Đã nén phiên.</string>
+    <string name="session_chat_compact_success_usage">Đã nén ngữ cảnh · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">Không thể nén ngữ cảnh phiên.</string>
     <string name="session_chat_revert_undo_failed">Không thể hoàn tác tin nhắn cuối.</string>
-    <string name="session_chat_revert_failed">Không thể khôi phục tin nhắn.</string>
+    <string name="session_chat_revert_failed">Không thể hoàn tác tin nhắn.</string>
     <string name="session_chat_revert_redo_failed">Không thể làm lại.</string>
-    <string name="session_chat_revert_cancel_failed">Không thể hủy khôi phục.</string>
-    <string name="session_chat_revert_commit_failed">Không thể xác nhận khôi phục.</string>
+    <string name="session_chat_revert_cancel_failed">Không thể hủy hoàn tác.</string>
+    <string name="session_chat_revert_commit_failed">Không thể xác nhận hoàn tác.</string>
     <string name="session_chat_fork_rename_failed">Đã tách nhánh, nhưng không thể đổi tên.</string>
     <string name="session_chat_pending_prompt_update_failed">Không thể cập nhật lời nhắc đang chờ</string>
     <string name="session_chat_shell_stop_failed">Không thể dừng shell. Hãy thử lại.</string>
@@ -833,7 +833,7 @@
     <string name="session_chat_sheet_copy">Sao chép</string>
     <string name="session_chat_sheet_copy_output">Sao chép kết quả</string>
     <string name="session_chat_sheet_message_actions_title">Tin nhắn</string>
-    <string name="session_chat_sheet_message_actions_revert">Khôi phục tin nhắn</string>
+    <string name="session_chat_sheet_message_actions_revert">Hoàn tác tin nhắn</string>
     <string name="session_chat_sheet_message_actions_fork">Tách nhánh từ đây</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Sao chép khối mã</string>
     <string name="session_chat_sheet_message_actions_copy_message">Sao chép tin nhắn</string>
@@ -1057,7 +1057,7 @@
     <string name="session_context_stat_usage">Mức dùng</string>
     <string name="session_context_stat_input_tokens">Token đầu vào</string>
     <string name="session_context_stat_output_tokens">Token đầu ra</string>
-    <string name="session_context_stat_reasoning_tokens">Token lý luận</string>
+    <string name="session_context_stat_reasoning_tokens">Token suy luận</string>
     <string name="session_context_stat_cache_tokens">Token bộ nhớ đệm (đọc/ghi)</string>
     <string name="session_context_stat_user_messages">Tin nhắn của người dùng</string>
     <string name="session_context_stat_assistant_messages">Tin nhắn của trợ lý</string>

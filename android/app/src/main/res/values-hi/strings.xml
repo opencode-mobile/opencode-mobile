@@ -1251,7 +1251,7 @@
     <string name="diagnostics_export_window_title">एक्सपोर्ट विंडो</string>
     <string name="diagnostics_export_sheet_title">डायग्नोस्टिक लॉग एक्सपोर्ट करें</string>
     <string name="diagnostics_share_via_apps">ऐप्स से साझा करें</string>
-    <string name="diagnostics_save_to_files">फ़ाइलों में सेव करें</string>
+    <string name="diagnostics_save_to_files">फ़ाइलों में सहेजें</string>
     <string name="diagnostics_clear_dialog_title">डायग्नोस्टिक लॉग साफ़ करें?</string>
     <string name="diagnostics_clear_dialog_message">इससे सहेजा गया डायग्नोस्टिक लॉग हट जाएगा।</string>
     <string name="diagnostics_error_share">साझा करने के लिए डायग्नोस्टिक लॉग तैयार नहीं हो सका।</string>
@@ -1642,7 +1642,7 @@
     <string name="session_list_section_today">आज</string>
     <string name="component_composer_child_lockout">चाइल्ड सेशन में प्रॉम्प्ट नहीं भेजा जा सकता।</string>
     <string name="component_attachment_uploading_percent">%1$d%% अपलोड हो रहा है</string>
-    <string name="component_composer_custom_answer_hint">अपना जवाब लिखें</string>
+    <string name="component_composer_custom_answer_hint">अपना जवाब दर्ज करें</string>
     <string name="component_composer_cancel_revert">रिवर्ट रद्द करें</string>
     <string name="session_list_scope_load_slow_caption">अभी लोड हो रहा है — बड़े प्रोजेक्ट में थोड़ा समय लग सकता है</string>
     <string name="component_outgoing_message_label_with_actions">भेजा गया संदेश। संदेश के विकल्प दिखाता है</string>

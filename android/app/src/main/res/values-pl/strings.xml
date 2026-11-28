@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">Połącz się z telefonu</string>
     <string name="onboarding_setup_step3_body">Zalecane: Tailscale — zainstaluj Tailscale na komputerze i telefonie, a potem użyj adresu IP Tailscale komputera lub nazwy MagicDNS jako adresu URL serwera.\n\nMożna też użyć tej samej sieci LAN, VPN-u, HTTPS lub innego tunelu, którym zarządzasz. Aplikacja nie tworzy dla Ciebie przekaźnika.</string>
     <string name="onboarding_setup_step4_title">Połącz w aplikacji</string>
-    <string name="onboarding_setup_step4_body">Wpisz bazowy adres URL i hasło. Aplikacja sprawdzi GET /global/health, a potem zapisze na tym urządzeniu połączenie z serwerem.</string>
+    <string name="onboarding_setup_step4_body">Wpisz bazowy adres URL i hasło. Aplikacja sprawdzi GET /global/health, a potem zapisze na tym urządzeniu zapisane połączenie z serwerem.</string>
     <string name="onboarding_setup_open_docs">Otwórz dokumentację serwera</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile jest zablokowany</string>

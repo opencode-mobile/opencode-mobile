@@ -51,7 +51,7 @@
     <string name="connection_setup_address_using_now">දැන් භාවිතයේ</string>
     <string name="connection_setup_address_saved">සුරැකිණි</string>
     <string name="connection_setup_pair_again_unreachable">සුරැකි ලිපිනයට ළඟා විය නොහැක. නැවත යුගල කරන්න.</string>
-    <string name="connection_setup_pair_again_unauthorized">මෙම සේවාදායකය සුරැකි පිවිසුම ප්‍රතික්ෂේප කළේය. නැවත යුගල කරන්න. නව මුරපදයක් සැකසූ විට සියලු උපාංග ඉවත් වේ (ලොග් අවුට් වේ).</string>
+    <string name="connection_setup_pair_again_unauthorized">මෙම සේවාදායකය සුරැකි පිවිසුම ප්‍රතික්ෂේප කළේය. නැවත යුගල කරන්න. නව මුරපදයක් සැකසූ විට සියලු උපාංග ලොග් අවුට් වේ.</string>
     <string name="connection_cleartext_title">සම්බන්ධතාවය සංකේතනය කර නැත</string>
     <string name="connection_cleartext_message_one_host">%1$s ඔබේ දේශීය ජාලයෙන් හෝ Tailscale වලින් පිටත සරල http භාවිතා කරයි. ඔබේ සේවාදායක මුරපදය සහ සැසිවල ඇති සියල්ල සංකේතනය නොකර ගමන් කරයි. https, VPN හෝ ටනලයක් භාවිතා කරන්න.</string>
     <string name="connection_cleartext_message_hosts">%1$s ඔබේ දේශීය ජාලයෙන් හෝ Tailscale වලින් පිටත සරල http භාවිතා කරයි. ඔබේ සේවාදායක මුරපදය සහ සැසිවල ඇති සියල්ල සංකේතනය නොකර ගමන් කරයි. https, VPN හෝ ටනලයක් භාවිතා කරන්න.</string>
@@ -104,7 +104,7 @@
     <string name="onboarding_setup_intro">යෙදුම ඔබ ධාවනය කරන opencode සේවාදායකයක් සමඟ සන්නිවේදනය කරයි. කෙටි මඟ පහත ඇත — සම්පූර්ණ විස්තර නිල ලේඛනවල.</string>
     <string name="onboarding_setup_step_number">පියවර %1$d</string>
     <string name="onboarding_setup_step1_title">ඔබේ යන්ත්‍රයේ සේවාදායකය ආරම්භ කරන්න</string>
-    <string name="onboarding_setup_step1_body">ඔබේ ව්‍යාපෘතියේ, opencode සේවාදායකය (headless) ධාවනය කරන්න. දුරකථනය භාවිතා කරන අතරතුර එය ධාවනය වෙමින් තබන්න.</string>
+    <string name="onboarding_setup_step1_body">ඔබේ ව්‍යාපෘතියේ, opencode සේවාදායකය (headless) ධාවනය කරන්න. දුරකථනය භාවිතා කරන අතරතුර එය ධාවනය වන ලෙස තබන්න.</string>
     <string name="onboarding_setup_step2_title">මුරපදයක් අවශ්‍ය කරන්න</string>
     <string name="onboarding_setup_step2_body">OPENCODE_SERVER_PASSWORD සකසන්න. OPENCODE_SERVER_USERNAME සකසන්නේ නැතහොත් පරිශීලක නාමය පෙරනිමියෙන් opencode වේ.</string>
     <string name="onboarding_setup_step3_title">ඔබේ දුරකථනයෙන් ළඟා වන්න</string>
@@ -121,7 +121,7 @@
         <item quantity="other">සුරැකි සේවාදායක සම්බන්ධතා %1$d</item>
     </plurals>
     <string name="servers_saved">සුරැකි</string>
-    <string name="server_health_title">සේවාදායකයේ සෞඛ්‍යය</string>
+    <string name="server_health_title">සේවාදායකයේ තත්ත්වය</string>
     <string name="server_health_ms_ping">ms පින්ග්</string>
     <string name="server_health_last_30_min">අවසන් මිනි. 30</string>
     <string name="server_health_30_min_ago">මිනි. 30කට පෙර</string>
@@ -197,7 +197,7 @@
     </plurals>
     <string name="server_health_quick_view_measuring">මනිමින්…</string>
     <string name="server_health_details">විස්තර</string>
-    <string name="server_health_open_details">සේවාදායකයේ සෞඛ්‍යය විවෘත කරන්න</string>
+    <string name="server_health_open_details">සේවාදායකයේ තත්ත්වය විවෘත කරන්න</string>
     <string name="server_health_unknown_value">—</string>
     <string name="server_health_axis_ago">%1$sකට පෙර</string>
     <string name="server_health_hero_streams">සිදුවීම් ප්‍රවාහ %2$dන් %1$dක් සජීවී</string>
@@ -502,7 +502,7 @@
     <string name="session_chat_commands_mcp_label">MCP සේවාදායකයන්</string>
     <string name="session_chat_commands_mcp_description">MCP සේවාදායකයේ තත්ත්වය පෙන්වන්න</string>
     <string name="session_chat_commands_btw_label">Btw</string>
-    <string name="session_chat_commands_btw_description">පැත්තකින් ප්‍රශ්නයක් අසන්න</string>
+    <string name="session_chat_commands_btw_description">අතුරු ප්‍රශ්නයක් අසන්න</string>
     <string name="session_chat_suggestion_file">ගොනුව</string>
     <string name="session_chat_suggestion_no_matches">ගැළපීම් නැත</string>
     <string name="session_chat_suggestion_no_commands">විධාන නැත</string>
@@ -521,7 +521,7 @@
     <string name="session_chat_model_notice_none_usable">භාවිතා කළ හැකි ආකෘති නැත. නැවත උත්සාහ කිරීමට ආකෘතිය තට්ටු කරන්න.</string>
     <string name="session_chat_model_notice_variant_unavailable">මතක තබාගත් ප්‍රභේදය නොමැත. පෙරනිමිය භාවිතා කරයි.</string>
     <string name="session_chat_model_notice_model_unavailable">තෝරාගත් ආකෘතිය නොමැත. %1$s භාවිතා කරයි.</string>
-    <string name="session_chat_side_question_unsupported">/btw සඳහා පැත්තකින් ප්‍රශ්නවලට පිළිතුරු දෙන opencode v2 සේවාදායකයක් අවශ්‍යයි. මෙම සේවාදායකයට සංවාදයට එකතු නොකර පිළිතුරු දිය නොහැක.</string>
+    <string name="session_chat_side_question_unsupported">/btw සඳහා අතුරු ප්‍රශ්නවලට පිළිතුරු දෙන opencode v2 සේවාදායකයක් අවශ්‍යයි. මෙම සේවාදායකයට සංවාදයට එකතු නොකර පිළිතුරු දිය නොහැක.</string>
     <string name="session_chat_side_question_unavailable">/btw සඳහා වඩා අලුත් opencode සේවාදායකයක් අවශ්‍යයි.</string>
     <string name="session_chat_side_question_copied">පිළිතුර පිටපත් කර ඇත</string>
     <string name="session_chat_side_question_failed">/btw අසාර්ථක විය: “%1$s”</string>
@@ -569,20 +569,20 @@
         <item quantity="one">පෝලිමේ ප්‍රොම්ප්ට් %1$d</item>
         <item quantity="other">පෝලිමේ ප්‍රොම්ප්ට් %1$d</item>
     </plurals>
-    <string name="session_chat_activity_side_question_failed">පැති ප්‍රශ්නය අසාර්ථක විය</string>
+    <string name="session_chat_activity_side_question_failed">අතුරු ප්‍රශ්නය අසාර්ථක විය</string>
     <plurals name="session_chat_activity_side_questions_failed">
-        <item quantity="one">පැති ප්‍රශ්න %1$dක් අසාර්ථක විය</item>
-        <item quantity="other">පැති ප්‍රශ්න %1$dක් අසාර්ථක විය</item>
+        <item quantity="one">අතුරු ප්‍රශ්න %1$dක් අසාර්ථක විය</item>
+        <item quantity="other">අතුරු ප්‍රශ්න %1$dක් අසාර්ථක විය</item>
     </plurals>
-    <string name="session_chat_activity_side_question_ready">පැති ප්‍රශ්නයේ පිළිතුර සූදානම්</string>
+    <string name="session_chat_activity_side_question_ready">අතුරු ප්‍රශ්නයේ පිළිතුර සූදානම්</string>
     <plurals name="session_chat_activity_side_questions_ready">
-        <item quantity="one">පැති ප්‍රශ්න පිළිතුරු %1$dක් සූදානම්</item>
-        <item quantity="other">පැති ප්‍රශ්න පිළිතුරු %1$dක් සූදානම්</item>
+        <item quantity="one">අතුරු ප්‍රශ්න පිළිතුරු %1$dක් සූදානම්</item>
+        <item quantity="other">අතුරු ප්‍රශ්න පිළිතුරු %1$dක් සූදානම්</item>
     </plurals>
-    <string name="session_chat_activity_side_question_running">පැති ප්‍රශ්නය ක්‍රියාත්මකයි</string>
+    <string name="session_chat_activity_side_question_running">අතුරු ප්‍රශ්නය ක්‍රියාත්මකයි</string>
     <plurals name="session_chat_activity_side_questions_running">
-        <item quantity="one">පැති ප්‍රශ්න %1$dක් ක්‍රියාත්මකයි</item>
-        <item quantity="other">පැති ප්‍රශ්න %1$dක් ක්‍රියාත්මකයි</item>
+        <item quantity="one">අතුරු ප්‍රශ්න %1$dක් ක්‍රියාත්මකයි</item>
+        <item quantity="other">අතුරු ප්‍රශ්න %1$dක් ක්‍රියාත්මකයි</item>
     </plurals>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
     <string name="session_chat_activity_action_open_request">ඉල්ලීම විවෘත කරන්න</string>
@@ -744,7 +744,7 @@
     </plurals>
     <plurals name="tool_count_skill">
         <item quantity="one">දක්ෂතා %1$d</item>
-        <item quantity="other">කුසලතා %1$d</item>
+        <item quantity="other">දක්ෂතා %1$d</item>
     </plurals>
     <plurals name="tool_count_patch">
         <item quantity="one">patch %1$d</item>
@@ -842,8 +842,8 @@
         <item quantity="other">සිතුවිලි %1$d</item>
     </plurals>
     <plurals name="timeline_activity_count_agent">
-        <item quantity="one">නියෝජිත %1$d</item>
-        <item quantity="other">නියෝජිත %1$d</item>
+        <item quantity="one">නියෝජිතයන් %1$dක්</item>
+        <item quantity="other">නියෝජිතයන් %1$dක්</item>
     </plurals>
     <string name="timeline_activity_thinking">සිතමින්…</string>
     <string name="timeline_activity_waiting_for_agents">නියෝජිතයන් සඳහා බලා සිටී</string>
@@ -874,7 +874,7 @@
     <string name="session_chat_revert_failed">පණිවිඩය ආපසු හැරවිය නොහැකි විය.</string>
     <string name="session_chat_revert_redo_failed">නැවත කළ නොහැකි විය.</string>
     <string name="session_chat_revert_cancel_failed">ආපසු හැරවීම අවලංගු කළ නොහැකි විය.</string>
-    <string name="session_chat_revert_commit_failed">ආපසු හැරවීම තහවුරු කළ නොහැකි විය.</string>
+    <string name="session_chat_revert_commit_failed">ආපසු හැරවීම commit කළ නොහැකි විය.</string>
     <string name="session_chat_fork_rename_failed">ෆෝක් එක සාදා ඇත, නමුත් නම වෙනස් කළ නොහැකි විය.</string>
     <string name="session_chat_pending_prompt_update_failed">පෝලිමේ ඇති ප්‍රොම්ප්ට් එක යාවත්කාලීන කළ නොහැකි විය</string>
     <string name="session_chat_shell_stop_failed">shell එක නවත්වන්න නොහැකි විය. නැවත උත්සාහ කරන්න.</string>
@@ -972,8 +972,8 @@
     <string name="session_chat_goal_footnote_paused">දිගටම කිරීමෙන් වට %1$dක නව සීමාවක් ආරම්භ වේ.</string>
     <string name="session_chat_goal_footnote_met">නව ඉලක්කයක් මෙය ප්‍රතිස්ථාපනය කරයි.</string>
     <string name="session_chat_goal_paused">ඉලක්කය නවතා ඇත</string>
-    <string name="session_chat_goal_paused_by_user">ඔබ ඉලක්කය නවතා ඇත</string>
-    <string name="session_chat_goal_paused_stopped">ඔබ වාරය නැවැත්වූ නිසා ඉලක්කය නවතා ඇත</string>
+    <string name="session_chat_goal_paused_by_user">ඔබ ඉලක්කය විරාමයට පත් කළා</string>
+    <string name="session_chat_goal_paused_stopped">ඔබ වාරය නැවැත්වූ නිසා ඉලක්කය විරාමයට පත් විය</string>
     <string name="session_chat_goal_paused_failed">දෝෂයකින් පසු ඉලක්කය නවතා ඇත</string>
     <string name="session_chat_goal_paused_no_progress">ඉලක්කය නවතා ඇත: වට %1$dක් ප්‍රගතියක් නැත</string>
     <string name="session_chat_goal_paused_round_limit">වට %1$dකට පසු ඉලක්කය නවතා ඇත</string>
@@ -990,7 +990,7 @@
     <string name="session_chat_goal_count">අක්ෂර %1$s / %2$s</string>
     <string name="session_chat_goal_count_over">අක්ෂර %1$s / %2$s · යැවීමට අරමුණ කෙටි කරන්න</string>
     <string name="session_chat_goal_command_replaces">ඔබේ වත්මන් ඉලක්කය ප්‍රතිස්ථාපනය කරයි</string>
-    <string name="session_chat_goal_command_replaces_paused">ඔබේ වත්මන් ඉලක්කය ප්‍රතිස්ථාපනය කරයි (නවතා ඇත)</string>
+    <string name="session_chat_goal_command_replaces_paused">ඔබේ වත්මන් ඉලක්කය ප්‍රතිස්ථාපනය කරයි (විරාමයේ)</string>
     <string name="session_chat_goal_command_replaces_met">ඔබේ වත්මන් ඉලක්කය ප්‍රතිස්ථාපනය කරයි (සපුරා ඇත)</string>
     <string name="session_chat_goal_pause_failed">ඉලක්කය නවතන්න නොහැකි විය</string>
     <string name="session_chat_goal_pause_failed_reason">ඉලක්කය නවතන්න නොහැකි විය: %1$s</string>
@@ -999,7 +999,7 @@
     <string name="session_chat_goal_clear_failed">ඉලක්කය හිස් කළ නොහැකි විය</string>
     <string name="session_chat_goal_clear_failed_reason">ඉලක්කය හිස් කළ නොහැකි විය: %1$s</string>
     <string name="session_chat_timeline_style_notice">කාලරේඛාව: %1$s. සැකසීම් තුළ ඕනෑම වේලාවක වෙනස් කරන්න.</string>
-    <string name="session_chat_branch_copied">Branch නම පිටපත් කර ඇත</string>
+    <string name="session_chat_branch_copied">ශාඛා නම පිටපත් කර ඇත</string>
     <string name="session_chat_follow_up_switched_steer">මඟ පෙන්වීමට මාරු විය</string>
     <string name="session_chat_follow_up_switched_queue">පෝලිමට මාරු විය</string>
     <string name="session_chat_failure_retry_after_seconds">තත්පර %1$dකින් නැවත උත්සාහ කරන්න</string>
@@ -1017,8 +1017,8 @@
         <item quantity="one">commit නොකළ ගොනු %1$d</item>
         <item quantity="other">commit නොකළ ගොනු %1$d</item>
     </plurals>
-    <string name="component_branch_pill_a11y_branch">Branch %1$s</string>
-    <string name="component_branch_pill_a11y_worktree_branch">Worktree branch %1$s</string>
+    <string name="component_branch_pill_a11y_branch">ශාඛාව %1$s</string>
+    <string name="component_branch_pill_a11y_worktree_branch">Worktree ශාඛාව %1$s</string>
     <string name="component_branch_pill_a11y_no_changes">%1$s, වෙනස්කම් නැත</string>
     <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
     <string name="component_branch_pill_a11y_added">%1$s, %2$d ක් එක් කළා</string>
@@ -1161,7 +1161,7 @@
     </plurals>
     <string name="settings_send_feedback_title">ප්‍රතිපෝෂණ යවන්න</string>
     <string name="settings_send_feedback_subtitle">දෝෂයක් වාර්තා කරන්න හෝ අදහසක් බෙදා ගන්න</string>
-    <string name="settings_hide_user_directory_title">පරිශීලක නාමාවලිය සඟවන්න</string>
+    <string name="settings_hide_user_directory_title">පරිශීලක ෆෝල්ඩරය සඟවන්න</string>
     <string name="settings_hide_user_directory_subtitle">/Users/you/Projects/… වෙනුවට ~/Projects/… පෙන්වන්න</string>
     <string name="settings_recent_window_title">මෑත කාල පරාසය</string>
     <string name="settings_recent_window_message">සැසි ධාවනය වන විට හෝ සූදානම් විට, නැතහොත් මෙම කාල පරාසය තුළ යාවත්කාලීන වූ විට මෑත ලැයිස්තුවේ රැඳී සිටී.</string>
@@ -1184,8 +1184,8 @@
     <string name="settings_follow_up_subtitle_steer">මඟ පෙන්වන්න · V2 සේවාදායකයන්ට පමණි. V1 මෙයට සහාය නොදක්වයි.</string>
     <string name="settings_follow_up_subtitle_queue">පෝලිම · V2 සේවාදායකයන්ට පමණි. V1 මෙයට සහාය නොදක්වයි.</string>
     <string name="settings_follow_up_unsupported">V1 හි සහාය නැත. මෙම සේවාදායකය සැමවිටම වහාම යවයි.</string>
-    <string name="settings_worktrees_title">Worktrees</string>
-    <string name="settings_worktrees_subtitle">මුල් පිටුවේ සෑම ව්‍යාපෘතියකම worktrees සහ branches පෙන්වන්න, සහ නව සැසිය ඔබාගෙන සිටින විට worktree එකක් තෝරා ගැනීමට ඉඩ දෙන්න.</string>
+    <string name="settings_worktrees_title">Worktree</string>
+    <string name="settings_worktrees_subtitle">මුල් පිටුවේ සෑම ව්‍යාපෘතියකම worktree සහ ශාඛා පෙන්වන්න, සහ නව සැසිය ඔබාගෙන සිටින විට worktree එකක් තෝරා ගැනීමට ඉඩ දෙන්න.</string>
     <string name="settings_session_rows_title">සැසි පේළි</string>
     <string name="settings_session_rows_compact_title">සංක්ෂිප්ත</string>
     <string name="settings_session_rows_compact_subtitle">පේළි දෙකක්: මාතෘකාව සහ වේලාව, ඉන්පසු ව්‍යාපෘතිය / worktree</string>
@@ -1208,7 +1208,7 @@
     <string name="settings_analytics_title">විශ්ලේෂණ සහ බිඳ වැටීම් වාර්තා</string>
     <string name="settings_analytics_subtitle">විකල්ප නිෂ්පාදන භාවිත සිදුවීම් සහ බිඳ වැටීම් වාර්තා ඉඩ දෙන්න. අක්‍රිය නම් Firebase වෙත කිසිවක් නොයවයි.</string>
     <string name="settings_analytics_label">නිෂ්පාදන විශ්ලේෂණ</string>
-    <string name="settings_diagnostic_logs_subtitle">සංශෝධිත, චලනය වන ධාවන කාල ලොග් කවුළුවක් බෙදා ගන්න</string>
+    <string name="settings_diagnostic_logs_subtitle">සංවේදී තොරතුරු ඉවත් කළ, චලනය වන ධාවන කාල ලොග් කවුළුවක් බෙදා ගන්න</string>
     <string name="settings_clear_all_data_title">සියලු දත්ත හිස් කරන්න</string>
     <string name="settings_clear_all_data_subtitle">සම්බන්ධතාව සහ හැඹිලිය ඉවත් කරන්න</string>
     <string name="settings_clear_all_data_dialog_title">සියලු දත්ත හිස් කරන්නද?</string>
@@ -1225,8 +1225,8 @@
     <string name="diagnostics_loading">රෝග විනිශ්චය ලොග් පූරණය වෙමින්</string>
     <string name="diagnostics_entries_title">ඇතුළත් කිරීම්</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">තබා ගත් කවුළුවේ සංශෝධිත පේළි %1$d</item>
-        <item quantity="other">තබා ගත් කවුළුවේ සංශෝධිත පේළි %1$d</item>
+        <item quantity="one">තබා ගත් කවුළුවේ සංවේදී තොරතුරු ඉවත් කළ පේළි %1$d</item>
+        <item quantity="other">තබා ගත් කවුළුවේ සංවේදී තොරතුරු ඉවත් කළ පේළි %1$d</item>
     </plurals>
     <string name="diagnostics_entries_empty">තබා ගත් කවුළුවේ තවම ඇතුළත් කිරීම් නැත</string>
     <string name="diagnostics_kept_title">තබා ගත්</string>
@@ -1242,7 +1242,7 @@
         <item quantity="other">උපරිම %1$d · කිසිවක් ඉවත දමා නැත</item>
     </plurals>
     <string name="diagnostics_format_title">Format</string>
-    <string name="diagnostics_format_value">JSONL · රහස් සහ පණිවිඩ අන්තර්ගතය සංශෝධිතයි</string>
+    <string name="diagnostics_format_value">JSONL · රහස් සහ පණිවිඩ අන්තර්ගතයෙන් සංවේදී තොරතුරු ඉවත් කර ඇත</string>
     <string name="diagnostics_range_title">පරාසය</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
     <string name="diagnostics_areas_title">ප්‍රදේශ</string>
@@ -1319,7 +1319,7 @@
     <string name="feedback_kind_idea">අදහස</string>
     <string name="feedback_placeholder_bug">සිදු වුණේ කුමක්ද? ඔබ බලාපොරොත්තු වුණේ කුමක්ද?</string>
     <string name="feedback_placeholder_idea">කුමක් කළොත් OpenCode ඔබට වඩා හොඳ වේද?</string>
-    <string name="feedback_privacy_note">OpenCode Mobile කණ්ඩායමට පමණක් යයි. ඔබේ සේවාදායක ලිපිනය, පරිශීලක නාමය හෝ මුරපදය කිසිවිටක ඇතුළත් නොවේ. ලොග් මෙම දුරකථනයේදී සංශෝධනය කෙරේ.</string>
+    <string name="feedback_privacy_note">OpenCode Mobile කණ්ඩායමට පමණක් යයි. ඔබේ සේවාදායක ලිපිනය, පරිශීලක නාමය හෝ මුරපදය කිසිවිටක ඇතුළත් නොවේ. ලොග්වලින් සංවේදී තොරතුරු මෙම දුරකථනයේදීම ඉවත් කෙරේ.</string>
     <string name="feedback_error_offline">ඔබ අන්තර්ජාලයට සම්බන්ධ නැත. ඔබේ වාර්තාව මෙහි තබා ඇත — සම්බන්ධ වූ විට නැවත උත්සාහ කරන්න.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">ඔබ දැන් තමයි වාර්තාවක් යැවුවේ. තත්පර %1$dකින් නැවත උත්සාහ කරන්න.</item>
@@ -1361,8 +1361,8 @@
         <item quantity="other">තිර රූපය, ප්‍රදේශ %1$dක් සඟවා ඇත</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">අවසාන මිනිත්තු %1$d · උඩුගත කිරීමේදී gzip කෙරේ. මෙම දුරකථනයේදී සංශෝධනය කර ඇත.</item>
-        <item quantity="other">අවසාන මිනිත්තු %1$d · උඩුගත කිරීමේදී gzip කෙරේ. මෙම දුරකථනයේදී සංශෝධනය කර ඇත.</item>
+        <item quantity="one">අවසාන මිනිත්තු %1$d · උඩුගත කිරීමේදී gzip කෙරේ. මෙම දුරකථනයේදී සංවේදී තොරතුරු ඉවත් කර ඇත.</item>
+        <item quantity="other">අවසාන මිනිත්තු %1$d · උඩුගත කිරීමේදී gzip කෙරේ. මෙම දුරකථනයේදී සංවේදී තොරතුරු ඉවත් කර ඇත.</item>
     </plurals>
     <string name="feedback_log_preview_loading">පූරණය වෙමින්…</string>
     <string name="feedback_log_preview_empty_title">ලොග් පේළි නැත</string>
@@ -1448,8 +1448,8 @@
     <string name="changes_filter_hint">පෙරන්න</string>
     <string name="changes_filter_accessibility_label">වෙනස් වූ ගොනු පෙරන්න</string>
     <string name="changes_no_matches_title">ගැළපෙන ගොනු නැත</string>
-    <string name="changes_no_matches_message">වෙනත් මාර්ගයක් උත්සාහ කරන්න, නැතහොත් පෙරහන ඉවත් කරන්න.</string>
-    <string name="changes_no_matches_clear_filter">පෙරහන ඉවත් කරන්න</string>
+    <string name="changes_no_matches_message">වෙනත් මාර්ගයක් උත්සාහ කරන්න, නැතහොත් පෙරහන හිස් කරන්න.</string>
+    <string name="changes_no_matches_clear_filter">පෙරහන හිස් කරන්න</string>
     <string name="changes_select_file_title">ගොනුවක් තෝරන්න</string>
     <string name="changes_select_file_message">diff එක බැලීමට වෙනස් වූ ගොනුවක් තෝරන්න.</string>
     <string name="changes_preview_unavailable_title">පෙරදසුන නොමැත</string>
@@ -1495,7 +1495,7 @@
     <string name="component_reasoning_row_shows_thought_hint">සම්පූර්ණ සිතුවිල්ල පෙන්වයි</string>
     <string name="component_unified_diff_row_kind_hunk">hunk</string>
     <string name="component_unified_diff_row_kind_metadata">මෙටාදත්ත</string>
-    <string name="component_unified_diff_row_kind_context">සන්දර්භය</string>
+    <string name="component_unified_diff_row_kind_context">වටපිටා පේළි</string>
     <string name="component_unified_diff_row_kind_addition">එකතු කිරීම</string>
     <string name="component_unified_diff_row_kind_deletion">මකා දැමීම</string>
     <string name="component_unified_diff_old_line">පැරණි පේළිය %1$d</string>
@@ -1522,13 +1522,13 @@
     <string name="component_message_time_yesterday">ඊයේ</string>
     <string name="component_composer_reverting_title">මෙම පණිවිඩය ආපසු හරවමින්</string>
     <string name="session_new_title">නව සැසිය</string>
-    <string name="session_list_dock_add_project">ව්යාපෘතියක් එක් කරන්න</string>
+    <string name="session_list_dock_add_project">ව්‍යාපෘතියක් එක් කරන්න</string>
     <string name="theme_error_preset_not_found">තේමා පෙරසැකසුම හමු නොවීය</string>
     <string name="component_composer_submit">ඉදිරිපත් කරන්න</string>
     <string name="component_composer_select_all_that_apply">අදාළ සියල්ල තෝරන්න</string>
     <string name="component_unified_diff_summary_modified">වෙනස් කළ ගොනුව %1$s, %2$s, %3$s</string>
-    <string name="component_hunk_navigation_collapse_context">සන්දර්භය හකුළන්න</string>
-    <string name="component_top_bar_project_subtitle">ව්යාපෘතිය %1$s %2$s</string>
+    <string name="component_hunk_navigation_collapse_context">වටපිටා පේළි හකුළන්න</string>
+    <string name="component_top_bar_project_subtitle">ව්‍යාපෘතිය %1$s %2$s</string>
     <string name="component_composer_dismiss">ඉවත් කරන්න</string>
     <string name="dictation_model_downloading_detail">මෙය පද්ධති බාගැනීමකි. ඔබ මෙම කාඩ්පත වැසුවත් එය දිගටම සිදුවේ.</string>
     <string name="session_list_scope_load_loading">සැසි පූරණය වෙමින්…</string>
@@ -1551,8 +1551,8 @@
     <string name="component_image_loading_label">%1$s, පූරණය වෙමින්</string>
     <string name="session_list_dock_new_session">නව සැසිය</string>
     <string name="component_composer_always_allows">සැමවිටම ඉඩ දෙයි: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">පැති ප්‍රශ්න ප්‍රකාරයෙන් ඉවත් වන්න</string>
-    <string name="session_list_worktree_empty_other_projects">වෙනත් ව්යාපෘතිවල සැසි බැලීමට පෙරහන ඉවත් කරන්න.</string>
+    <string name="component_composer_leave_side_question_mode">අතුරු ප්‍රශ්න ප්‍රකාරයෙන් ඉවත් වන්න</string>
+    <string name="session_list_worktree_empty_other_projects">වෙනත් ව්‍යාපෘතිවල සැසි බැලීමට පෙරහන හිස් කරන්න.</string>
     <string name="component_attachment_uploading">උඩුගත කරමින්…</string>
     <string name="component_composer_deny">ප්‍රතික්ෂේප කරන්න</string>
     <string name="component_composer_deny_options">තවත් ප්‍රතික්ෂේප විකල්ප</string>
@@ -1569,32 +1569,32 @@
     <string name="dictation_busy">කථනයෙන් ලිවීම කාර්යබහුලයි</string>
     <string name="component_composer_question_position">%2$dන් %1$d</string>
     <string name="session_list_status_ready">සූදානම්</string>
-    <string name="session_list_dock_hint_swipe">ව්යාපෘති පෙරහන විවෘත කරයි. ව්යාපෘති මාරු කිරීමට ස්වයිප් කරන්න.</string>
+    <string name="session_list_dock_hint_swipe">ව්‍යාපෘති පෙරහන විවෘත කරයි. ව්‍යාපෘති මාරු කිරීමට ස්වයිප් කරන්න.</string>
     <string name="component_composer_select_one">එකක් තෝරන්න</string>
     <string name="component_session_list_skeleton_row">සැසිය පූරණය වෙමින්</string>
     <string name="component_split_pane_resize_sidebar">පැති තීරුවේ ප්‍රමාණය වෙනස් කරන්න</string>
     <string name="session_list_section_recent">මෑත</string>
     <string name="session_list_section_recent_hint">බැලීමක් අවශ්‍යයි</string>
     <string name="component_activity_status_completed">අවසන්</string>
-    <string name="share_diagnostics_chooser_title">රෝග විනිශ්චය ලොග බෙදාගන්න</string>
+    <string name="share_diagnostics_chooser_title">රෝග විනිශ්චය ලොග් බෙදා ගන්න</string>
     <string name="dictation_model_queued_title">%1$s පසුව %2$s බාගනී</string>
-    <string name="session_list_dock_choose_project_or_worktree">ව්යාපෘතිය හෝ worktree තෝරන්න</string>
+    <string name="session_list_dock_choose_project_or_worktree">ව්‍යාපෘතිය හෝ worktree තෝරන්න</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
     <string name="component_image_could_not_load_label">%1$s, පූරණය කළ නොහැකි විය</string>
     <string name="component_composer_question">ප්‍රශ්නය</string>
     <string name="component_worktree">Worktree</string>
-    <string name="session_list_worktree_empty_other_worktrees">වෙනත් worktree වල සැසි බැලීමට පෙරහන ඉවත් කරන්න.</string>
-    <string name="component_composer_side_question_mode">පැති ප්‍රශ්න ප්‍රකාරය</string>
+    <string name="session_list_worktree_empty_other_worktrees">වෙනත් worktree වල සැසි බැලීමට පෙරහන හිස් කරන්න.</string>
+    <string name="component_composer_side_question_mode">අතුරු ප්‍රශ්න ප්‍රකාරය</string>
     <string name="component_page_indicator_label">පිටුව %2$dන් %1$d</string>
     <string name="component_composer_next">ඊළඟ</string>
     <string name="component_message_image_label">රූපය %1$s</string>
     <string name="component_composer_leave_shell_mode">shell ප්‍රකාරයෙන් ඉවත් වන්න</string>
     <string name="dictation_action_downloading">බාගනිමින්…</string>
-    <string name="component_image_viewer_share">බෙදාගන්න</string>
+    <string name="component_image_viewer_share">බෙදා ගන්න</string>
     <string name="session_list_status_failed">අසාර්ථකයි</string>
     <string name="component_composer_custom_answer_title">ඔබේම පිළිතුර ටයිප් කරන්න</string>
     <string name="component_composer_always">සැමවිට</string>
-    <string name="component_composer_send_side_question">පැති ප්‍රශ්නයක් අසන්න</string>
+    <string name="component_composer_send_side_question">අතුරු ප්‍රශ්නයක් අසන්න</string>
     <string name="component_composer_select_exactly">%1$dක් තෝරන්න</string>
     <string name="dictation_action_open_settings">සැකසීම් විවෘත කරන්න</string>
     <string name="component_composer_open_commands">විධාන විවෘත කරන්න</string>
@@ -1609,7 +1609,7 @@
     <string name="session_list_scope_load_failed_title">%1$s පූරණය කළ නොහැකි විය</string>
     <string name="dictation_status_listening">සවන් දෙමින්</string>
     <string name="dictation_downloading_model">කථන ආකෘතිය බාගනිමින්</string>
-    <string name="session_list_worktree_empty_every_worktree">සියලු worktree බැලීමට පෙරහන ඉවත් කරන්න.</string>
+    <string name="session_list_worktree_empty_every_worktree">සියලු worktree බැලීමට පෙරහන හිස් කරන්න.</string>
     <string name="component_overflow_menu_more_options">තවත් විකල්ප</string>
     <string name="session_list_status_retrying_attempt">නැවත උත්සාහ කරමින් · %1$d</string>
     <string name="live_updates_status_offline">නොබැඳි</string>
@@ -1644,7 +1644,7 @@
     <string name="component_attachment_uploading_percent">උඩුගත කරමින් %1$d%%</string>
     <string name="component_composer_custom_answer_hint">අභිරුචි පිළිතුරක් ඇතුළත් කරන්න</string>
     <string name="component_composer_cancel_revert">ආපසු හැරවීම අවලංගු කරන්න</string>
-    <string name="session_list_scope_load_slow_caption">තවමත් පූරණය වෙමින් — විශාල ව්යාපෘති සඳහා මොහොතක් ගත විය හැක</string>
+    <string name="session_list_scope_load_slow_caption">තවමත් පූරණය වෙමින් — විශාල ව්‍යාපෘති සඳහා මොහොතක් ගත විය හැක</string>
     <string name="component_outgoing_message_label_with_actions">යවන පණිවිඩය. පණිවිඩ ක්‍රියා පෙන්වයි</string>
     <string name="session_list_scope_load_failed_subtitle">සැසි පූරණය කළ නොහැකි විය</string>
     <plurals name="component_activity_card_more_running">
@@ -1657,7 +1657,7 @@
     </plurals>
     <string name="theme_error_syntax_preset_not_found">සින්ටැක්ස් ඉස්මතු කිරීමේ පෙරසැකසුම හමු නොවීය</string>
     <string name="session_list_scope_load_slow">තවමත් පූරණය වෙමින්…</string>
-    <string name="session_list_dock_hint">ව්යාපෘති පෙරහන විවෘත කරයි.</string>
+    <string name="session_list_dock_hint">ව්‍යාපෘති පෙරහන විවෘත කරයි.</string>
     <string name="component_hunk_navigation_next">ඊළඟ hunk</string>
     <string name="session_list_scope_load_failed_message">සේවාදායකය මෙම ව්‍යාපෘතියේ සැසි ලබා දුන්නේ නැත.</string>
     <string name="component_drop_overlay_accessibility_label">%1$s. %2$s</string>
@@ -1666,19 +1666,19 @@
     <string name="component_file_tabs_close">%1$s වසන්න</string>
     <string name="dictation_action_download">බාගන්න</string>
     <string name="component_attachment_kind_pdf">PDF</string>
-    <string name="session_list_dock_next_project">ඊළඟ ව්යාපෘතිය</string>
+    <string name="session_list_dock_next_project">ඊළඟ ව්‍යාපෘතිය</string>
     <string name="component_composer_allow_once">එක් වරක් ඉඩ දෙන්න</string>
     <string name="session_list_worktree_empty_title">මෙම worktree හි සැසි නැත</string>
     <string name="component_activity_card_opens_activity_hint">ක්‍රියාකාරකම විවෘත කරයි</string>
     <string name="dictation_speech_model">කථන ආකෘතිය</string>
-    <string name="session_list_dock_previous_project">පෙර ව්යාපෘතිය</string>
+    <string name="session_list_dock_previous_project">පෙර ව්‍යාපෘතිය</string>
     <plurals name="relative_time_minutes_ago">
         <item quantity="one">මිනිත්තු %1$dකට පෙර</item>
         <item quantity="other">මිනිත්තු %1$dකට පෙර</item>
     </plurals>
     <string name="component_composer_request_position">%2$dන් %1$d</string>
-    <string name="component_composer_side_question_placeholder">පැති ප්‍රශ්නය, සංවාදයට එක් නොකෙරේ</string>
-    <string name="session_list_worktree_empty_every_project">සියලු ව්යාපෘති බැලීමට පෙරහන ඉවත් කරන්න.</string>
+    <string name="component_composer_side_question_placeholder">අතුරු ප්‍රශ්නය, සංවාදයට එක් නොකෙරේ</string>
+    <string name="session_list_worktree_empty_every_project">සියලු ව්‍යාපෘති බැලීමට පෙරහන හිස් කරන්න.</string>
     <string name="component_image_viewer_could_not_load_named">%1$s පූරණය කළ නොහැකි විය</string>
     <string name="component_composer_select_up_to">%1$d දක්වා තෝරන්න</string>
     <string name="live_updates_status_live">සජීවී</string>
@@ -1686,7 +1686,7 @@
     <string name="component_image_viewer_could_not_load_full">සම්පූර්ණ රූපය පූරණය කළ නොහැකි විය</string>
     <string name="component_image_viewer_retry">නැවත උත්සාහ කරන්න</string>
     <string name="component_image_viewer_loading_full">සම්පූර්ණ රූපය පූරණය වෙමින්</string>
-    <string name="session_list_worktree_empty_action">පෙරහන ඉවත් කරන්න</string>
+    <string name="session_list_worktree_empty_action">පෙරහන හිස් කරන්න</string>
     <string name="dictation_model_download_failed_detail">සම්බන්ධතාවය සහ මෙම උපාංගයේ ගබඩා ඉඩ පරීක්ෂා කර, නැවත උත්සාහ කරන්න.</string>
     <string name="component_composer_send_queue">පෝලිමට යවන්න</string>
     <string name="session_list_dock_new_session_hint">වෙනත් තැනක ආරම්භ කිරීමට “ව්‍යාපෘතිය හෝ worktree තෝරන්න” භාවිතා කරන්න.</string>
@@ -1706,7 +1706,7 @@
     <string name="component_outgoing_message_long_press_hint">පණිවිඩ ක්‍රියා පෙන්වීමට දිගු ඔබන්න</string>
     <string name="component_composer_hide_permission">අවසර ඉල්ලීම සඟවන්න</string>
     <string name="dictation_downloading_model_progress">කථන ආකෘතිය බාගනිමින්, %1$s</string>
-    <string name="component_branch_pill_copy_branch_name">branch නම පිටපත් කරන්න</string>
+    <string name="component_branch_pill_copy_branch_name">ශාඛා නම පිටපත් කරන්න</string>
     <string name="component_truncation_row_full_message_title">සම්පූර්ණ පණිවිඩය පෙන්වන්න</string>
     <string name="component_truncation_row_full_message_caption">අක්ෂර %2$sන් %1$sක් පෙන්වා ඇත</string>
     <string name="component_truncation_row_full_message_hint">සම්පූර්ණ පණිවිඩය විවෘත කරයි</string>
@@ -1730,7 +1730,7 @@
     <string name="relative_time_now">දැන්</string>
     <string name="component_composer_previous_permission">පෙර අවසර ඉල්ලීම</string>
     <string name="component_composer_dictate">කථනයෙන් ලියන්න</string>
-    <string name="component_composer_side_question_mode_description">පැති ප්‍රශ්න ප්‍රකාරය. පැති ප්‍රශ්න ප්‍රකාරයෙන් ඉවත් වන්න</string>
+    <string name="component_composer_side_question_mode_description">අතුරු ප්‍රශ්න ප්‍රකාරය. අතුරු ප්‍රශ්න ප්‍රකාරයෙන් ඉවත් වන්න</string>
     <string name="component_composer_abort">සක්‍රිය වැඩය නතර කරන්න</string>
     <string name="component_server_address_scheme_button">Scheme %1$s</string>
     <string name="component_composer_open_subagent_session">උප නියෝජිත සැසිය විවෘත කරන්න</string>
@@ -1745,13 +1745,13 @@
     <string name="component_attachment_remove">%1$s ඉවත් කරන්න</string>
     <string name="component_composer_send_steer">මඟ පෙන්වීමක් ලෙස යවන්න</string>
     <string name="component_composer_next_permission">ඊළඟ අවසර ඉල්ලීම</string>
-    <string name="session_list_dock_project_filter">ව්යාපෘති පෙරහන</string>
+    <string name="session_list_dock_project_filter">ව්‍යාපෘති පෙරහන</string>
     <string name="component_split_pane_resize_hint">පැති තීරුව සැඟවීමට දෙවරක් තට්ටු කරන්න</string>
-    <string name="component_branch_pill_shows_details_hint">branch විස්තර පෙන්වයි</string>
+    <string name="component_branch_pill_shows_details_hint">ශාඛා විස්තර පෙන්වයි</string>
     <string name="component_composer_permission_requested">අවසරය ඉල්ලා ඇත</string>
     <string name="component_thinking">සිතමින්</string>
     <string name="dictation_model_downloading_title">%1$s %2$s බාගනිමින් සිටී</string>
-    <string name="component_hunk_navigation_expand_context">සන්දර්භය දිගහරින්න</string>
+    <string name="component_hunk_navigation_expand_context">වටපිටා පේළි දිගහරින්න</string>
     <string name="dictation_listening_placeholder">සවන් දෙමින්…</string>
     <string name="component_skeleton_illustration_unofficial">නිල නොවන</string>
     <string name="dictation_status_ready">ඇතුළත් කිරීමට සූදානම්</string>
@@ -1782,7 +1782,7 @@
         <item quantity="one">%1$dක් වෙනස් විය</item>
         <item quantity="other">%1$dක් වෙනස් විය</item>
     </plurals>
-    <string name="worktrees_none_in_project">worktree නැත. නව සැසිය → ව්යාපෘතිය හෝ worktree තෝරන්න මගින් එකක් සාදයි.</string>
+    <string name="worktrees_none_in_project">worktree නැත. නව සැසිය → ව්‍යාපෘතිය හෝ worktree තෝරන්න මගින් එකක් සාදයි.</string>
     <string name="worktrees_footer">worktree එකක් ඉවත් කිරීමෙන් සේවාදායකයේ එහි ෆෝල්ඩරය මැකේ. එහි සැසි රැඳී පවතී, නමුත් නැවත එහි ධාවනය කළ නොහැක.</string>
     <string name="worktrees_more">%1$s සඳහා තවත් ක්‍රියා</string>
     <string name="worktrees_removing">ඉවත් කරමින්…</string>

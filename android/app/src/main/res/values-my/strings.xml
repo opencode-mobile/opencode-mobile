@@ -56,7 +56,7 @@
     <string name="connection_cleartext_message_one_host">%1$s သည် သင့်ဒေသတွင်းကွန်ရက် သို့မဟုတ် Tailscale ပြင်ပတွင် ရိုးရိုး http ကို သုံးသည်။ သင့်ဆာဗာစကားဝှက်နှင့် ဆက်ရှင်များရှိ အရာအားလုံး ကုဒ်မဝှက်ဘဲ ပို့ခံရနိုင်သည်။ https၊ VPN သို့မဟုတ် ဥမင်ကို ရွေးသင့်သည်။</string>
     <string name="connection_cleartext_message_hosts">%1$s တို့သည် သင့်ဒေသတွင်းကွန်ရက် သို့မဟုတ် Tailscale ပြင်ပတွင် ရိုးရိုး http ကို သုံးသည်။ သင့်ဆာဗာစကားဝှက်နှင့် ဆက်ရှင်များရှိ အရာအားလုံး ကုဒ်မဝှက်ဘဲ ပို့ခံရနိုင်သည်။ https၊ VPN သို့မဟုတ် ဥမင်ကို ရွေးသင့်သည်။</string>
     <string name="connection_cleartext_message_this_address">ဤလိပ်စာသည် သင့်ဒေသတွင်းကွန်ရက် သို့မဟုတ် Tailscale ပြင်ပတွင် ရိုးရိုး http ကို သုံးသည်။ သင့်ဆာဗာစကားဝှက်နှင့် ဆက်ရှင်များရှိ အရာအားလုံး ကုဒ်မဝှက်ဘဲ ပို့ခံရနိုင်သည်။ https၊ VPN သို့မဟုတ် ဥမင်ကို ရွေးသင့်သည်။</string>
-    <string name="connection_cleartext_connect_anyway">ဘာဖြစ်ဖြစ် ချိတ်ဆက်ပါ</string>
+    <string name="connection_cleartext_connect_anyway">မည်သို့ပင်ဖြစ်စေ ချိတ်ဆက်ပါ</string>
     <string name="connection_error_invalid_qr">ဤသည်မှာ OpenCode 2 တွဲချိတ် QR မဟုတ်ပါ</string>
     <string name="connection_error_localhost_qr">ထို QR တွင် localhost လိပ်စာသာ ပါသည်</string>
     <string name="connection_error_camera_denied">တွဲချိတ် QR စကင်ဖတ်ရန် ကင်မရာသုံးခွင့် ပေးပါ</string>
@@ -89,11 +89,11 @@
     <string name="onboarding_connect_page_title">သင့်ဆာဗာများသို့\nချိတ်ဆက်ပါ</string>
     <string name="onboarding_connect_page_body">အက်ပ်ကို သင့်စက်ပေါ်ရှိ opencode ဆာဗာသို့ ညွှန်ပါ။ သင့်ဖုန်းက ဘယ်နေရာမှမဆို လုံခြုံစွာ ချိတ်ဆက်နိုင်ရန် Tailscale ကို အကြံပြုသည်။</string>
     <string name="onboarding_connect_page_setup_link">ဆာဗာ အရင် လိုသလား။</string>
-    <string name="onboarding_features_title">ဤနေရာမှ\nဘာတွေ လုပ်နိုင်လဲ</string>
+    <string name="onboarding_features_title">ဤနေရာမှ\nသင်လုပ်နိုင်သည့်အရာများ</string>
     <string name="onboarding_features_sessions_title">ဆက်ရှင်များ</string>
-    <string name="onboarding_features_sessions_detail">စာရင်းကြည့်၊ ဖွင့်၊ ဖန်တီး၊ အမည်ပြောင်း၊ fork လုပ်၊ မှတ်တမ်းသို့ ရွှေ့၊ ဖျက်</string>
+    <string name="onboarding_features_sessions_detail">စာရင်းကြည့်၊ ဖွင့်၊ ဖန်တီး၊ အမည်ပြောင်း၊ fork လုပ်၊ မော်ကွန်းတင်၊ ဖျက်</string>
     <string name="onboarding_features_chat_title">စကားပြော နှင့် ရပ်တန့်</string>
-    <string name="onboarding_features_chat_detail">ညွှန်ကြားချက်များ ပို့ပြီး လုပ်နေသောအလုပ်ကို ရပ်နိုင်သည်</string>
+    <string name="onboarding_features_chat_detail">Prompt များ ပို့ပြီး လုပ်နေသောအလုပ်ကို ရပ်နိုင်သည်</string>
     <string name="onboarding_features_permissions_title">ခွင့်ပြုချက်များ</string>
     <string name="onboarding_features_permissions_detail">တောင်းဆိုမှုများကို ခွင့်ပြု သို့မဟုတ် ငြင်းဆို (အမြဲမှတ်မထားနိုင်)</string>
     <string name="onboarding_features_changes_title">အပြောင်းအလဲများ</string>
@@ -120,7 +120,7 @@
         <item quantity="other">ဆာဗာချိတ်ဆက်မှု %1$d ခု</item>
     </plurals>
     <string name="servers_saved">သိမ်းထားသည်</string>
-    <string name="server_health_title">ဆာဗာ ကျန်းမာရေး</string>
+    <string name="server_health_title">ဆာဗာ အခြေအနေ</string>
     <string name="server_health_ms_ping">ms ping</string>
     <string name="server_health_last_30_min">လွန်ခဲ့သော ၃၀ မိနစ်</string>
     <string name="server_health_30_min_ago">၃၀ မိနစ်ခန့်က</string>
@@ -194,7 +194,7 @@
     </plurals>
     <string name="server_health_quick_view_measuring">တိုင်းတာနေသည်…</string>
     <string name="server_health_details">အသေးစိတ်</string>
-    <string name="server_health_open_details">ဆာဗာ ကျန်းမာရေး ဖွင့်ရန်</string>
+    <string name="server_health_open_details">ဆာဗာ အခြေအနေ ဖွင့်ရန်</string>
     <string name="server_health_unknown_value">—</string>
     <string name="server_health_axis_ago">လွန်ခဲ့သော %1$s</string>
     <string name="server_health_hero_streams">အဖြစ်အပျက်စီးဆင်းမှု %2$d ခုအနက် %1$d ခု တိုက်ရိုက်</string>
@@ -238,7 +238,7 @@
     <plurals name="home_project_count">
         <item quantity="other">ပရောဂျက် %1$d ခု</item>
     </plurals>
-    <string name="home_main_checkout">main checkout</string>
+    <string name="home_main_checkout">ပင်မ checkout</string>
     <plurals name="home_worktree_count">
         <item quantity="other">worktree %1$d ခု</item>
     </plurals>
@@ -258,7 +258,7 @@
     <string name="home_session_actions_title">ဆက်ရှင် လုပ်ဆောင်ချက်များ</string>
     <string name="home_session_actions_rename">ဆက်ရှင် အမည်ပြောင်းရန်</string>
     <string name="home_session_actions_fork">ဆက်ရှင် fork လုပ်ရန်</string>
-    <string name="home_session_actions_archive">မှတ်တမ်းသို့ ရွှေ့ရန်</string>
+    <string name="home_session_actions_archive">မော်ကွန်းတင်ရန်</string>
     <string name="home_rename_title">ဆက်ရှင် အမည်ပြောင်းရန်</string>
     <string name="home_session_title_hint">ခေါင်းစဉ်</string>
     <string name="home_fork_title">ဆက်ရှင် fork လုပ်ရန်</string>
@@ -270,12 +270,12 @@
     <string name="home_delete_message">ဆက်ရှင် “%1$s” ကို ဖျက်မလား။</string>
     <string name="home_session_error_empty_title">ဆက်ရှင်ခေါင်းစဉ် ထည့်ပါ</string>
     <string name="home_session_error_nothing_to_fork">fork လုပ်စရာ မရှိသေးပါ</string>
-    <string name="home_session_error_archive_failed">ဆက်ရှင်ကို မှတ်တမ်းသို့ ရွှေ့၍ မရပါ။</string>
+    <string name="home_session_error_archive_failed">ဆက်ရှင်ကို မော်ကွန်းတင်၍ မရပါ။</string>
     <string name="home_session_error_delete_failed">ဆက်ရှင်ကို ဖျက်၍ မရပါ။</string>
     <string name="home_session_error_request_failed">တောင်းဆိုမှု မအောင်မြင်ပါ</string>
     <string name="home_session_error_unreadable_response">ဆာဗာ၏ တုံ့ပြန်ချက်ကို ဖတ်၍ မရပါ</string>
     <string name="home_session_error_generic">တစ်ခုခု မှားယွင်းသွားသည်</string>
-    <string name="archived_sessions_title">မှတ်တမ်းသို့ ရွှေ့ထားသော ဆက်ရှင်များ</string>
+    <string name="archived_sessions_title">မော်ကွန်းတင်ထားသော ဆက်ရှင်များ</string>
     <string name="home_menu_archived_count">%2$s တွင် %1$d</string>
     <string name="archived_sessions_section_this_week">ဤအပတ်</string>
     <string name="archived_sessions_section_earlier">ယခင်က</string>
@@ -284,11 +284,11 @@
     <string name="archived_sessions_delete_dialog_message">“%1$s” ကို ဆာဗာမှ ဖျက်မည်။ ပြန်ရယူ၍ မရပါ။</string>
     <string name="archived_sessions_archived_at">%1$s က မှတ်တမ်းသို့ ရွှေ့ခဲ့သည်</string>
     <string name="archived_sessions_unarchived">“%1$s” ကို မှတ်တမ်းမှ ပြန်ထုတ်လိုက်သည်</string>
-    <string name="archived_sessions_undo">မလုပ်တော့ပါ</string>
-    <string name="archived_sessions_empty_title">မှတ်တမ်းသို့ ရွှေ့ထားသော ဆက်ရှင် မရှိပါ</string>
-    <string name="archived_sessions_empty_message">%1$s တွင် မှတ်တမ်းသို့ ရွှေ့သော ဆက်ရှင်များ ဤနေရာတွင် ပေါ်လာမည်။</string>
+    <string name="archived_sessions_undo">ပြန်ရုပ်သိမ်းရန်</string>
+    <string name="archived_sessions_empty_title">မော်ကွန်းတင်ထားသော ဆက်ရှင် မရှိပါ</string>
+    <string name="archived_sessions_empty_message">%1$s တွင် မော်ကွန်းတင်သော ဆက်ရှင်များ ဤနေရာတွင် ပေါ်လာမည်။</string>
     <string name="archived_sessions_show_all_projects">ပရောဂျက်အားလုံး ပြရန်</string>
-    <string name="archived_sessions_footer">ဆက်ရှင်ကို နှိပ်၍ ပိုကြည့်ပါ။ မှတ်တမ်းမှ ပြန်ထုတ်လျှင် ပင်မသို့ ပြန်ရောက်မည်။</string>
+    <string name="archived_sessions_footer">ဆက်ရှင်ကို နှိပ်၍ ပိုကြည့်ပါ။ မော်ကွန်းမှ ပြန်ထုတ်လျှင် ပင်မသို့ ပြန်ရောက်မည်။</string>
     <string name="archived_sessions_load_failed">မှတ်တမ်းသို့ ရွှေ့ထားသော ဆက်ရှင်များကို ဖွင့်၍ မရပါ။</string>
     <string name="archived_sessions_unarchive_failed">ဆက်ရှင်ကို မှတ်တမ်းမှ ပြန်ထုတ်၍ မရပါ။</string>
     <string name="session_chat_archived_banner">%1$s က မှတ်တမ်းသို့ ရွှေ့ခဲ့သည်</string>
@@ -323,7 +323,7 @@
         <item quantity="other">ပထမဆုံး ဖိုလ်ဒါ %1$d ခုကို ပြထားသည်။ စာရင်းကို ကျဉ်းရန် အမည်ကို ပိုရိုက်ပါ။</item>
     </plurals>
     <string name="add_project_in_folder">%1$s ထဲတွင်</string>
-    <string name="add_project_root_home">ပင်မ</string>
+    <string name="add_project_root_home">ဟို့မ်</string>
     <string name="add_project_error_add_failed">ဤဖိုလ်ဒါကို ထည့်၍ မရပါ</string>
     <string name="worktree_new_row">worktree အသစ်…</string>
     <string name="worktree_run_in_subtitle">checkout တစ်ခု ဖန်တီးပြီး ထိုနေရာတွင် စတင်ရန်</string>
@@ -380,7 +380,7 @@
     <string name="files_no_file_title">ဖိုင်စာရင်းမှ ဖိုင်တစ်ခု ဖွင့်ပါ</string>
     <string name="files_no_file_message">ဖွင့်ထားသောဖိုင်များ တက်ဘ်အဖြစ် ကျန်နေမည်</string>
     <string name="files_path_copied">လမ်းကြောင်း ကူးယူထားသည်</string>
-    <string name="file_viewer_copy_path">လမ်းကြောင်း မိတ္တူကူးရန်</string>
+    <string name="file_viewer_copy_path">လမ်းကြောင်း ကူးရန်</string>
     <string name="file_viewer_wrap_lines">စာကြောင်းများ ခွဲပြရန်</string>
     <string name="file_viewer_wrap_lines_on">စာကြောင်းများ ခွဲပြရန်၊ ဖွင့်ထားသည်</string>
     <string name="file_viewer_wrap_lines_off">စာကြောင်းများ ခွဲပြရန်၊ ပိတ်ထားသည်</string>
@@ -446,8 +446,8 @@
     <string name="session_chat_menu_fork">ဆက်ရှင် fork လုပ်ရန်</string>
     <string name="session_chat_menu_browse_files">ဖိုင်များ ရှာကြည့်ရန်</string>
     <string name="session_chat_menu_session_context">ဆက်ရှင် ဆက်စပ်အကြောင်းအရာ</string>
-    <string name="session_chat_menu_copy_session_id">ဆက်ရှင် ID မိတ္တူကူးရန်</string>
-    <string name="session_chat_menu_archive">မှတ်တမ်းသို့ ရွှေ့ရန်</string>
+    <string name="session_chat_menu_copy_session_id">ဆက်ရှင် ID ကူးရန်</string>
+    <string name="session_chat_menu_archive">မော်ကွန်းတင်ရန်</string>
     <string name="session_chat_menu_report_problem">ပြဿနာ တင်ပြရန်</string>
     <string name="session_chat_menu_delete">ဖျက်ပါ</string>
     <string name="session_chat_delete_dialog_title">ဆက်ရှင် ဖျက်ရန်</string>
@@ -476,12 +476,12 @@
     <string name="session_chat_commands_new_description">ဆက်ရှင်အသစ် စတင်ရန်</string>
     <string name="session_chat_commands_fork_label">Fork</string>
     <string name="session_chat_commands_fork_description">ဤဆက်ရှင်ကို fork လုပ်ရန်</string>
-    <string name="session_chat_commands_undo_label">မလုပ်တော့ပါ</string>
-    <string name="session_chat_commands_undo_description">နောက်ဆုံးမက်ဆေ့ချ်ကို မလုပ်တော့ပါ</string>
+    <string name="session_chat_commands_undo_label">ပြန်ရုပ်သိမ်းရန်</string>
+    <string name="session_chat_commands_undo_description">နောက်ဆုံးမက်ဆေ့ချ်ကို ပြန်ရုပ်သိမ်းရန်</string>
     <string name="session_chat_commands_redo_label">ပြန်လုပ်ပါ</string>
     <string name="session_chat_commands_redo_description">မလုပ်တော့သော မက်ဆေ့ချ်ကို ပြန်လုပ်ပါ</string>
-    <string name="session_chat_commands_compact_label">ကျစ်လျစ်ရန်</string>
-    <string name="session_chat_commands_compact_description">ဆက်ရှင် ဆက်စပ်အကြောင်းအရာကို ကျစ်လျစ်ရန်</string>
+    <string name="session_chat_commands_compact_label">ချုံ့ရန်</string>
+    <string name="session_chat_commands_compact_description">ဆက်ရှင် ဆက်စပ်အကြောင်းအရာကို ချုံ့ရန်</string>
     <string name="session_chat_commands_terminal_label">တာမီနယ်</string>
     <string name="session_chat_commands_terminal_description">ပရောဂျက် shell ဖွင့်ရန်</string>
     <string name="session_chat_commands_files_label">ဖိုင်များ</string>
@@ -493,7 +493,7 @@
     <string name="session_chat_suggestion_file">ဖိုင်</string>
     <string name="session_chat_suggestion_no_matches">ကိုက်ညီမှု မရှိပါ</string>
     <string name="session_chat_suggestion_no_commands">အမိန့် မရှိပါ</string>
-    <string name="session_chat_suggestion_badge_skill">ကျွမ်းကျင်မှု</string>
+    <string name="session_chat_suggestion_badge_skill">skill</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
     <string name="session_chat_move_worktree_current">လက်ရှိ worktree</string>
     <string name="session_chat_move_worktree_menu_title">worktree သို့ ရွှေ့ရန်…</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_model_chip_loading">မော်ဒယ် ဖွင့်နေသည်…</string>
     <string name="session_chat_model_notice_load_failed">မော်ဒယ်များကို ဖွင့်၍ မရပါ။ ပြန်ကြိုးစားရန် မော်ဒယ်ကို နှိပ်ပါ။</string>
     <string name="session_chat_model_notice_none_usable">သုံးနိုင်သော မော်ဒယ် မရှိပါ။ ပြန်ကြိုးစားရန် မော်ဒယ်ကို နှိပ်ပါ။</string>
-    <string name="session_chat_model_notice_variant_unavailable">မှတ်ထားသော Variant မရနိုင်ပါ။ မူလကို သုံးနေသည်။</string>
+    <string name="session_chat_model_notice_variant_unavailable">မှတ်ထားသော မူကွဲ မရနိုင်ပါ။ မူလကို သုံးနေသည်။</string>
     <string name="session_chat_model_notice_model_unavailable">ရွေးထားသော မော်ဒယ် မရနိုင်ပါ။ %1$s ကို သုံးနေသည်။</string>
     <string name="session_chat_side_question_unsupported">/btw သည် ဘေးထွက်မေးခွန်းများကို ဖြေနိုင်သော opencode v2 ဆာဗာ လိုအပ်သည်။ ဤဆာဗာသည် စကားဝိုင်းထဲ မထည့်ဘဲ မဖြေနိုင်ပါ။</string>
     <string name="session_chat_side_question_unavailable">/btw သည် ပိုသစ်သော opencode ဆာဗာ ဗားရှင်း လိုအပ်သည်။</string>
@@ -516,8 +516,8 @@
     <string name="attachment_error_duplicate">ဤဖိုင်ကို တင်ပြီးဖြစ်သည်</string>
     <string name="attachment_error_too_large">ဤဖိုင်သည် %1$d MB ထက် ကြီးသည်။</string>
     <string name="attachment_error_unsupported_type">ဤနေရာတွင် ပုံ၊ PDF သို့မဟုတ် စာသားဖိုင်များကိုသာ ပူးတွဲနိုင်သည်။</string>
-    <string name="attachment_error_model_no_images">ဤမော်ဒယ်သည် ပုံပူးတွဲမှုကို မပံ့ပိုးပါ။</string>
-    <string name="attachment_error_model_no_pdf">ဤမော်ဒယ်သည် PDF ပူးတွဲမှုကို မပံ့ပိုးပါ။</string>
+    <string name="attachment_error_model_no_images">ဤမော်ဒယ်သည် ပုံ ပူးတွဲဖိုင်များကို မပံ့ပိုးပါ။</string>
+    <string name="attachment_error_model_no_pdf">ဤမော်ဒယ်သည် PDF ပူးတွဲဖိုင်များကို မပံ့ပိုးပါ။</string>
     <string name="attachment_error_model_some">ဤမော်ဒယ်သည် ရွေးထားသော ပူးတွဲဖိုင်အချို့ကို မပံ့ပိုးပါ။</string>
     <string name="attachment_error_unreadable">ပူးတွဲဖိုင်ကို ဖတ်၍ မရပါ။</string>
     <string name="attachment_error_upload_failed">အပ်လုဒ် မအောင်မြင်ပါ</string>
@@ -549,7 +549,7 @@
         <item quantity="other">%1$d ခု တန်းစီထားသည်</item>
     </plurals>
     <plurals name="session_chat_activity_queued_prompts">
-        <item quantity="other">တန်းစီထားသော အချက်ပြချက် %1$d ခု</item>
+        <item quantity="other">တန်းစီထားသော prompt %1$d ခု</item>
     </plurals>
     <string name="session_chat_activity_side_question_failed">ဘေးထွက်မေးခွန်း မအောင်မြင်ပါ</string>
     <plurals name="session_chat_activity_side_questions_failed">
@@ -612,17 +612,17 @@
     <string name="timeline_state_error_title">မက်ဆေ့ချ်များ ဖွင့်၍ မရပါ</string>
     <string name="timeline_state_error_fallback">မက်ဆေ့ချ်များ မဖွင့်နိုင်ပါ။</string>
     <string name="timeline_state_retry">ပြန်ကြိုးစားပါ</string>
-    <string name="timeline_state_empty">မက်ဆေ့ချ် မရှိသေးပါ။ စတင်ရန် အချက်ပြချက်တစ်ခု ပို့ပါ။</string>
+    <string name="timeline_state_empty">မက်ဆေ့ချ် မရှိသေးပါ။ စတင်ရန် prompt တစ်ခု ပို့ပါ။</string>
     <string name="timeline_state_refreshing">မက်ဆေ့ချ်များ ပြန်လည်ရယူနေသည်</string>
     <string name="timeline_message_assistant">အကူအညီပေးသူ၏ မက်ဆေ့ချ်</string>
     <string name="timeline_message_actions_hint_long_press">မက်ဆေ့ချ်လုပ်ဆောင်ချက်များကို ပြရန် ဖိထားပါ</string>
     <string name="timeline_message_actions_hint">မက်ဆေ့ချ်လုပ်ဆောင်ချက်များကို ပြသည်</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
-    <string name="timeline_failure_copy">မိတ္တူ</string>
+    <string name="timeline_failure_copy">ကူးရန်</string>
     <string name="timeline_retry_retrying_in">%1$d စက္ကန့်အတွင်း ပြန်ကြိုးစားမည်</string>
     <string name="timeline_retry_attempt_retrying_in">အကြိမ် %1$d၊ %2$d စက္ကန့်အတွင်း ပြန်ကြိုးစားမည်</string>
     <plurals name="timeline_background_work_subagent_count">
-        <item quantity="other">subagent %1$d ခု</item>
+        <item quantity="other">ခွဲအေးဂျင့် %1$d ခု</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
         <item quantity="other">shell %1$d ခု</item>
@@ -632,7 +632,7 @@
     <string name="timeline_background_work_running_spoken">%1$s လုပ်ဆောင်နေသည်</string>
     <string name="timeline_background_work_agent_needs_input">%1$s သည် သင့်အဖြေ လိုအပ်သည်</string>
     <plurals name="timeline_background_work_subagents_need_input">
-        <item quantity="other">subagent %1$d ခုသည် သင့်အဖြေ လိုအပ်သည်</item>
+        <item quantity="other">ခွဲအေးဂျင့် %1$d ခုသည် သင့်အဖြေ လိုအပ်သည်</item>
     </plurals>
     <string name="timeline_background_work_needs_input_running">%1$s · %2$d လုပ်ဆောင်နေသည်</string>
     <string name="timeline_background_work_needs_input_running_spoken">%1$s၊ %2$s လုပ်ဆောင်နေသည်</string>
@@ -656,7 +656,7 @@
     <string name="tool_title_plan">စီမံကိန်း</string>
     <string name="tool_title_edit">ပြင်ရန်</string>
     <string name="tool_title_write">ရေးရန်</string>
-    <string name="tool_title_skill">ကျွမ်းကျင်မှု</string>
+    <string name="tool_title_skill">Skill</string>
     <string name="tool_title_patch">Patch</string>
     <string name="tool_title_get_issue">Issue ရယူရန်</string>
     <string name="tool_title_save_issue">Issue သိမ်းရန်</string>
@@ -700,7 +700,7 @@
         <item quantity="other">ရေးသားမှု %1$d ကြိမ်</item>
     </plurals>
     <plurals name="tool_count_skill">
-        <item quantity="other">ကျွမ်းကျင်မှု %1$d ခု</item>
+        <item quantity="other">skill %1$d ခု</item>
     </plurals>
     <plurals name="tool_count_patch">
         <item quantity="other">patch %1$d ခု</item>
@@ -762,9 +762,9 @@
     <string name="timeline_step_running_named">%1$s ကို လုပ်ဆောင်နေသည်</string>
     <string name="timeline_step_ran_named">%1$s ကို လုပ်ဆောင်ခဲ့သည်</string>
     <string name="timeline_step_ran_command">အမိန့်ကို လုပ်ဆောင်ခဲ့သည်</string>
-    <string name="timeline_step_loading_skill">ကျွမ်းကျင်မှု ဖွင့်နေသည်…</string>
-    <string name="timeline_step_loading_skill_named">ကျွမ်းကျင်မှု %1$s ကို ဖွင့်နေသည်</string>
-    <string name="timeline_step_skill_named">ကျွမ်းကျင်မှု %1$s</string>
+    <string name="timeline_step_loading_skill">skill ဖွင့်နေသည်…</string>
+    <string name="timeline_step_loading_skill_named">skill %1$s ကို ဖွင့်နေသည်</string>
+    <string name="timeline_step_skill_named">Skill %1$s</string>
     <string name="timeline_step_thought_duration">စဉ်းစားခဲ့သည် · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">လေ့လာခဲ့သည် — %1$s</string>
@@ -795,31 +795,31 @@
     <string name="timeline_notice_agent_changed">အေးဂျင့် ပြောင်းသွားသည်</string>
     <string name="timeline_notice_agent_change">%1$s → %2$s</string>
     <string name="timeline_notice_switched_to">ပြောင်းလိုက်သည်</string>
-    <string name="timeline_notice_variant_switched">Variant ကို ပြောင်းလိုက်သည်</string>
-    <string name="timeline_notice_variant_default">Variant ကို မူလသို့ ပြောင်းလိုက်သည်</string>
+    <string name="timeline_notice_variant_switched">မူကွဲကို ပြောင်းလိုက်သည်</string>
+    <string name="timeline_notice_variant_default">မူကွဲကို မူလသို့ ပြောင်းလိုက်သည်</string>
     <string name="timeline_notice_instructions_updated">ညွှန်ကြားချက်များ အပ်ဒိတ်လုပ်ပြီးပြီ</string>
     <string name="timeline_notice_restart">ပြန်စတင်ပြီးနောက် ဆက်လုပ်နေသည်</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">ဆက်စပ်အကြောင်းအရာကို ကျစ်လျစ်ပြီးပြီ</string>
+    <string name="timeline_compaction_title">ဆက်စပ်အကြောင်းအရာကို ချုံ့ပြီးပြီ</string>
     <string name="timeline_compaction_automatic">အလိုအလျောက်</string>
     <string name="timeline_syncing">စင့်ခ်လုပ်နေသည်…</string>
     <string name="timeline_failure_session_work_failed">ဆက်ရှင်အလုပ် မအောင်မြင်ပါ</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">မော်ဒယ် ရွေးပါ</string>
-    <string name="timeline_failure_compact">ကျစ်လျစ်ရန်</string>
-    <string name="session_chat_compact_status">ကျစ်လျစ်နေသည်…</string>
+    <string name="timeline_failure_compact">ချုံ့ရန်</string>
+    <string name="session_chat_compact_status">ချုံ့နေသည်…</string>
     <string name="session_chat_turn_sending">ပို့နေသည်…</string>
     <string name="session_chat_turn_sending_percent">ပို့နေသည် %1$d%%</string>
-    <string name="session_chat_compact_success">ဆက်ရှင်ကို ကျစ်လျစ်ပြီးပါပြီ။</string>
-    <string name="session_chat_compact_success_usage">ဆက်စပ်အကြောင်းအရာ ကျစ်လျစ်ပြီး · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">ဆက်ရှင်၏ ဆက်စပ်အကြောင်းအရာကို ကျစ်လျစ်၍ မရပါ။</string>
-    <string name="session_chat_revert_undo_failed">နောက်ဆုံးမက်ဆေ့ချ်ကို နောက်ပြန်ရုပ်သိမ်း၍ မရပါ။</string>
+    <string name="session_chat_compact_success">ဆက်ရှင်ကို ချုံ့ပြီးပါပြီ။</string>
+    <string name="session_chat_compact_success_usage">ဆက်စပ်အကြောင်းအရာ ချုံ့ပြီး · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">ဆက်ရှင်၏ ဆက်စပ်အကြောင်းအရာကို ချုံ့၍ မရပါ။</string>
+    <string name="session_chat_revert_undo_failed">နောက်ဆုံးမက်ဆေ့ချ်ကို ပြန်ရုပ်သိမ်း၍ မရပါ။</string>
     <string name="session_chat_revert_failed">မက်ဆေ့ချ်ကို မူလအတိုင်း ပြန်ထား၍ မရပါ။</string>
     <string name="session_chat_revert_redo_failed">ပြန်လုပ်၍ မရပါ။</string>
     <string name="session_chat_revert_cancel_failed">ပြန်ထားမှုကို ပယ်ဖျက်၍ မရပါ။</string>
     <string name="session_chat_revert_commit_failed">ပြန်ထားမှုကို အတည်ပြု၍ မရပါ။</string>
     <string name="session_chat_fork_rename_failed">Fork ဖန်တီးပြီးပါပြီ၊ သို့သော် အမည်ပြောင်း၍ မရပါ။</string>
-    <string name="session_chat_pending_prompt_update_failed">စောင့်ဆိုင်းနေသော အချက်ပြချက်ကို အပ်ဒိတ်လုပ်၍ မရပါ</string>
+    <string name="session_chat_pending_prompt_update_failed">စောင့်ဆိုင်းနေသော prompt ကို အပ်ဒိတ်လုပ်၍ မရပါ</string>
     <string name="session_chat_shell_stop_failed">shell ကို ရပ်၍ မရပါ။ ထပ်ကြိုးစားပါ။</string>
     <string name="session_chat_shell_status_running">လုပ်ဆောင်နေသည်</string>
     <string name="session_chat_shell_status_exited">ထွက်ပြီး</string>
@@ -830,7 +830,7 @@
     <string name="session_chat_shell_duration_hours">%1$d နာရီ</string>
     <string name="session_chat_shell_duration_hours_minutes">%1$d နာရီ %2$d မိနစ်</string>
     <string name="session_chat_todos_progress">%1$d/%2$d</string>
-    <string name="session_chat_sheet_copy">မိတ္တူ</string>
+    <string name="session_chat_sheet_copy">ကူးရန်</string>
     <string name="session_chat_sheet_copy_output">ထွက်ရှိချက်ကို ကူးရန်</string>
     <string name="session_chat_sheet_message_actions_title">မက်ဆေ့ချ်</string>
     <string name="session_chat_sheet_message_actions_revert">မက်ဆေ့ချ်ကို မူလအတိုင်း ပြန်ထားရန်</string>
@@ -864,7 +864,7 @@
     <string name="session_chat_sheet_pending_prompts_clear_all">အားလုံး ရှင်းရန်</string>
     <string name="session_chat_sheet_pending_prompts_sending">ပို့နေသည်…</string>
     <string name="session_chat_sheet_pending_prompts_move_to_queue">တန်းစီသို့ ရွှေ့ရန်</string>
-    <string name="session_chat_sheet_pending_prompts_steer_now">ယခု လမ်းညွှန်ပါ</string>
+    <string name="session_chat_sheet_pending_prompts_steer_now">ယခု လမ်းညွှန်ရန်</string>
     <string name="session_chat_sheet_pending_prompts_delete">ဖျက်ပါ</string>
     <string name="session_chat_sheet_side_question_done">ပြီးပြီ</string>
     <string name="session_chat_sheet_side_question_not_added">စကားဝိုင်းထဲသို့ မထည့်ထားပါ</string>
@@ -895,7 +895,7 @@
     </plurals>
     <string name="session_chat_goal_waiting">စောင့်နေသည်</string>
     <string name="session_chat_goal_waiting_shell">နောက်ခံ shell ပြီးဆုံးရန် စောင့်နေသည်- %1$s။ %2$d မိနစ်ကြာ ဘာမျှမလုပ်ဆောင်ပါက ခဏရပ်မည်။</string>
-    <string name="session_chat_goal_waiting_subagent">subagent ပြီးဆုံးရန် စောင့်နေသည်။ %1$d မိနစ်ကြာ ဘာမျှမလုပ်ဆောင်ပါက ခဏရပ်မည်။</string>
+    <string name="session_chat_goal_waiting_subagent">ခွဲအေးဂျင့် ပြီးဆုံးရန် စောင့်နေသည်။ %1$d မိနစ်ကြာ ဘာမျှမလုပ်ဆောင်ပါက ခဏရပ်မည်။</string>
     <string name="session_chat_goal_waiting_on_you">သင့်ကို စောင့်နေသည်</string>
     <string name="session_chat_goal_waiting_permission">ခွင့်ပြုချက်တောင်းဆိုမှု ဖွင့်ထားသည်။ သင်ဖြေပြီးလျှင် ပန်းတိုင် ဆက်လုပ်မည်။</string>
     <string name="session_chat_goal_waiting_question">မေးခွန်းတစ်ခု ဖွင့်ထားသည်။ သင်ဖြေပြီးလျှင် ပန်းတိုင် ဆက်လုပ်မည်။</string>
@@ -955,16 +955,16 @@
     <plurals name="component_branch_pill_uncommitted_files">
         <item quantity="other">commit မလုပ်ရသေးသော ဖိုင် %1$d ခု</item>
     </plurals>
-    <string name="component_branch_pill_a11y_branch">ဘရန့်ချ် %1$s</string>
-    <string name="component_branch_pill_a11y_worktree_branch">Worktree ဘရန့်ချ် %1$s</string>
-    <string name="component_branch_pill_a11y_no_changes">%1$s၊ ပြောင်းလဲမှု မရှိပါ</string>
+    <string name="component_branch_pill_a11y_branch">Branch %1$s</string>
+    <string name="component_branch_pill_a11y_worktree_branch">Worktree branch %1$s</string>
+    <string name="component_branch_pill_a11y_no_changes">%1$s၊ အပြောင်းအလဲ မရှိပါ</string>
     <string name="component_branch_pill_a11y_detail">%1$s၊ %2$s</string>
     <string name="component_branch_pill_a11y_added">%1$s၊ %2$d ခု ထည့်ထားသည်</string>
     <string name="component_branch_pill_a11y_removed">%1$s၊ %2$d ခု ဖယ်ထားသည်</string>
-    <string name="session_chat_archive_failed">အပိုင်းကို မှတ်တမ်းသို့ မထည့်နိုင်ပါ။</string>
-    <string name="session_chat_delete_failed">အပိုင်းကို မဖျက်နိုင်ပါ။</string>
+    <string name="session_chat_archive_failed">ဆက်ရှင်ကို မော်ကွန်းတင်၍ မရပါ။</string>
+    <string name="session_chat_delete_failed">ဆက်ရှင်ကို ဖျက်၍ မရပါ။</string>
     <string name="session_chat_mcp_load_failed">MCP ဆာဗာများကို မဖွင့်နိုင်ပါ။ ချိတ်ဆက်မှုကို စစ်ပြီး ထပ်ကြိုးစားပါ။</string>
-    <string name="session_chat_create_failed">အပိုင်းကို မဖန်တီးနိုင်ပါ</string>
+    <string name="session_chat_create_failed">ဆက်ရှင်ကို မဖန်တီးနိုင်ပါ</string>
     <string name="session_chat_send_timed_out">မပို့နိုင်ပါ။ ထပ်ကြိုးစားပါ။</string>
     <string name="session_chat_shell_cannot_queue">Shell အမိန့်များကို တန်းစီ၍ မရပါ။ ယခုလုပ်ရန် လမ်းညွှန်ခြင်းသို့ ပြောင်းပါ။</string>
     <string name="session_chat_reply_error_permission">သင့်အဖြေကို မပို့နိုင်ပါ။ ထပ်ကြိုးစားပါ။</string>
@@ -975,8 +975,8 @@
     <string name="session_chat_reply_error_dismiss_reason">မေးခွန်းကို ပိတ်၍ မရပါ။ %1$s။</string>
     <string name="session_chat_permission_unavailable">ခွင့်ပြုချက်တောင်းဆိုမှုကို မရနိုင်တော့ပါ</string>
     <string name="session_chat_question_unavailable">မေးခွန်းတောင်းဆိုမှုကို မရနိုင်တော့ပါ</string>
-    <string name="session_chat_permission_tree_failed">ခွင့်ပြုချက် အပိုင်းအစုကို ပြန်လည်မရယူနိုင်ပါ</string>
-    <string name="session_chat_question_tree_failed">မေးခွန်း အပိုင်းအစုကို ပြန်လည်မရယူနိုင်ပါ</string>
+    <string name="session_chat_permission_tree_failed">ခွင့်ပြုချက်ဆိုင်ရာ ဆက်ရှင်အဆင့်ဆင့်ကို ပြန်လည်ရယူ၍ မရပါ</string>
+    <string name="session_chat_question_tree_failed">မေးခွန်းဆိုင်ရာ ဆက်ရှင်အဆင့်ဆင့်ကို ပြန်လည်ရယူ၍ မရပါ</string>
     <string name="session_chat_sheet_timeline_style_picker_title">အသစ်- သင့်အချိန်ကြောင်းကို ရွေးပါ</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">ဤအပ်ဒိတ်တွင် အေးဂျင့်လုပ်ဆောင်နေသည်များကို ခြေရာခံရန် နည်းလမ်းအသစ်များ ပါဝင်သည်။</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">ဆက်တင်များ → အချိန်ကြောင်းပုံစံတွင် အချိန်မရွေး ပြောင်းနိုင်သည်။</string>
@@ -986,7 +986,7 @@
     <string name="session_chat_sheet_timeline_style_picker_standard_title">စံ</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">အေးဂျင့်၏ မက်ဆေ့ချ်များကြားရှိ ကိရိယာကတ်များနှင့် အုပ်စုများ</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">အဆင့်လမ်းကြောင်း</string>
-    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">လမ်းကြောင်းပေါ်တွင် အဆင့်တစ်ခုလျှင် တစ်ကြောင်း၊ အေးဂျင့်အလုပ်လုပ်နေစဉ် တိုက်ရိုက်ပြသည်</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">လမ်းကြောင်းပေါ်တွင် အဆင့်တစ်ခုလျှင် စာကြောင်းတစ်ကြောင်း၊ အေးဂျင့်အလုပ်လုပ်နေစဉ် တိုက်ရိုက်ပြသည်</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">လုပ်ဆောင်ချက်ကတ်</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">လုပ်ဆောင်နေသောအဆင့်များကို တိုက်ရိုက်ကတ်တစ်ခုတည်းတွင်ပြပြီး အနှစ်ချုပ်အဖြစ် ခေါက်သိမ်းသည်</string>
     <string name="session_chat_sheet_picker_model">မော်ဒယ်</string>
@@ -995,7 +995,7 @@
     <string name="session_chat_sheet_picker_back_to_providers">ဝန်ဆောင်မှုပေးသူများသို့ ပြန်သွားရန်</string>
     <string name="session_chat_sheet_picker_no_models_match">သင့်စစ်ထုတ်မှုနှင့် ကိုက်ညီသော မော်ဒယ် မရှိပါ</string>
     <string name="session_chat_sheet_picker_filter_models_hint">မော်ဒယ်များ စစ်ထုတ်ရန်...</string>
-    <string name="session_chat_sheet_tool_detail_provider_response">ပံ့ပိုးပေးသူ၏ တုံ့ပြန်ချက်</string>
+    <string name="session_chat_sheet_tool_detail_provider_response">ဝန်ဆောင်မှုပေးသူ၏ တုံ့ပြန်ချက်</string>
     <string name="session_chat_sheet_tool_detail_tool">ကိရိယာ</string>
     <string name="session_chat_sheet_tool_result_exit_code">ထွက်ကုဒ် %1$d</string>
     <plurals name="session_chat_sheet_tool_result_matches">
@@ -1005,11 +1005,11 @@
         <item quantity="other">ဖိုင် %1$d ခု</item>
     </plurals>
     <plurals name="session_chat_sheet_tool_result_lines">
-        <item quantity="other">လိုင်း %1$d ကြောင်း</item>
+        <item quantity="other">စာကြောင်း %1$d ကြောင်း</item>
     </plurals>
     <string name="session_chat_sheet_tool_result_copy_link">%1$s ကို ကူးရန်</string>
     <string name="session_chat_sheet_tool_result_copies_link_hint">လင့်ခ်ကို ကူးသည်</string>
-    <string name="session_chat_sheet_tool_result_line_accessibility">လိုင်း %1$d၊ %2$s</string>
+    <string name="session_chat_sheet_tool_result_line_accessibility">စာကြောင်း %1$d၊ %2$s</string>
     <string name="session_chat_sheet_shell_title">Shell</string>
     <string name="session_chat_sheet_shell_command_accessibility">အမိန့်၊ %1$s</string>
     <string name="session_chat_sheet_shell_no_output">ထွက်ရှိချက် မရှိသေးပါ</string>
@@ -1017,7 +1017,7 @@
     <string name="session_chat_sheet_shell_stop">Shell ကို ရပ်ပါ</string>
     <string name="session_chat_sheet_shell_stopping">ရပ်နေသည်…</string>
     <string name="session_chat_sheet_background_work_title">နောက်ခံလုပ်ငန်း</string>
-    <string name="session_chat_sheet_background_work_subagents">Subagent များ</string>
+    <string name="session_chat_sheet_background_work_subagents">ခွဲအေးဂျင့်များ</string>
     <string name="session_chat_sheet_background_work_shells">Shell များ</string>
     <string name="session_chat_sheet_background_work_tab_running">လုပ်ဆောင်နေသည်</string>
     <string name="session_chat_sheet_background_work_tab_done">ပြီးပြီ</string>
@@ -1040,17 +1040,17 @@
         <item quantity="other">ကိရိယာ %1$d ခု</item>
     </plurals>
     <string name="session_chat_sheet_activity_stopped">ရပ်ထားသည်</string>
-    <string name="session_context_title">အပိုင်း၏ ဆက်စပ်အကြောင်းအရာ</string>
-    <string name="session_context_loading_title">အပိုင်း၏ ဆက်စပ်အကြောင်းအရာကို ဖွင့်နေသည်</string>
+    <string name="session_context_title">ဆက်ရှင် ဆက်စပ်အကြောင်းအရာ</string>
+    <string name="session_context_loading_title">ဆက်ရှင် ဆက်စပ်အကြောင်းအရာကို ဖွင့်နေသည်</string>
     <string name="session_context_loading_subtitle">ဆက်စပ်အကြောင်းအရာ ရယူနေသည်…</string>
-    <string name="session_context_load_failed">အပိုင်း၏ ဆက်စပ်အကြောင်းအရာကို မဖွင့်နိုင်ပါ</string>
+    <string name="session_context_load_failed">ဆက်ရှင် ဆက်စပ်အကြောင်းအရာကို မဖွင့်နိုင်ပါ</string>
     <string name="session_context_load_failed_message">ဆက်စပ်အကြောင်းအရာ မဖွင့်နိုင်ပါ။</string>
-    <string name="session_context_refresh_failed">အပိုင်း၏ ဆက်စပ်အကြောင်းအရာကို ပြန်လည်မရယူနိုင်ပါ</string>
-    <string name="session_context_refreshing">အပိုင်း၏ ဆက်စပ်အကြောင်းအရာကို ပြန်လည်ရယူနေသည်</string>
+    <string name="session_context_refresh_failed">ဆက်ရှင် ဆက်စပ်အကြောင်းအရာကို ပြန်လည်ရယူ၍ မရပါ</string>
+    <string name="session_context_refreshing">ဆက်ရှင် ဆက်စပ်အကြောင်းအရာကို ပြန်လည်ရယူနေသည်</string>
     <string name="session_context_retry">ပြန်ကြိုးစားပါ</string>
-    <string name="session_context_stat_session">အပိုင်း</string>
+    <string name="session_context_stat_session">ဆက်ရှင်</string>
     <string name="session_context_stat_messages">မက်ဆေ့ချ်များ</string>
-    <string name="session_context_stat_provider">ပံ့ပိုးပေးသူ</string>
+    <string name="session_context_stat_provider">ဝန်ဆောင်မှုပေးသူ</string>
     <string name="session_context_stat_model">မော်ဒယ်</string>
     <string name="session_context_stat_context_limit">ဆက်စပ်အကြောင်းအရာ ကန့်သတ်ချက်</string>
     <string name="session_context_stat_total_tokens">စုစုပေါင်း တိုကင်</string>
@@ -1062,7 +1062,7 @@
     <string name="session_context_stat_user_messages">အသုံးပြုသူ မက်ဆေ့ချ်များ</string>
     <string name="session_context_stat_assistant_messages">အကူအညီပေးသူ မက်ဆေ့ချ်များ</string>
     <string name="session_context_stat_total_cost">စုစုပေါင်း ကုန်ကျစရိတ်</string>
-    <string name="session_context_stat_created">အပိုင်း ဖန်တီးသည့်အချိန်</string>
+    <string name="session_context_stat_created">ဆက်ရှင် ဖန်တီးသည့်အချိန်</string>
     <string name="session_context_stat_last_activity">နောက်ဆုံး လုပ်ဆောင်ချက်</string>
     <string name="session_context_breakdown_title">ဆက်စပ်အကြောင်းအရာ ခွဲခြမ်းစိတ်ဖြာချက်</string>
     <string name="session_context_breakdown_system">စနစ်</string>
@@ -1078,7 +1078,7 @@
     <string name="settings_section_appearance">အသွင်အပြင်</string>
     <string name="settings_appearance_subtitle">%1$s · %2$s</string>
     <string name="settings_section_home">ပင်မ</string>
-    <string name="settings_section_session_cache">အပိုင်း cache</string>
+    <string name="settings_section_session_cache">ဆက်ရှင် cache</string>
     <string name="settings_section_privacy">ကိုယ်ရေးကိုယ်တာ</string>
     <string name="settings_section_about">အကြောင်း</string>
     <string name="settings_servers_summary_none">သိမ်းထားသော ဆာဗာ မရှိပါ</string>
@@ -1093,7 +1093,7 @@
     <string name="settings_hide_user_directory_title">အသုံးပြုသူဖိုလ်ဒါကို ဝှက်ရန်</string>
     <string name="settings_hide_user_directory_subtitle">/Users/you/Projects/… အစား ~/Projects/… ကို ပြမည်</string>
     <string name="settings_recent_window_title">မကြာသေးမီ ကာလ</string>
-    <string name="settings_recent_window_message">လုပ်ဆောင်နေစဉ် သို့မဟုတ် အဆင်သင့်ဖြစ်စဉ်၊ သို့မဟုတ် ဤကာလအတွင်း အပ်ဒိတ်လုပ်ထားသော အပိုင်းများသည် မကြာသေးမီတွင် ရှိနေမည်။</string>
+    <string name="settings_recent_window_message">လုပ်ဆောင်နေစဉ် သို့မဟုတ် အဆင်သင့်ဖြစ်စဉ်၊ သို့မဟုတ် ဤကာလအတွင်း အပ်ဒိတ်လုပ်ထားသော ဆက်ရှင်များသည် မကြာသေးမီတွင် ရှိနေမည်။</string>
     <plurals name="settings_recent_window_hours">
         <item quantity="other">%1$d နာရီ</item>
     </plurals>
@@ -1103,7 +1103,7 @@
     <string name="settings_timeline_style_standard_title">စံ</string>
     <string name="settings_timeline_style_standard_subtitle">အေးဂျင့်၏ မက်ဆေ့ချ်များကြားရှိ ကိရိယာကတ်များနှင့် အုပ်စုများ</string>
     <string name="settings_timeline_style_step_rail_title">အဆင့်လမ်းကြောင်း</string>
-    <string name="settings_timeline_style_step_rail_subtitle">လမ်းကြောင်းပေါ်တွင် အဆင့်တစ်ခုလျှင် တစ်ကြောင်း၊ အေးဂျင့်အလုပ်လုပ်နေစဉ် တိုက်ရိုက်ပြသည်</string>
+    <string name="settings_timeline_style_step_rail_subtitle">လမ်းကြောင်းပေါ်တွင် အဆင့်တစ်ခုလျှင် စာကြောင်းတစ်ကြောင်း၊ အေးဂျင့်အလုပ်လုပ်နေစဉ် တိုက်ရိုက်ပြသည်</string>
     <string name="settings_timeline_style_activity_card_title">လုပ်ဆောင်ချက်ကတ်</string>
     <string name="settings_timeline_style_activity_card_subtitle">လုပ်ဆောင်နေသောအဆင့်များကို တိုက်ရိုက်ကတ်တစ်ခုတည်းတွင်ပြပြီး အနှစ်ချုပ်အဖြစ် ခေါက်သိမ်းသည်</string>
     <string name="settings_follow_up_title">နောက်ဆက်တွဲ ပို့ခြင်း</string>
@@ -1113,20 +1113,20 @@
     <string name="settings_follow_up_subtitle_queue">တန်းစီခြင်း · V2 ဆာဗာများတွင်သာ။ V1 တွင် မပံ့ပိုးပါ။</string>
     <string name="settings_follow_up_unsupported">V1 တွင် မပံ့ပိုးပါ။ ဤဆာဗာသည် အမြဲ ချက်ချင်းပို့သည်။</string>
     <string name="settings_worktrees_title">Worktree များ</string>
-    <string name="settings_worktrees_subtitle">ပင်မစာမျက်နှာတွင် ပရောဂျက်တစ်ခုစီ၏ worktree နှင့် ဘရန့်ချ်များကို ပြပြီး စက်ရှင်အသစ်ကို ဖိထားလျှင် worktree ရွေးခွင့်ပေးသည်။</string>
-    <string name="settings_session_rows_title">အပိုင်းအတန်းများ</string>
-    <string name="settings_session_rows_compact_title">ကျစ်လစ်</string>
-    <string name="settings_session_rows_compact_subtitle">နှစ်ကြောင်း- ခေါင်းစဉ်နှင့် အချိန်၊ ထို့နောက် ပရောဂျက် / worktree</string>
+    <string name="settings_worktrees_subtitle">ပင်မစာမျက်နှာတွင် ပရောဂျက်တစ်ခုစီ၏ worktree နှင့် branch များကို ပြပြီး ဆက်ရှင်အသစ်ကို ဖိထားလျှင် worktree ရွေးခွင့်ပေးသည်။</string>
+    <string name="settings_session_rows_title">ဆက်ရှင်အတန်းများ</string>
+    <string name="settings_session_rows_compact_title">ကျစ်လျစ်</string>
+    <string name="settings_session_rows_compact_subtitle">စာကြောင်းနှစ်ကြောင်း- ခေါင်းစဉ်နှင့် အချိန်၊ ထို့နောက် ပရောဂျက် / worktree</string>
     <string name="settings_session_rows_classic_title">ရိုးရာ</string>
-    <string name="settings_session_rows_classic_subtitle">ပရောဂျက်နှင့် worktree ကို သီးခြားလိုင်းများတွင်</string>
+    <string name="settings_session_rows_classic_subtitle">ပရောဂျက်နှင့် worktree ကို သီးခြားစာကြောင်းများတွင်</string>
     <string name="settings_session_cache_size">အရွယ်အစား</string>
-    <string name="settings_session_cache_size_label">အပိုင်း cache အရွယ်အစား</string>
+    <string name="settings_session_cache_size_label">ဆက်ရှင် cache အရွယ်အစား</string>
     <string name="settings_session_cache_empty">ဗလာ</string>
     <string name="settings_session_cache_bytes">%1$d B</string>
-    <string name="settings_clear_session_cache_title">အပိုင်း cache ကို ရှင်းရန်</string>
-    <string name="settings_clear_session_cache_subtitle">cache လုပ်ထားသော အပိုင်းများနှင့် မက်ဆေ့ချ်များကို ဖယ်ရှားသည်</string>
-    <string name="settings_clear_session_cache_dialog_title">အပိုင်း cache ကို ရှင်းမလား။</string>
-    <string name="settings_clear_session_cache_dialog_message">cache လုပ်ထားသော အပိုင်းများနှင့် မက်ဆေ့ချ်များကို ဖယ်ရှားမည်။ သင့်ချိတ်ဆက်မှုနှင့် အထောက်အထားများ ဆက်ရှိမည်။</string>
+    <string name="settings_clear_session_cache_title">ဆက်ရှင် cache ကို ရှင်းရန်</string>
+    <string name="settings_clear_session_cache_subtitle">cache လုပ်ထားသော ဆက်ရှင်များနှင့် မက်ဆေ့ချ်များကို ဖယ်ရှားသည်</string>
+    <string name="settings_clear_session_cache_dialog_title">ဆက်ရှင် cache ကို ရှင်းမလား။</string>
+    <string name="settings_clear_session_cache_dialog_message">cache လုပ်ထားသော ဆက်ရှင်များနှင့် မက်ဆေ့ချ်များကို ဖယ်ရှားမည်။ သင့်ချိတ်ဆက်မှုနှင့် အထောက်အထားများ ဆက်ရှိမည်။</string>
     <string name="settings_clear">ရှင်းရန်</string>
     <string name="settings_app_lock_title">အက်ပ်လော့ခ်</string>
     <string name="settings_app_lock_subtitle_available">အက်ပ်ကို နောက်ခံမှ ပြန်ဖွင့်သည့်အခါ လက်ဗွေ၊ မျက်နှာ သို့မဟုတ် ဖန်သားပြင်လော့ခ် လိုအပ်စေမည်</string>
@@ -1153,7 +1153,7 @@
     <string name="diagnostics_loading">Diagnostic မှတ်တမ်းများကို ဖွင့်နေသည်</string>
     <string name="diagnostics_entries_title">ထည့်သွင်းချက်များ</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="other">သိမ်းထားသောကာလတွင် ဖုံးကွယ်ထားသော လိုင်း %1$d ကြောင်း</item>
+        <item quantity="other">သိမ်းထားသောကာလတွင် ဖုံးကွယ်ထားသော စာကြောင်း %1$d ကြောင်း</item>
     </plurals>
     <string name="diagnostics_entries_empty">သိမ်းထားသောကာလတွင် ထည့်သွင်းချက် မရှိသေးပါ</string>
     <string name="diagnostics_kept_title">သိမ်းထားသည်</string>
@@ -1200,7 +1200,7 @@
     <string name="appearance_preview_light">အလင်း</string>
     <string name="appearance_preview_dark">အမှောင်</string>
     <string name="appearance_preview_sample_message">တိုကင်သိုလှောင်ရာကို လျှောက်ကြည့်ပါ။</string>
-    <string name="appearance_preview_sample_reply">တစ်ကြိမ်ပြန်လည်ရယူပြီး ထပ်ကြိုးစားမည်။</string>
+    <string name="appearance_preview_sample_reply">တစ်ကြိမ်ပြန်လည်ရယူပြီး ပြန်ကြိုးစားမည်။</string>
     <string name="appearance_more_options">နောက်ထပ် ရွေးစရာများ</string>
     <string name="appearance_reset_text_sizes">စာလုံးအရွယ်အစားများကို ပြန်သတ်မှတ်ရန်</string>
     <string name="appearance_reset_all">အသွင်အပြင်အားလုံး ပြန်သတ်မှတ်ရန်</string>
@@ -1212,7 +1212,7 @@
     <string name="appearance_mode_note_light">ဖုန်းကို မည်သို့သတ်မှတ်ထားစေ အမြဲ အလင်း။</string>
     <string name="appearance_mode_note_dark">ဖုန်းကို မည်သို့သတ်မှတ်ထားစေ အမြဲ အမှောင်။</string>
     <string name="appearance_text_home_title">ပင်မစာရင်း စာသား</string>
-    <string name="appearance_text_session_chat_title">အပိုင်းစကားပြော စာသား</string>
+    <string name="appearance_text_session_chat_title">ဆက်ရှင်စကားပြော စာသား</string>
     <string name="appearance_text_code_title">ကုဒ် စာသား</string>
     <string name="appearance_text_size_label">အရွယ်အစား</string>
     <string name="appearance_text_size_accessibility">%1$s အရွယ်အစား</string>
@@ -1222,8 +1222,8 @@
     <string name="appearance_text_size_default">မူလ</string>
     <string name="appearance_text_size_large">ကြီး</string>
     <string name="appearance_text_size_extra_large">အလွန်ကြီး</string>
-    <string name="appearance_text_code_note">တာမီနယ်၊ ပြောင်းလဲမှုများ၊ ဖိုင်ကြည့်ရှုသူနှင့် ကိရိယာ ထွက်ရှိချက်။</string>
-    <string name="appearance_text_session_chat_note">မက်ဆေ့ချ်များနှင့် စာရိုက်ကွက်အတွင်းရှိ ကုဒ်ဘလောက်များသည် အပိုင်းစကားပြော အရွယ်အစားကို လိုက်နာသည်။</string>
+    <string name="appearance_text_code_note">တာမီနယ်၊ အပြောင်းအလဲများ၊ ဖိုင်ကြည့်ရှုသူနှင့် ကိရိယာ ထွက်ရှိချက်။</string>
+    <string name="appearance_text_session_chat_note">မက်ဆေ့ချ်များနှင့် စာရိုက်ကွက်အတွင်းရှိ ကုဒ်ဘလောက်များသည် ဆက်ရှင်စကားပြော အရွယ်အစားကို လိုက်နာသည်။</string>
     <string name="appearance_sample_session_one">မတည်ငြိမ်သော login redirect စမ်းသပ်မှုကို ပြင်ပါ</string>
     <string name="appearance_sample_session_two">ဆက်တင်များကို store အသစ်သို့ ရွှေ့ပါ</string>
     <string name="appearance_sample_time_now">ယခု</string>
@@ -1253,7 +1253,7 @@
     <string name="feedback_error_failed">အစီရင်ခံစာကို မပို့နိုင်ပါ။</string>
     <string name="feedback_action_try_again">ထပ်ကြိုးစားရန်</string>
     <string name="feedback_action_share_instead">အစား မျှဝေရန်</string>
-    <string name="feedback_undo">မလုပ်တော့ပါ</string>
+    <string name="feedback_undo">ပြန်ရုပ်သိမ်းရန်</string>
     <string name="feedback_done">ပြီးပြီ</string>
     <string name="feedback_add_attachment">ပူးတွဲဖိုင် ထည့်ရန်</string>
     <string name="feedback_dictate">အသံဖြင့်ရေးရန်</string>
@@ -1283,7 +1283,7 @@
         <item quantity="other">နောက်ဆုံး %1$d မိနစ် · တင်သည့်အခါ gzip ချုံ့မည်။ ဤဖုန်းပေါ်တွင် ဖုံးကွယ်ထားသည်။</item>
     </plurals>
     <string name="feedback_log_preview_loading">ဖွင့်နေသည်…</string>
-    <string name="feedback_log_preview_empty_title">မှတ်တမ်းလိုင်း မရှိပါ</string>
+    <string name="feedback_log_preview_empty_title">မှတ်တမ်းစာကြောင်း မရှိပါ</string>
     <plurals name="feedback_log_preview_empty_message">
         <item quantity="other">နောက်ဆုံး %1$d မိနစ်အတွင်း မည်သည့်အရာမျှ မှတ်တမ်းမတင်ခဲ့ပါ။</item>
     </plurals>
@@ -1295,15 +1295,15 @@
     <string name="feedback_dictation_microphone_off">မိုက်ခရိုဖုန်း ခွင့်ပြုချက် ပိတ်ထားသည်</string>
     <string name="feedback_dictation_listening">နားထောင်နေသည် · %1$s</string>
     <string name="feedback_dictation_listening_on_device">နားထောင်နေသည် · %1$s · စက်ပေါ်တွင်</string>
-    <string name="session_search_title">အပိုင်းများ ရှာရန်</string>
+    <string name="session_search_title">ဆက်ရှင်များ ရှာရန်</string>
     <string name="session_search_clear">ရှာဖွေမှု ရှင်းရန်</string>
     <string name="session_search_placeholder">%1$s တွင် ရှာရန်</string>
-    <string name="session_search_hint">%1$s ရှိ အပိုင်းခေါင်းစဉ်များနှင့် ကိုက်ညီသည်။</string>
+    <string name="session_search_hint">%1$s ရှိ ဆက်ရှင်ခေါင်းစဉ်များနှင့် ကိုက်ညီသည်။</string>
     <string name="session_search_searching">ရှာနေသည်…</string>
     <plurals name="session_search_results">
         <item quantity="other">ရလဒ် %1$d ခု</item>
     </plurals>
-    <string name="session_search_no_match_title">“%1$s” နှင့် ကိုက်ညီသော အပိုင်း မရှိပါ</string>
+    <string name="session_search_no_match_title">“%1$s” နှင့် ကိုက်ညီသော ဆက်ရှင် မရှိပါ</string>
     <string name="session_search_no_match_message">%1$s တွင်</string>
     <string name="session_search_search_all_projects">ပရောဂျက်အားလုံး ရှာရန်</string>
     <string name="session_search_include_archived">မှတ်တမ်းထဲရှိများ ထည့်ရန်</string>
@@ -1311,10 +1311,10 @@
     <string name="session_search_archived_section">မှတ်တမ်းထဲ</string>
     <string name="session_search_archived_tag">မှတ်တမ်းထဲ</string>
     <string name="session_search_scope_selected">%1$s၊ ရွေးထားသည်</string>
-    <string name="keyboard_shortcuts_group_session">အပိုင်း</string>
+    <string name="keyboard_shortcuts_group_session">ဆက်ရှင်</string>
     <string name="keyboard_shortcuts_group_prompt">Prompt</string>
     <string name="keyboard_shortcuts_group_go">သွားရန်</string>
-    <string name="keyboard_shortcuts_new_session">စက်ရှင်အသစ်</string>
+    <string name="keyboard_shortcuts_new_session">ဆက်ရှင်အသစ်</string>
     <string name="keyboard_shortcuts_command_palette">အမိန့်ရွေးချယ်ခန်း</string>
     <string name="keyboard_shortcuts_choose_model">မော်ဒယ် ရွေးရန်</string>
     <string name="keyboard_shortcuts_settings">ဆက်တင်များ</string>
@@ -1329,10 +1329,10 @@
     <string name="keyboard_shortcuts_submit_answers">အဖြေများ တင်ရန်</string>
     <string name="keyboard_shortcuts_dismiss_question">မေးခွန်း ပိတ်ရန်</string>
     <string name="keyboard_shortcuts_toggle_sidebar">ဘေးဘားကို ပြ/ဝှက်ရန်</string>
-    <string name="keyboard_shortcuts_next_session">နောက်အပိုင်း</string>
-    <string name="keyboard_shortcuts_previous_session">ယခင်အပိုင်း</string>
+    <string name="keyboard_shortcuts_next_session">နောက်ဆက်ရှင်</string>
+    <string name="keyboard_shortcuts_previous_session">ယခင်ဆက်ရှင်</string>
     <string name="keyboard_shortcuts_focus_composer">စာရိုက်ကွက်ကို အာရုံစိုက်ရန်</string>
-    <string name="keyboard_shortcuts_search_sessions">အပိုင်းများ ရှာရန်</string>
+    <string name="keyboard_shortcuts_search_sessions">ဆက်ရှင်များ ရှာရန်</string>
     <string name="changes_title">အပြောင်းအလဲများ</string>
     <string name="changes_source_menu_label">အပြောင်းအလဲ ရင်းမြစ် ရွေးပါ</string>
     <string name="changes_source_menu_selected">%1$s၊ ရွေးထားသည်</string>
@@ -1362,7 +1362,7 @@
     <string name="changes_filter_hint">စစ်ထုတ်ရန်</string>
     <string name="changes_filter_accessibility_label">ပြောင်းထားသော ဖိုင်များ စစ်ထုတ်ပါ</string>
     <string name="changes_no_matches_title">ကိုက်ညီသော ဖိုင် မရှိပါ</string>
-    <string name="changes_no_matches_message">အခြား path ကို စမ်းပါ သို့မဟုတ် စစ်ထုတ်မှုကို ရှင်းပါ။</string>
+    <string name="changes_no_matches_message">အခြား လမ်းကြောင်းကို စမ်းပါ သို့မဟုတ် စစ်ထုတ်မှုကို ရှင်းပါ။</string>
     <string name="changes_no_matches_clear_filter">စစ်ထုတ်မှု ရှင်းရန်</string>
     <string name="changes_select_file_title">ဖိုင် ရွေးပါ</string>
     <string name="changes_select_file_message">diff ကြည့်ရန် ပြောင်းထားသော ဖိုင်ကို ရွေးပါ။</string>
@@ -1395,8 +1395,8 @@
     <string name="component_todo_item_status_in_progress">လုပ်ဆောင်နေသည်</string>
     <string name="component_todo_item_status_completed">ပြီးစီးသည်</string>
     <string name="component_todo_item_status_cancelled">ပယ်ဖျက်ထားသည်</string>
-    <string name="component_todos_pill_accessibility_label">အပိုင်း todo များ၊ %2$d ခုအနက် %1$d ခု ပြီးစီးသည်</string>
-    <string name="component_todos_pill_accessibility_label_active">အပိုင်း todo များ၊ %2$d ခုအနက် %1$d ခု ပြီးစီးသည်၊ %3$s</string>
+    <string name="component_todos_pill_accessibility_label">ဆက်ရှင်၏ todo များ၊ %2$d ခုအနက် %1$d ခု ပြီးစီးသည်</string>
+    <string name="component_todos_pill_accessibility_label_active">ဆက်ရှင်၏ todo များ၊ %2$d ခုအနက် %1$d ခု ပြီးစီးသည်၊ %3$s</string>
     <string name="component_reasoning_row_thought_duration">စဉ်းစားမှု · %1$s</string>
     <string name="component_reasoning_row_duration_seconds">%1$s စက္ကန့်</string>
     <string name="component_reasoning_row_duration_ms">%1$dms</string>
@@ -1405,11 +1405,11 @@
     <string name="component_reasoning_row_shows_thought_hint">စဉ်းစားမှုအပြည့်အစုံကို ပြသည်</string>
     <string name="component_unified_diff_row_kind_hunk">hunk</string>
     <string name="component_unified_diff_row_kind_metadata">မက်တာဒေတာ</string>
-    <string name="component_unified_diff_row_kind_context">မပြောင်းသော လိုင်း</string>
+    <string name="component_unified_diff_row_kind_context">မပြောင်းသော စာကြောင်း</string>
     <string name="component_unified_diff_row_kind_addition">ထည့်သွင်းမှု</string>
     <string name="component_unified_diff_row_kind_deletion">ဖျက်မှု</string>
-    <string name="component_unified_diff_old_line">အဟောင်း လိုင်း %1$d</string>
-    <string name="component_unified_diff_new_line">အသစ် လိုင်း %1$d</string>
+    <string name="component_unified_diff_old_line">စာကြောင်းအဟောင်း %1$d</string>
+    <string name="component_unified_diff_new_line">စာကြောင်းအသစ် %1$d</string>
     <string name="component_floating_pill_state_live">လုပ်ဆောင်နေသည်</string>
     <string name="component_floating_pill_state_ready">အဆင်သင့်</string>
     <string name="component_floating_pill_state_needs_attention">အာရုံစိုက်ရန် လိုသည်</string>
@@ -1420,7 +1420,7 @@
     <string name="common_expanded">ဖြန့်ထားသည်</string>
     <string name="common_collapsed">ခေါက်ထားသည်</string>
     <string name="component_tree_row_loading">ဖွင့်နေသည်</string>
-    <string name="component_timeline_notice_shows_one_line_hint">တစ်ကြောင်းတည်း ပြသည်</string>
+    <string name="component_timeline_notice_shows_one_line_hint">စာကြောင်းတစ်ကြောင်းတည်း ပြသည်</string>
     <string name="component_timeline_notice_shows_full_value_hint">တန်ဖိုးအပြည့်အစုံကို ပြသည်</string>
     <string name="component_attachment_accessibility_label">%1$s၊ %2$s</string>
     <string name="component_subagent_state_waiting_for_input">အဖြေကို စောင့်နေသည်</string>
@@ -1430,14 +1430,14 @@
     <string name="component_filter_tabs_unseen">အသစ်</string>
     <string name="component_text_size_slider_sample_letter">က</string>
     <string name="component_message_time_yesterday">မနေ့က</string>
-    <string name="component_composer_reverting_title">ဤမက်ဆေ့ချ်ကို နောက်ပြန်ပြောင်းနေသည်</string>
-    <string name="session_new_title">စက်ရှင်အသစ်</string>
+    <string name="component_composer_reverting_title">ဤမက်ဆေ့ချ်ကို မူလအတိုင်း ပြန်ထားနေသည်</string>
+    <string name="session_new_title">ဆက်ရှင်အသစ်</string>
     <string name="session_list_dock_add_project">ပရောဂျက် ထည့်ရန်</string>
     <string name="theme_error_preset_not_found">အပြင်အဆင် ကြိုတင်သတ်မှတ်ချက် မတွေ့ပါ</string>
     <string name="component_composer_submit">တင်သွင်းရန်</string>
     <string name="component_composer_select_all_that_apply">သက်ဆိုင်သမျှ အားလုံး ရွေးပါ</string>
     <string name="component_unified_diff_summary_modified">ပြင်ထားသော ဖိုင် %1$s၊ %2$s၊ %3$s</string>
-    <string name="component_hunk_navigation_collapse_context">မပြောင်းသော လိုင်းများ ခေါက်ရန်</string>
+    <string name="component_hunk_navigation_collapse_context">မပြောင်းသော စာကြောင်းများ ခေါက်ရန်</string>
     <string name="component_top_bar_project_subtitle">ပရောဂျက် %1$s %2$s</string>
     <string name="component_composer_dismiss">ပိတ်ရန်</string>
     <string name="dictation_model_downloading_detail">၎င်းမှာ စနစ်ဒေါင်းလုဒ် ဖြစ်သည်။ ဤကတ်ကို ပိတ်လည်း ဆက်လုပ်နေမည်။</string>
@@ -1455,13 +1455,13 @@
     <string name="component_outgoing_message_shows_actions_hint">မက်ဆေ့ချ် လုပ်ဆောင်ချက်များကို ပြသည်</string>
     <string name="component_activity_status_stopped">ရပ်ထားသည်</string>
     <string name="dictation_action_try_again">ထပ်ကြိုးစားရန်</string>
-    <string name="component_composer_model_effort">မော်ဒယ် %1$s၊ ကြိုးစားမှု %2$s</string>
+    <string name="component_composer_model_effort">မော်ဒယ် %1$s၊ အားထုတ်မှု %2$s</string>
     <string name="component_activity_card_working">လုပ်ဆောင်နေသည်</string>
     <string name="component_activity_card_opens_activity">%1$s၊ လုပ်ဆောင်မှုကို ဖွင့်သည်</string>
     <string name="component_image_loading_label">%1$s၊ ဖွင့်နေသည်</string>
-    <string name="session_list_dock_new_session">စက်ရှင်အသစ်</string>
+    <string name="session_list_dock_new_session">ဆက်ရှင်အသစ်</string>
     <string name="component_composer_always_allows">အမြဲခွင့်ပြုသည်- %1$s</string>
-    <string name="component_composer_leave_side_question_mode">ဘေးမေးခွန်းမုဒ်မှ ထွက်ရန်</string>
+    <string name="component_composer_leave_side_question_mode">ဘေးထွက်မေးခွန်းမုဒ်မှ ထွက်ရန်</string>
     <string name="session_list_worktree_empty_other_projects">အခြားပရောဂျက်များရှိ ဆက်ရှင်များကို ကြည့်ရန် စစ်ထုတ်မှုကို ရှင်းပါ။</string>
     <string name="component_attachment_uploading">အပ်လုဒ်လုပ်နေသည်…</string>
     <string name="component_composer_deny">ငြင်းဆို</string>
@@ -1493,7 +1493,7 @@
     <string name="component_composer_question">မေးခွန်း</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">အခြား worktree များရှိ ဆက်ရှင်များကို ကြည့်ရန် စစ်ထုတ်မှုကို ရှင်းပါ။</string>
-    <string name="component_composer_side_question_mode">ဘေးမေးခွန်းမုဒ်</string>
+    <string name="component_composer_side_question_mode">ဘေးထွက်မေးခွန်းမုဒ်</string>
     <string name="component_page_indicator_label">စာမျက်နှာ %2$d ခုအနက် %1$d</string>
     <string name="component_composer_next">ရှေ့ဆက်ရန်</string>
     <string name="component_message_image_label">ပုံ %1$s</string>
@@ -1503,7 +1503,7 @@
     <string name="session_list_status_failed">မအောင်မြင်ပါ</string>
     <string name="component_composer_custom_answer_title">သင့်ကိုယ်ပိုင် အဖြေ ရိုက်ပါ</string>
     <string name="component_composer_always">အမြဲ</string>
-    <string name="component_composer_send_side_question">ဘေးမေးခွန်း မေးရန်</string>
+    <string name="component_composer_send_side_question">ဘေးထွက်မေးခွန်း မေးရန်</string>
     <string name="component_composer_select_exactly">%1$d ခု ရွေးပါ</string>
     <string name="dictation_action_open_settings">ဆက်တင်များ ဖွင့်ရန်</string>
     <string name="component_composer_open_commands">အမိန့်များ ဖွင့်ရန်</string>
@@ -1543,13 +1543,13 @@
     <string name="component_image_could_not_load">မဖွင့်နိုင်ပါ</string>
     <string name="component_outgoing_message_show_actions">မက်ဆေ့ချ် လုပ်ဆောင်ချက်များ ပြရန်</string>
     <string name="live_updates_accessibility_label">တိုက်ရိုက်အပ်ဒိတ်များ %1$s</string>
-    <string name="component_composer_previous_question">ရှေ့မေးခွန်း</string>
+    <string name="component_composer_previous_question">ယခင်မေးခွန်း</string>
     <string name="component_activity_card_agent">အေးဂျင့်</string>
     <string name="session_list_section_today">ယနေ့</string>
-    <string name="component_composer_child_lockout">ဒုတိယအဆင့် ဆက်ရှင်များသို့ Prompt ပို့၍ မရပါ။</string>
+    <string name="component_composer_child_lockout">ခွဲဆက်ရှင်များသို့ Prompt ပို့၍ မရပါ။</string>
     <string name="component_attachment_uploading_percent">အပ်လုဒ်လုပ်နေသည် %1$d%%</string>
     <string name="component_composer_custom_answer_hint">ကိုယ်ပိုင်အဖြေ ထည့်ပါ</string>
-    <string name="component_composer_cancel_revert">နောက်ပြန်ပြောင်းခြင်းကို မလုပ်တော့</string>
+    <string name="component_composer_cancel_revert">မူလအတိုင်း ပြန်ထားခြင်းကို ပယ်ဖျက်ရန်</string>
     <string name="session_list_scope_load_slow_caption">ဖွင့်နေဆဲ — ပရောဂျက်ကြီးများသည် အချိန်အနည်းငယ် ကြာနိုင်သည်</string>
     <string name="component_outgoing_message_label_with_actions">ပို့မည့်မက်ဆေ့ချ်။ မက်ဆေ့ချ် လုပ်ဆောင်ချက်များကို ပြသည်</string>
     <string name="session_list_scope_load_failed_subtitle">ဆက်ရှင်များ မဖွင့်နိုင်ပါ</string>
@@ -1580,7 +1580,7 @@
         <item quantity="other">%1$d မိနစ်က</item>
     </plurals>
     <string name="component_composer_request_position">%2$d ခုအနက် %1$d</string>
-    <string name="component_composer_side_question_placeholder">ဘေးမေးခွန်း၊ ချက်တင်သို့ မထည့်ပါ</string>
+    <string name="component_composer_side_question_placeholder">ဘေးထွက်မေးခွန်း၊ ချက်တင်သို့ မထည့်ပါ</string>
     <string name="session_list_worktree_empty_every_project">ပရောဂျက်အားလုံးကို ကြည့်ရန် စစ်ထုတ်မှုကို ရှင်းပါ။</string>
     <string name="component_image_viewer_could_not_load_named">%1$s ကို မဖွင့်နိုင်ပါ</string>
     <string name="component_composer_select_up_to">အများဆုံး %1$d ခု ရွေးပါ</string>
@@ -1594,13 +1594,13 @@
     <string name="component_composer_send_queue">တန်းစီအဖြစ် ပို့ရန်</string>
     <string name="session_list_dock_new_session_hint">တခြားနေရာတွင် စတင်ရန် “ပရောဂျက် သို့မဟုတ် worktree ရွေးပါ” ကို သုံးပါ။</string>
     <string name="session_list_section_yesterday">မနေ့က</string>
-    <string name="component_code_file_line_label">လိုင်း %1$d၊ %2$s</string>
+    <string name="component_code_file_line_label">စာကြောင်း %1$d၊ %2$s</string>
     <string name="share_feedback_subject_idea">OpenCode Mobile အကြံပြုချက် အစီရင်ခံစာ</string>
-    <string name="component_hunk_navigation_previous">ရှေ့ hunk</string>
+    <string name="component_hunk_navigation_previous">ယခင် hunk</string>
     <string name="session_list_section_week_of">%1$s – %2$s ရက်သတ္တပတ်</string>
     <string name="dictation_model_download_failed_title">%1$s က %2$s ကို ဒေါင်းလုဒ်မလုပ်နိုင်ပါ</string>
     <string name="component_activity_status_pending">စောင့်ဆိုင်းနေသည်</string>
-    <string name="component_composer_revert_tag">နောက်ပြန်</string>
+    <string name="component_composer_revert_tag">ပြန်ထား</string>
     <string name="component_composer_model">မော်ဒယ် %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
         <item quantity="other">အရင်အဆင့် %1$d ဆင့်</item>
@@ -1608,7 +1608,7 @@
     <string name="component_outgoing_message_long_press_hint">မက်ဆေ့ချ် လုပ်ဆောင်ချက်များ ပြရန် ဖိထားပါ</string>
     <string name="component_composer_hide_permission">ခွင့်ပြုချက်တောင်းဆိုမှုကို ဝှက်ရန်</string>
     <string name="dictation_downloading_model_progress">အသံမော်ဒယ် ဒေါင်းလုဒ်လုပ်နေသည်၊ %1$s</string>
-    <string name="component_branch_pill_copy_branch_name">ဘရန့်ချ်အမည် မိတ္တူကူးရန်</string>
+    <string name="component_branch_pill_copy_branch_name">branch အမည် ကူးရန်</string>
     <string name="component_truncation_row_full_message_title">မက်ဆေ့ချ်အပြည့်အစုံ ပြရန်</string>
     <string name="component_truncation_row_full_message_caption">စာလုံး %2$s လုံးအနက် %1$s လုံး ပြထားသည်</string>
     <string name="component_truncation_row_full_message_hint">မက်ဆေ့ချ်တစ်ခုလုံးကို ဖွင့်သည်</string>
@@ -1630,15 +1630,15 @@
     <string name="component_session_list_skeleton_slow_label">%1$s။ %2$s</string>
     <string name="component_close">ပိတ်ရန်</string>
     <string name="relative_time_now">ယခု</string>
-    <string name="component_composer_previous_permission">ရှေ့ခွင့်ပြုချက်တောင်းဆိုမှု</string>
+    <string name="component_composer_previous_permission">ယခင် ခွင့်ပြုချက်တောင်းဆိုမှု</string>
     <string name="component_composer_dictate">အသံဖြင့်ရိုက်ရန်</string>
-    <string name="component_composer_side_question_mode_description">ဘေးမေးခွန်းမုဒ်။ ဘေးမေးခွန်းမုဒ်မှ ထွက်ရန်</string>
+    <string name="component_composer_side_question_mode_description">ဘေးထွက်မေးခွန်းမုဒ်။ ဘေးထွက်မေးခွန်းမုဒ်မှ ထွက်ရန်</string>
     <string name="component_composer_abort">လက်ရှိအလုပ်ကို ရပ်ရန်</string>
     <string name="component_server_address_scheme_button">Scheme %1$s</string>
-    <string name="component_composer_open_subagent_session">subagent ဆက်ရှင်ကို ဖွင့်ရန်</string>
+    <string name="component_composer_open_subagent_session">ခွဲအေးဂျင့် ဆက်ရှင်ကို ဖွင့်ရန်</string>
     <string name="component_composer_question_step">အဆင့် %2$d ခုအနက် %1$d</string>
     <string name="share_feedback_subject_bug">OpenCode Mobile ချို့ယွင်းချက် အစီရင်ခံစာ</string>
-    <string name="component_activity_card_opens_child_session_hint">ဒုတိယအဆင့် ဆက်ရှင်ကို ဖွင့်သည်</string>
+    <string name="component_activity_card_opens_child_session_hint">ခွဲဆက်ရှင်ကို ဖွင့်သည်</string>
     <string name="component_activity_status_failed">မအောင်မြင်ပါ</string>
     <string name="dictation_model_not_installed_title">%1$s သည် %2$s ကို လိုအပ်သည်</string>
     <string name="component_composer_back_to_main_session">ပင်မဆက်ရှင်သို့ ပြန်ရန်</string>
@@ -1646,14 +1646,14 @@
     <string name="session_list_status_retrying">ပြန်ကြိုးစားနေသည်</string>
     <string name="component_attachment_remove">%1$s ကို ဖယ်ရှားရန်</string>
     <string name="component_composer_send_steer">လမ်းညွှန်အဖြစ် ပို့ရန်</string>
-    <string name="component_composer_next_permission">နောက်ခွင့်ပြုချက်တောင်းဆိုမှု</string>
+    <string name="component_composer_next_permission">နောက် ခွင့်ပြုချက်တောင်းဆိုမှု</string>
     <string name="session_list_dock_project_filter">ပရောဂျက်စစ်ထုတ်မှု</string>
     <string name="component_split_pane_resize_hint">ဘေးဘားကို ဝှက်ရန် နှစ်ချက်နှိပ်ပါ</string>
-    <string name="component_branch_pill_shows_details_hint">ဘရန့်ချ် အသေးစိတ်ကို ပြသည်</string>
-    <string name="component_composer_permission_requested">ခွင့်ပြုချက် တောင်းဆိုထားသည်</string>
+    <string name="component_branch_pill_shows_details_hint">branch အသေးစိတ်ကို ပြသည်</string>
+    <string name="component_composer_permission_requested">ခွင့်ပြုချက်တောင်းဆိုမှု ပြုလုပ်ထားသည်</string>
     <string name="component_thinking">စဉ်းစားနေသည်</string>
     <string name="dictation_model_downloading_title">%1$s က %2$s ကို ဒေါင်းလုဒ်လုပ်နေသည်</string>
-    <string name="component_hunk_navigation_expand_context">မပြောင်းသော လိုင်းများ ဖြန့်ရန်</string>
+    <string name="component_hunk_navigation_expand_context">မပြောင်းသော စာကြောင်းများ ဖြန့်ရန်</string>
     <string name="dictation_listening_placeholder">နားထောင်နေသည်…</string>
     <string name="component_skeleton_illustration_unofficial">တရားဝင်မဟုတ်</string>
     <string name="dictation_status_ready">ထည့်ရန် အဆင်သင့်</string>
@@ -1681,12 +1681,12 @@
     <plurals name="worktrees_changed">
         <item quantity="other">%1$d ခု ပြောင်းထားသည်</item>
     </plurals>
-    <string name="worktrees_none_in_project">worktree မရှိပါ။ စက်ရှင်အသစ် → ပရောဂျက် သို့မဟုတ် worktree ရွေးပါ ဖြင့် တစ်ခု ဖန်တီးနိုင်သည်။</string>
+    <string name="worktrees_none_in_project">worktree မရှိပါ။ ဆက်ရှင်အသစ် → ပရောဂျက် သို့မဟုတ် worktree ရွေးပါ ဖြင့် တစ်ခု ဖန်တီးနိုင်သည်။</string>
     <string name="worktrees_footer">worktree ကို ဖယ်ရှားခြင်းသည် ဆာဗာပေါ်ရှိ ၎င်း၏ ဖိုလ်ဒါကို ဖျက်သည်။ ၎င်း၏ ဆက်ရှင်များ ကျန်ရစ်သော်လည်း ၎င်းထဲတွင် ထပ်မလုပ်ဆောင်နိုင်တော့ပါ။</string>
     <string name="worktrees_more">%1$s အတွက် နောက်ထပ် လုပ်ဆောင်ချက်များ</string>
     <string name="worktrees_removing">ဖယ်ရှားနေသည်…</string>
     <string name="worktrees_actions_show_on_home">ပင်မစာမျက်နှာတွင် ဆက်ရှင်များ ပြရန်</string>
-    <string name="worktrees_actions_new_session">ဤနေရာတွင် စက်ရှင်အသစ်</string>
+    <string name="worktrees_actions_new_session">ဤနေရာတွင် ဆက်ရှင်အသစ်</string>
     <string name="worktrees_actions_remove">worktree ဖယ်ရှားရန်…</string>
     <string name="worktrees_remove_title">worktree “%1$s” ကို ဖယ်ရှားမလား။</string>
     <string name="worktrees_remove_message">ဆာဗာပေါ်ရှိ %1$s ကို ဖျက်မည်။</string>

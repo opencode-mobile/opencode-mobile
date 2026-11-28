@@ -1734,7 +1734,7 @@
     <string name="component_composer_previous_question">Pregunta anterior</string>
     <string name="component_activity_card_agent">Agente</string>
     <string name="session_list_section_today">Hoy</string>
-    <string name="component_composer_child_lockout">No se pueden enviar mensajes a las sesiones secundarias.</string>
+    <string name="component_composer_child_lockout">No se pueden enviar prompts a las sesiones secundarias.</string>
     <string name="component_attachment_uploading_percent">Subiendo %1$d %%</string>
     <string name="component_composer_custom_answer_hint">Escribe una respuesta personalizada</string>
     <string name="component_composer_cancel_revert">Cancelar reversión</string>

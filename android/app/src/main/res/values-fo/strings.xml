@@ -187,7 +187,7 @@
     <string name="server_health_empty_message">Heilsan verður mátað, meðan appin er opin og hevur samband við hendan ambætaran.</string>
     <string name="server_health_status_live">Beinleiðis</string>
     <string name="server_health_status_connecting">Fær samband</string>
-    <string name="server_health_status_reconnecting">Fær samband aftur</string>
+    <string name="server_health_status_reconnecting">Endursamband í gongd</string>
     <string name="server_health_status_offline">Ikki á netinum</string>
     <string name="server_health_status_auth_failed">Samgilding miseydnaðist</string>
     <string name="server_health_status_stopped">Mátar ikki</string>
@@ -611,7 +611,7 @@
         <item quantity="one">Skrulla til enda, %1$d nýtt boð</item>
         <item quantity="other">Skrulla til enda, %1$d ný boð</item>
     </plurals>
-    <string name="home_error_reconnect_to_create">Set samband aftur fyri at gera setu</string>
+    <string name="home_error_reconnect_to_create">Set endursamband fyri at gera setu</string>
     <string name="timeline_state_creating_title">Byrjar setu…</string>
     <string name="timeline_state_creating_subtitle">Stovnar á ambætaranum…</string>
     <string name="new_session_title">Nýggj seta</string>
@@ -764,7 +764,7 @@
     </plurals>
     <plurals name="tool_count_file">
         <item quantity="one">%1$d skrá</item>
-        <item quantity="other">%1$d fílur</item>
+        <item quantity="other">%1$d skrár</item>
     </plurals>
     <plurals name="tool_count_match">
         <item quantity="one">%1$d træff</item>
@@ -960,7 +960,7 @@
     <string name="session_chat_goal_waiting_permission">Ein loyvisumbøn er opin. Málið heldur fram, tá tú hevur svarað.</string>
     <string name="session_chat_goal_waiting_question">Ein spurningur er opin. Málið heldur fram, tá tú hevur svarað.</string>
     <string name="session_chat_goal_evidence">Prógv</string>
-    <string name="session_chat_goal_reconnecting">Fær samband aftur. Vísir seinasta kenda málið.</string>
+    <string name="session_chat_goal_reconnecting">Endursamband í gongd. Vísir seinasta kenda málið.</string>
     <string name="session_chat_goal_pause">Steðga</string>
     <string name="session_chat_goal_pausing">Steðgar…</string>
     <string name="session_chat_goal_resume">Halt fram</string>
@@ -1011,7 +1011,7 @@
     <string name="app_lock_prompt_title">Lat OpenCode Mobile upp</string>
     <plurals name="component_branch_pill_files">
         <item quantity="one">%1$d skrá</item>
-        <item quantity="other">%1$d fílur</item>
+        <item quantity="other">%1$d skrár</item>
     </plurals>
     <plurals name="component_branch_pill_uncommitted_files">
         <item quantity="one">%1$d skrá uttan commit</item>
@@ -1066,7 +1066,7 @@
     </plurals>
     <plurals name="session_chat_sheet_tool_result_files">
         <item quantity="one">%1$d skrá</item>
-        <item quantity="other">%1$d fílur</item>
+        <item quantity="other">%1$d skrár</item>
     </plurals>
     <plurals name="session_chat_sheet_tool_result_lines">
         <item quantity="one">%1$d linja</item>
@@ -1251,7 +1251,7 @@
     <string name="diagnostics_export_window_title">Útflytingargluggi</string>
     <string name="diagnostics_export_sheet_title">Útflyt greiningarloggar</string>
     <string name="diagnostics_share_via_apps">Deil gjøgnum appir</string>
-    <string name="diagnostics_save_to_files">Goym í fílur</string>
+    <string name="diagnostics_save_to_files">Goym í skrár</string>
     <string name="diagnostics_clear_dialog_title">Rudda greiningarloggar?</string>
     <string name="diagnostics_clear_dialog_message">Hetta tekur goymdu greiningarloggina burtur.</string>
     <string name="diagnostics_error_share">Tað eydnaðist ikki at fyrireika greiningarloggin til deiling.</string>
@@ -1279,7 +1279,7 @@
     <string name="appearance_more_options">Fleiri møguleikar</string>
     <string name="appearance_reset_text_sizes">Nullstilla tekstastøddir</string>
     <string name="appearance_reset_all">Nullstilla alla útsjónd</string>
-    <string name="appearance_mode_title">Støða</string>
+    <string name="appearance_mode_title">Háttur</string>
     <string name="appearance_mode_system">Skipan</string>
     <string name="appearance_mode_light">Ljóst</string>
     <string name="appearance_mode_dark">Myrkt</string>
@@ -1307,7 +1307,7 @@
     <string name="appearance_sample_assistant_message">Testin les setukakuna beint eftir at `login()` er liðugt, men kakan verður skrivað eitt tikk seinni.</string>
     <string name="appearance_sample_tool_title">Broytt</string>
     <string name="feature_flags_title">Eginleikamerki</string>
-    <string name="feature_flags_clear_overrides">Nullstilla yvirskrivingar</string>
+    <string name="feature_flags_clear_overrides">Rudda yvirskrivingar</string>
     <string name="feature_flags_more_options">Fleiri møguleikar</string>
     <string name="feature_flags_intro">Tá tú skiftir eitt merki, verður sett ein yvirskriving á tilfarinum, sum gongur framum fjarvirðið. Fjarvirði verða heintað við byrjan og nýtt næstu ferð appin byrjar.</string>
     <string name="feature_flags_section_flags">Merki</string>
@@ -1377,7 +1377,7 @@
     <string name="feedback_share_chooser_title">Deil fráboðan</string>
     <string name="feedback_dictation_microphone_off">Atgongd til mikrofon er sløkt</string>
     <string name="feedback_dictation_listening">Lurtar · %1$s</string>
-    <string name="feedback_dictation_listening_on_device">Lurtar · %1$s · á tilfarinum</string>
+    <string name="feedback_dictation_listening_on_device">Lurtar · %1$s · á eindini</string>
     <string name="session_search_title">Leita í setrum</string>
     <string name="session_search_clear">Rudda leiting</string>
     <string name="session_search_placeholder">Leita í %1$s</string>
@@ -1430,12 +1430,12 @@
     </plurals>
     <plurals name="changes_other_source_last_turn">
         <item quantity="one">Seinasta umfar broytti %1$d skrá.</item>
-        <item quantity="other">Seinasta umfar broytti %1$d fílur.</item>
+        <item quantity="other">Seinasta umfar broytti %1$d skrár.</item>
     </plurals>
     <string name="changes_other_source_show">Vís %1$s</string>
     <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
     <string name="changes_source_last_turn_empty_title">Eingar broytingar</string>
-    <string name="changes_source_last_turn_empty_message">Seinasta liðna umfar broytti ongar fílur.</string>
+    <string name="changes_source_last_turn_empty_message">Seinasta liðna umfar broytti ongar skrár.</string>
     <string name="changes_loading_title">Heintar broytingar</string>
     <string name="changes_loading_message">Heintar diff…</string>
     <string name="changes_no_turn_title">Einki liðugt umfar</string>
@@ -1446,8 +1446,8 @@
     <string name="changes_error_turn_moved_folders">Hetta umfarið flutti mappur, so broytingarnar kunnu ikki vísast saman.</string>
     <string name="changes_refresh_failed">Endurnýggjan miseydnaðist: %1$s</string>
     <string name="changes_filter_hint">Sía</string>
-    <string name="changes_filter_accessibility_label">Sía broyttar fílur</string>
-    <string name="changes_no_matches_title">Eingar samsvarandi fílur</string>
+    <string name="changes_filter_accessibility_label">Sía broyttar skrár</string>
+    <string name="changes_no_matches_title">Eingar samsvarandi skrár</string>
     <string name="changes_no_matches_message">Royn aðra slóð ella rudda síuna.</string>
     <string name="changes_no_matches_clear_filter">Rudda síu</string>
     <string name="changes_select_file_title">Vel eina skrá</string>
@@ -1457,7 +1457,7 @@
     <string name="changes_file_viewer_truncated">Vísir fyrsta 1 MB av broytingunum í hesi skránni.</string>
     <plurals name="changes_summary_changed_files">
         <item quantity="one">%1$d broytt skrá</item>
-        <item quantity="other">%1$d broyttar fílur</item>
+        <item quantity="other">%1$d broyttar skrár</item>
     </plurals>
     <plurals name="changes_count_additions">
         <item quantity="one">%1$d tillaging</item>
@@ -1474,7 +1474,7 @@
     <string name="changes_accessibility_file">%1$s, %2$s, skrá %3$d av %4$d, %5$s, %6$s</string>
     <plurals name="component_review_changes_pill_files">
         <item quantity="one">%1$d skrá</item>
-        <item quantity="other">%1$d fílur</item>
+        <item quantity="other">%1$d skrár</item>
     </plurals>
     <string name="component_review_changes_pill_title">Kanna broytingar</string>
     <string name="component_unified_diff_summary_added">Skrá løgd afturat: %1$s, %2$s, %3$s</string>
@@ -1687,7 +1687,7 @@
     <string name="component_image_viewer_retry">Royn aftur</string>
     <string name="component_image_viewer_loading_full">Heintar alla myndina</string>
     <string name="session_list_worktree_empty_action">Rudda síu</string>
-    <string name="dictation_model_download_failed_detail">Kanna sambandið og leyst goymslurúm á hesum tilfarinum og royn so aftur.</string>
+    <string name="dictation_model_download_failed_detail">Kanna sambandið og leyst goymslurúm á hesi eindini og royn so aftur.</string>
     <string name="component_composer_send_queue">Send sum Bíðirøð</string>
     <string name="session_list_dock_new_session_hint">Brúka Vel verkætlan ella worktree fyri at byrja á øðrum stað.</string>
     <string name="session_list_section_yesterday">Í gjár</string>
@@ -1748,7 +1748,7 @@
     <string name="session_list_dock_project_filter">Verkætlanarsía</string>
     <string name="component_split_pane_resize_hint">Trýst tvær ferðir fyri at fjala síðuslána</string>
     <string name="component_branch_pill_shows_details_hint">Vísir upplýsingar um branchið</string>
-    <string name="component_composer_permission_requested">Biðið er um loyvi</string>
+    <string name="component_composer_permission_requested">Loyvisumbøn</string>
     <string name="component_thinking">At hugsa</string>
     <string name="dictation_model_downloading_title">%1$s heintar %2$s</string>
     <string name="component_hunk_navigation_expand_context">Víðka samanhang</string>
@@ -1767,7 +1767,7 @@
     <string name="component_split_pane_hide_sidebar">Fjal síðuslána</string>
     <string name="component_composer_select_range">Vel %1$d til %2$d</string>
     <string name="component_image_viewer_position">%1$d av %2$d</string>
-    <string name="dictation_status_line_on_device">%1$s · %2$s · á tilfarinum</string>
+    <string name="dictation_status_line_on_device">%1$s · %2$s · á eindini</string>
     <string name="component_composer_select_at_least">Vel í minsta lagi %1$d</string>
     <string name="dictation_insert_description">Set tekst inn</string>
     <string name="worktrees_title">Worktrees</string>

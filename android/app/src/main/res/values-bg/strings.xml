@@ -111,7 +111,7 @@
     <string name="onboarding_setup_step3_body">Препоръчително: Tailscale — инсталирайте Tailscale на компютъра и на телефона, после използвайте Tailscale IP адреса или MagicDNS името на компютъра като URL на сървъра.\n\nПодходящи са и същата локална мрежа, VPN, HTTPS или друг тунел, който управлявате. Приложението не създава релей вместо вас.</string>
     <string name="onboarding_setup_step4_title">Свържете се в приложението</string>
     <string name="onboarding_setup_step4_body">Въведете базов URL + парола. Приложението проверява GET /global/health, след което запазва връзка със сървъра на това устройство.</string>
-    <string name="onboarding_setup_open_docs">Отваряне на документацията</string>
+    <string name="onboarding_setup_open_docs">Отваряне на документацията на сървъра</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile е заключено</string>
     <string name="privacy_cover_unlock">Отключи</string>
@@ -633,9 +633,9 @@
     <string name="new_session_new_worktree_subtitle">Изолирано копие, създава се при изпращане</string>
     <string name="new_session_worktrees_section">Worktree</string>
     <string name="timeline_state_loading_title">Зареждане на съобщения</string>
-    <string name="timeline_state_loading_subtitle">Извличане на хронологията…</string>
+    <string name="timeline_state_loading_subtitle">Извличане на времевата линия…</string>
     <string name="timeline_state_error_title">Съобщенията не можаха да се заредят</string>
-    <string name="timeline_state_error_fallback">Хронологията не се зареди.</string>
+    <string name="timeline_state_error_fallback">Времевата линия не се зареди.</string>
     <string name="timeline_state_retry">Опитайте отново</string>
     <string name="timeline_state_empty">Още няма съобщения. Изпратете промпт, за да започнете.</string>
     <string name="timeline_state_refreshing">Опресняване на съобщенията</string>
@@ -1286,7 +1286,7 @@
     <string name="appearance_mode_note_system">Следва светлата или тъмната настройка на телефона.</string>
     <string name="appearance_mode_note_light">Винаги светъл, независимо от настройката на телефона.</string>
     <string name="appearance_mode_note_dark">Винаги тъмен, независимо от настройката на телефона.</string>
-    <string name="appearance_text_home_title">Текст в списъка</string>
+    <string name="appearance_text_home_title">Текст в списъка на началния екран</string>
     <string name="appearance_text_session_chat_title">Текст в чата на сесията</string>
     <string name="appearance_text_code_title">Текст на кода</string>
     <string name="appearance_text_size_label">Размер</string>
@@ -1640,7 +1640,7 @@
     <string name="component_composer_previous_question">Предишен въпрос</string>
     <string name="component_activity_card_agent">Агент</string>
     <string name="session_list_section_today">Днес</string>
-    <string name="component_composer_child_lockout">Към подсесии не могат да се изпращат съобщения.</string>
+    <string name="component_composer_child_lockout">Към подсесии не могат да се изпращат промптове.</string>
     <string name="component_attachment_uploading_percent">Качване %1$d%%</string>
     <string name="component_composer_custom_answer_hint">Въведете собствен отговор</string>
     <string name="component_composer_cancel_revert">Отказ от връщането</string>

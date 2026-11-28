@@ -110,17 +110,17 @@
     <string name="onboarding_setup_step3_title">Настройте доступ с телефона</string>
     <string name="onboarding_setup_step3_body">Рекомендуем Tailscale: установите его на компьютер и телефон, затем используйте Tailscale IP компьютера или имя MagicDNS как URL сервера.\n\nПодойдут и общая локальная сеть, VPN, HTTPS или другой туннель, который вы настроили сами. Приложение не создаёт ретранслятор за вас.</string>
     <string name="onboarding_setup_step4_title">Подключитесь в приложении</string>
-    <string name="onboarding_setup_step4_body">Введите базовый URL и пароль. Приложение проверит GET /global/health и сохранит подключение к серверу на этом устройстве.</string>
+    <string name="onboarding_setup_step4_body">Введите базовый URL и пароль. Приложение проверит GET /global/health и сохранит подключение на этом устройстве.</string>
     <string name="onboarding_setup_open_docs">Открыть документацию сервера</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile заблокирован</string>
     <string name="privacy_cover_unlock">Разблокировать</string>
     <string name="servers_title">Серверы</string>
     <plurals name="servers_profile_count">
-        <item quantity="one">%1$d подключение к серверу</item>
-        <item quantity="few">%1$d подключения к серверам</item>
-        <item quantity="many">%1$d подключений к серверам</item>
-        <item quantity="other">%1$d подключения к серверам</item>
+        <item quantity="one">%1$d сохранённое подключение</item>
+        <item quantity="few">%1$d сохранённых подключения</item>
+        <item quantity="many">%1$d сохранённых подключений</item>
+        <item quantity="other">%1$d сохранённого подключения</item>
     </plurals>
     <string name="servers_saved">Сохранённые</string>
     <string name="server_health_title">Состояние сервера</string>

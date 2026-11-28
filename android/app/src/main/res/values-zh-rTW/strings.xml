@@ -25,7 +25,7 @@
     <string name="connection_setup_action_scan_qr_instead">改為掃描 QR</string>
     <string name="connection_setup_scan_qr_instead_hint">來自 opencode pair</string>
     <string name="connection_setup_remove_server">移除伺服器</string>
-    <string name="connection_setup_remove_dialog_title_unnamed">要移除「server」嗎？</string>
+    <string name="connection_setup_remove_dialog_title_unnamed">要移除「伺服器」嗎？</string>
     <string name="connection_setup_instructions_run">在你的電腦上執行以下指令，然後掃描 QR。</string>
     <string name="connection_setup_instructions_first_run">首次執行約需一分鐘。需要 OpenCode 2.0.25 或更新版本。若服務尚未執行，會自動啟動。</string>
     <string name="connection_setup_instructions_same_wifi_title">改用相同 Wi-Fi</string>

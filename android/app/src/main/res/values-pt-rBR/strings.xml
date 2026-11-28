@@ -64,7 +64,7 @@
     <string name="connection_error_enter_host">Insira um host</string>
     <string name="connection_error_enter_pairing_code">Insira um código de pareamento</string>
     <string name="connection_error_pairing_link_expired">Este link de pareamento expirou ou já foi usado</string>
-    <string name="connection_error_duplicate_profile">Já existe uma conexão salva com este host e usuário</string>
+    <string name="connection_error_duplicate_profile">Já existe um servidor salvo com este host e usuário</string>
     <string name="connection_error_qr_scan_failed">O QR não conectou. A API de pareamento do OpenCode 2 ainda está mudando, então a leitura pode falhar mesmo com o app funcionando. Informe o host e conecte. A senha é opcional. Um código de pareamento também funciona.</string>
     <string name="connection_error_unreachable">Não foi possível acessar o servidor</string>
     <string name="server_error_pairing_expired">Pareamento expirado, pareie novamente</string>
