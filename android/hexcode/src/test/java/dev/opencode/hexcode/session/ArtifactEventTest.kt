@@ -23,6 +23,11 @@ class ArtifactEventTest {
     }
 
     @Test
+    fun aSupersededInterruptIsNoRunEnd() {
+        assertNull(ArtifactEvent.decode(line("session.execution.interrupted", """{"sessionID":"s","reason":"superseded"}""")))
+    }
+
+    @Test
     fun aFailedRunCarriesItsErrorAndTheFreeLimitIsKnown() {
         val event =
             ArtifactEvent.decode(

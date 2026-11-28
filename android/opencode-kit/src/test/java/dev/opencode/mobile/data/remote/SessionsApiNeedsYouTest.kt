@@ -80,6 +80,27 @@ class SessionsApiNeedsYouTest {
         }
 
     @Test
+    fun interruptResumesSteeredInput() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api { request ->
+                    captured += request
+                    respond("""{"interrupted":true}""", HttpStatusCode.OK, jsonHeaders)
+                }
+
+            api.interruptSessionResultV2("ses_1")
+            api.interruptSessionV2("ses_1")
+
+            assertEquals(2, captured.size)
+            captured.forEach { request ->
+                assertEquals(HttpMethod.Post, request.method)
+                assertTrue(request.url.encodedPath.endsWith("/api/session/ses_1/interrupt"))
+                assertEquals("true", request.url.parameters["resume"])
+            }
+        }
+
+    @Test
     fun aMissingRequestIsAnHttpError() =
         runTest {
             val api =

@@ -62,6 +62,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.timeout
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
@@ -225,7 +226,7 @@ class SessionsApi private constructor(
     suspend fun interruptSessionV2(id: String): Boolean =
         httpClient
             .get()
-            .post("api/session/$id/interrupt")
+            .post("api/session/$id/interrupt") { resumeSteeredInput() }
             .ensureSuccess()
 
     /**
@@ -236,9 +237,17 @@ class SessionsApi private constructor(
     suspend fun interruptSessionResultV2(id: String): Boolean =
         httpClient
             .get()
-            .post("api/session/$id/interrupt")
+            .post("api/session/$id/interrupt") { resumeSteeredInput() }
             .bodyOnSuccess<V2InterruptResultDto>()
             .interrupted
+
+    /**
+     * `resume=true` on an interrupt starts input steered in during the run once the stop settles, as the desktop app
+     * and the TUI do; without it that input stays parked. Queued next-turn prompts stay parked either way.
+     */
+    private fun HttpRequestBuilder.resumeSteeredInput() {
+        parameter("resume", "true")
+    }
 
     suspend fun listInboxV2(sessionId: String): List<V2InboxItemDto> =
         httpClient

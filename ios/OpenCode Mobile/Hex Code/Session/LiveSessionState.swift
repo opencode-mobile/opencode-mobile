@@ -170,7 +170,12 @@ enum SessionEvent: Equatable, Sendable {
             return .connected
         case "session.execution.started":
             return sessionID.map { .executionStarted(sessionID: $0, at: created) }
-        case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted":
+        case "session.execution.succeeded", "session.execution.failed":
+            return sessionID.map { .executionEnded(sessionID: $0) }
+        case "session.execution.interrupted":
+            // A steer interrupts the active step with `reason: "superseded"` and starts the next
+            // one at once: the session hasn't settled.
+            if data["reason"] as? String == "superseded" { return nil }
             return sessionID.map { .executionEnded(sessionID: $0) }
         case "permission.asked":
             // The event's data is the request itself.

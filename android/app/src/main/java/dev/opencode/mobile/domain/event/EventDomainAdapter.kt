@@ -226,9 +226,11 @@ class EventDomainAdapter(
             "session.next.step.ended",
             "session.step.ended",
             -> listOfNotNull(assistantMessageUpdated(properties, finish = properties.string("finish")))
-            "session.execution.succeeded",
-            "session.execution.interrupted",
-            -> listOf(event("session.idle", properties))
+            "session.execution.succeeded" -> listOf(event("session.idle", properties))
+            // A steer interrupts the active step with `reason: "superseded"` and starts the next one at once: the
+            // session hasn't settled, so this is no run end.
+            "session.execution.interrupted" ->
+                if (isSupersededInterrupt(properties)) emptyList() else listOf(event("session.idle", properties))
             "session.next.step.failed",
             "session.execution.failed",
             -> failedStepEvents(properties, idle = true)
@@ -850,6 +852,8 @@ class EventDomainAdapter(
             output = properties.string("output"),
             title = "Shell",
         )
+
+    private fun isSupersededInterrupt(properties: JsonObject): Boolean = properties.string("reason") == "superseded"
 
     private fun isSyntheticInboxItem(properties: JsonObject): Boolean = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
 

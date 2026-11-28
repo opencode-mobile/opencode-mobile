@@ -382,6 +382,27 @@ struct EventDomainAdapterTests {
         #expect(event?.triggersStatusRefresh == true)
     }
 
+    @Test(arguments: [#","reason":"user""#, #","reason":"shutdown""#, #","reason":"inactivity""#, ""])
+    func parseEvent_projectsLiveExecutionInterruptedIntoIdle(reason: String) {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.execution.interrupted","data":{"sessionID":"ses-1"\#(reason)}}"#
+        )
+        #expect(event?.type == "session.idle")
+        #expect(event?.sessionID == "ses-1")
+    }
+
+    @Test func parseEvents_dropsSupersededInterruptBecauseTheRunGoesOn() {
+        let adapter = EventDomainAdapter()
+        let line = #"{"type":"session.execution.interrupted","data":{"sessionID":"ses-1","reason":"superseded"}}"#
+        #expect(adapter.parseEvents(dataLine: line).isEmpty)
+        guard case let .dropped(type) = adapter.parse(line) else {
+            Issue.record("Expected the superseded interrupt to be dropped")
+            return
+        }
+        #expect(type == "session.execution.interrupted")
+    }
+
     @Test func parseEvents_projectsReasoningStartedIntoAssistantAndReasoningPart() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(

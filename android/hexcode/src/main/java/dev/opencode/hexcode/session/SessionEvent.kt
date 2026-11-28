@@ -188,8 +188,11 @@ sealed interface SessionEvent {
             return when (type) {
                 "server.connected" -> Connected
                 "session.execution.started" -> sessionId?.let { ExecutionStarted(it, (envelope["created"] as? JsonPrimitive)?.longOrNull) }
-                "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted" ->
-                    sessionId?.let { ExecutionEnded(it) }
+                "session.execution.succeeded", "session.execution.failed" -> sessionId?.let { ExecutionEnded(it) }
+                // A steer interrupts the active step with `reason: "superseded"` and starts the next one at once:
+                // the session hasn't settled.
+                "session.execution.interrupted" ->
+                    if (data.string("reason") == "superseded") null else sessionId?.let { ExecutionEnded(it) }
                 "permission.asked" -> {
                     val id = data.string("id") ?: return null
                     sessionId ?: return null

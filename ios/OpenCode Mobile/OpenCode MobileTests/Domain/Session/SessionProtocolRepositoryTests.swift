@@ -892,6 +892,21 @@ struct SessionProtocolRepositoryTests {
         let request = try #require(ProtocolRoutingURLProtocol.requests.first)
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/interrupt") == true)
+        // Input steered in during the run starts once the stop settles instead of staying parked.
+        #expect(queryValue(try #require(request.url), "resume") == "true")
+    }
+
+    @Test func v1AbortSessionPostsAbortWithoutResume() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json("true")])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        _ = try await repository.abortSession(id: "ses_1", directory: "/repo")
+
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        let url = try #require(request.url)
+        #expect(request.httpMethod == "POST")
+        #expect(url.path.hasSuffix("/session/ses_1/abort"))
+        #expect(queryValue(url, "resume") == nil)
     }
 
     @Test func v2SummarizeSessionPostsCompactWithSteerDelivery() async throws {
