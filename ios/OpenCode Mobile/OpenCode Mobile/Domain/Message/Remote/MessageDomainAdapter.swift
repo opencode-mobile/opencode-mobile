@@ -1056,10 +1056,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return completedAtEpochMs ?? nowEpochMs()
     }
 
-    private func httpMessage(_ body: String?) -> String {
+    /// The server's readable error text, or nil so the app shows its own keyed fallback.
+    private func httpMessage(_ body: String?) -> String? {
         if let friendly = ServerErrorMessage.userFacing(body) { return friendly }
         let plain = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if plain.isEmpty || plain.hasPrefix("{") || plain.count > 200 { return "Request failed" }
+        if plain.isEmpty || plain.hasPrefix("{") || plain.count > 200 { return nil }
         return plain
     }
 

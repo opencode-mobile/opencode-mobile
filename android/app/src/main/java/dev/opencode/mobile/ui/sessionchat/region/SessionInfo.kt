@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
@@ -18,11 +19,14 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatStatusText
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionRenameUiState
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
@@ -186,7 +190,7 @@ class SessionInfo(
                 .trim()
         if (trimmed.isEmpty()) {
             _state.update {
-                it.copy(rename = it.rename.copy(errorMessage = EMPTY_TITLE_ERROR))
+                it.copy(rename = it.rename.copy(errorMessage = UiText.resource(R.string.home_session_error_empty_title)))
             }
             return
         }
@@ -370,7 +374,7 @@ class SessionInfo(
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
                             val entry = snapshot.entries[sessionId]
                             val activity = if (snapshot.seeded) entry?.activity else null
-                            val label = activity?.chatStatusLabel()
+                            val label = activity?.let(SessionChatStatusText::label)
                             val retryCard = (activity as? SessionActivity.Retrying)?.retryCard()
                             logD(
                                 "live status session=$sessionId activity=${entry?.activity ?: "-"} seeded=${snapshot.seeded}",
@@ -538,12 +542,16 @@ class SessionInfo(
         worktree: String,
     ): Boolean = boundSessionId == sessionId && boundWorktree == worktree
 
-    private fun renameErrorMessage(throwable: Throwable): String =
+    /** Server text stays verbatim; the app's own fallbacks are keyed (same keys as Home). */
+    private fun renameErrorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is SessionError.Http -> throwable.message ?: "Request failed"
-            is SessionError.Transport -> "Unable to reach the server"
-            is SessionError.Decoding -> "Unable to read server response"
-            else -> throwable.message ?: "Something went wrong"
+            is SessionError.Http ->
+                ServerErrorMessage.text(throwable)
+                    ?: throwable.message?.let(UiText::verbatim)
+                    ?: UiText.resource(R.string.home_session_error_request_failed)
+            is SessionError.Transport -> UiText.resource(R.string.connection_error_unreachable)
+            is SessionError.Decoding -> UiText.resource(R.string.home_session_error_unreadable_response)
+            else -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_generic)
         }
 
     private fun logI(message: String) {
@@ -564,8 +572,7 @@ class SessionInfo(
 
     companion object {
         private const val TAG = "SessionInfo"
-        private const val EMPTY_TITLE_ERROR = "Enter a session title"
-        const val ARCHIVE_ERROR = "Couldn't archive session."
-        const val DELETE_ERROR = "Couldn't delete session."
+        val ARCHIVE_ERROR: UiText = UiText.resource(R.string.session_chat_archive_failed)
+        val DELETE_ERROR: UiText = UiText.resource(R.string.session_chat_delete_failed)
     }
 }

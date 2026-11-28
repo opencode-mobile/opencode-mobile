@@ -13,5 +13,7 @@ nonisolated enum RequestConnectionPin {
 
 /// The active server changed during an operation pinned to another one. Nothing more goes out.
 nonisolated struct ServerConnectionChangedError: LocalizedError {
-    var errorDescription: String? { "The server changed before this was sent. Your draft is kept." }
+    var errorDescription: String? {
+        String(localized: "session_chat.server_changed", defaultValue: "The server changed before this was sent. Your draft is kept.")
+    }
 }

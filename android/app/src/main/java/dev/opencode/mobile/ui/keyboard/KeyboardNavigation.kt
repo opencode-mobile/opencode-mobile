@@ -84,9 +84,6 @@ object KeyboardNavigationRules {
     /** The TUI's double-Esc window: a second Esc less than this long after the first interrupts. */
     const val INTERRUPT_ARM_WINDOW_MS = 5_000L
 
-    /** Hint shown while a prompt waits and the keyboard has not moved into it. */
-    const val PROMPT_KEYBOARD_HINT = "Press Tab to answer with the keyboard"
-
     /** Hint shown while the interrupt is armed. */
     const val INTERRUPT_ARMED_HINT = "Esc again to interrupt"
 

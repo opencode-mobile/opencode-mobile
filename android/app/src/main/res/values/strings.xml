@@ -77,6 +77,14 @@
     <string name="connection_error_duplicate_profile">A server with this host and username is already saved</string>
     <string name="connection_error_qr_scan_failed">QR didn\'t connect. OpenCode 2\'s pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too.</string>
     <string name="connection_error_unreachable">Unable to reach the server</string>
+    <!-- The app's own words for server errors it recognises; other server errors show the server's text. -->
+    <string name="server_error_pairing_expired">Pairing expired, pair again</string>
+    <string name="server_error_not_found">Folder or file not found</string>
+    <!-- The argument is the server's path. -->
+    <string name="server_error_not_found_path">Folder or file not found · %1$s</string>
+    <string name="server_error_session_busy">Session is busy</string>
+    <!-- The server's error message, then its error reference id. -->
+    <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Authentication failed</string>
     <string name="connection_error_unhealthy">Server reported unhealthy</string>
 
@@ -387,6 +395,8 @@
     <string name="worktree_submitting">Creating…</string>
     <string name="worktree_create_failed">Couldn\'t create the worktree: %1$s</string>
     <string name="worktree_unknown_error">Unknown error</string>
+    <!-- A worktree request failed and the server sent no readable message. The number is the HTTP status code. -->
+    <string name="worktree_request_failed_http">Request failed (HTTP %1$d)</string>
     <!-- Files and Terminal -->
     <string name="files_title">Files</string>
     <string name="files_more_options">More options</string>
@@ -407,6 +417,7 @@
     <string name="files_find_no_match">No files match “%1$s”</string>
     <string name="files_find_no_match_detail">Server search skips ignored folders.</string>
     <string name="files_error_check_server_connection">Check the connection to the server and try again.</string>
+    <string name="files_error_server_status">The server responded with %1$d.</string>
     <string name="files_no_file_title">Open a file from the tree</string>
     <string name="files_no_file_message">Opened files stay as tabs</string>
     <string name="files_path_copied">Path copied</string>
@@ -435,6 +446,14 @@
         <item quantity="other">%1$d lines</item>
     </plurals>
     <string name="file_viewer_meta">%1$s · %2$s</string>
+    <!-- A size in kilobytes, such as 1.5 KB. %1$s is the number, already written in the reader's locale. -->
+    <string name="byte_count_kilobytes">%1$s KB</string>
+    <!-- A size in megabytes, such as 1.5 MB. %1$s is the number, already written in the reader's locale. -->
+    <string name="byte_count_megabytes">%1$s MB</string>
+    <!-- A size in gigabytes, such as 1.5 GB. %1$s is the number, already written in the reader's locale. -->
+    <string name="byte_count_gigabytes">%1$s GB</string>
+    <!-- A size in terabytes, such as 1.5 TB. %1$s is the number, already written in the reader's locale. -->
+    <string name="byte_count_terabytes">%1$s TB</string>
     <plurals name="file_viewer_size_bytes">
         <item quantity="one">%1$d byte</item>
         <item quantity="other">%1$d bytes</item>
@@ -525,6 +544,51 @@
     <string name="session_chat_suggestion_badge_skill">skill</string>
     <string name="session_chat_suggestion_badge_mcp">mcp</string>
     <string name="session_chat_move_worktree_current">Current worktree</string>
+    <string name="session_chat_move_worktree_menu_title">Move to worktree…</string>
+    <string name="session_chat_move_worktree_sheet_title">Move to worktree</string>
+    <string name="session_chat_move_worktree_no_other">This project has no other worktrees</string>
+    <string name="session_chat_move_worktree_moves_after_turn">Moves to %1$s after this turn.</string>
+    <string name="session_chat_move_worktree_failed">Couldn\'t move the session: %1$s</string>
+    <string name="session_chat_variant_default">Default</string>
+    <string name="session_chat_model_chip_placeholder">Model</string>
+    <string name="session_chat_model_chip_loading">Loading model…</string>
+    <string name="session_chat_model_notice_load_failed">Unable to load models. Tap Model to retry.</string>
+    <string name="session_chat_model_notice_none_usable">No usable models are available. Tap Model to retry.</string>
+    <string name="session_chat_model_notice_variant_unavailable">Remembered Variant is unavailable. Using Default.</string>
+    <string name="session_chat_model_notice_model_unavailable">Selected model is unavailable. Using %1$s.</string>
+    <string name="session_chat_side_question_unsupported">/btw needs an opencode v2 server that answers side questions. This server can\'t answer without adding to the conversation.</string>
+    <string name="session_chat_side_question_unavailable">/btw needs a newer opencode server.</string>
+    <string name="session_chat_side_question_copied">Answer copied</string>
+    <string name="session_chat_side_question_failed">/btw failed: “%1$s”</string>
+    <string name="attachment_error_folder">Folders can\'t be attached.</string>
+    <string name="attachment_error_duplicate">This file has already been uploaded</string>
+    <string name="attachment_error_too_large">This file is larger than %1$d MB.</string>
+    <string name="attachment_error_unsupported_type">Only images, PDFs, or text files can be attached here.</string>
+    <string name="attachment_error_model_no_images">This model does not support image attachments.</string>
+    <string name="attachment_error_model_no_pdf">This model does not support PDF attachments.</string>
+    <string name="attachment_error_model_some">This model does not support some of the selected attachments.</string>
+    <string name="attachment_error_unreadable">The attachment could not be read.</string>
+    <string name="attachment_error_upload_failed">Upload failed</string>
+    <string name="attachment_drop_reject_one">Can\'t attach this</string>
+    <string name="attachment_drop_reject_many">Can\'t attach these</string>
+    <plurals name="attachment_drop_attach_images_count">
+        <item quantity="one">Drop to attach %1$d image</item>
+        <item quantity="other">Drop to attach %1$d images</item>
+    </plurals>
+    <plurals name="attachment_drop_attach_files_count">
+        <item quantity="one">Drop to attach %1$d file</item>
+        <item quantity="other">Drop to attach %1$d files</item>
+    </plurals>
+    <string name="attachment_drop_attach_images">Drop to attach images</string>
+    <string name="attachment_drop_attach_files">Drop to attach files</string>
+    <string name="attachment_drop_adds_to_draft">Adds them to the message you are writing</string>
+    <plurals name="attachment_drop_skipped_count">
+        <item quantity="one">%1$d will be skipped</item>
+        <item quantity="other">%1$d will be skipped</item>
+    </plurals>
+    <string name="attachment_drop_some_skipped">Some will be skipped</string>
+    <!-- How many are skipped, then why: "2 will be skipped · Folders can't be attached." -->
+    <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
     <string name="session_chat_activity_review_permission">Review permission</string>
     <string name="session_chat_activity_review_permission_request">Review permission request</string>
     <string name="session_chat_activity_answer_question">Answer question</string>
@@ -749,8 +813,11 @@
         <item quantity="one">%1$d path</item>
         <item quantity="other">%1$d paths</item>
     </plurals>
-    <!-- %1$d is how many times a tool ran, %2$s the tool name. -->
-    <string name="tool_count_named">%1$d %2$s</string>
+    <!-- %1$d is how many times a tool ran (two or more), %2$s the tool name as the server sends it, such as mcp_lookup. Known tools have their own plurals, such as tool_count_read. -->
+    <plurals name="tool_count_named">
+        <item quantity="one">%1$d %2$s</item>
+        <item quantity="other">%1$d %2$s</item>
+    </plurals>
     <string name="tool_error_malformed">Not run: malformed tool call</string>
     <string name="tool_error_failed">Failed</string>
     <string name="tool_error_exit_code">Exited with code %1$d</string>
@@ -804,6 +871,13 @@
     <string name="timeline_explore_title">Explored — %1$s</string>
     <!-- Joins two parts of a list. -->
     <string name="timeline_list_separator">%1$s · %2$s</string>
+    <!-- Who wrote a message the timeline shows as plain text (the "<role>: <text>" fallback row). -->
+    <string name="timeline_role_you">You</string>
+    <string name="timeline_role_assistant">Assistant</string>
+    <string name="timeline_role_command">Command</string>
+    <string name="timeline_role_tool">Tool</string>
+    <string name="timeline_role_notice">Notice</string>
+    <string name="timeline_role_message">Message</string>
     <!-- Joins two tool names in a list. -->
     <string name="timeline_list_comma">%1$s, %2$s</string>
     <plurals name="timeline_activity_count_step">
@@ -845,6 +919,8 @@
     <string name="timeline_failure_pick_model">Pick a model</string>
     <string name="timeline_failure_compact">Compact</string>
     <string name="session_chat_compact_status">Compacting…</string>
+    <string name="session_chat_turn_sending">Sending…</string>
+    <string name="session_chat_turn_sending_percent">Sending %1$d%%</string>
     <string name="session_chat_compact_success">Session compacted.</string>
     <!-- Context usage before and after, in percent. -->
     <string name="session_chat_compact_success_usage">Context compacted · %1$d%% → %2$d%%</string>
@@ -889,8 +965,11 @@
     <string name="session_chat_sheet_mcp_error_message">The MCP server list didn\'t load.</string>
     <string name="session_chat_sheet_mcp_empty_title">No MCP servers</string>
     <string name="session_chat_sheet_mcp_empty_message">None are configured on this opencode server.</string>
-    <!-- %1$d connected MCP servers, %2$d configured. -->
-    <string name="session_chat_sheet_mcp_headline">%1$d of %2$d connected</string>
+    <!-- %1$d connected MCP servers, %2$d configured. The plural follows %2$d. -->
+    <plurals name="session_chat_sheet_mcp_headline">
+        <item quantity="one">%1$d of %2$d connected</item>
+        <item quantity="other">%1$d of %2$d connected</item>
+    </plurals>
     <string name="session_chat_sheet_mcp_status_connected">Connected</string>
     <string name="session_chat_sheet_mcp_status_connecting">Connecting</string>
     <string name="session_chat_sheet_mcp_status_disabled">Disabled</string>
@@ -981,6 +1060,61 @@
     <string name="session_chat_goal_resume_failed_reason">Couldn’t resume the goal: %1$s</string>
     <string name="session_chat_goal_clear_failed">Couldn’t clear the goal</string>
     <string name="session_chat_goal_clear_failed_reason">Couldn’t clear the goal: %1$s</string>
+    <!-- Snackbar after the Timeline Style picker; the argument is the chosen style's name (Standard, Step Rail, Activity Card). -->
+    <string name="session_chat_timeline_style_notice">Timeline: %1$s. Change it any time in Settings.</string>
+    <!-- Snackbar after the branch pill copied the branch name. -->
+    <string name="session_chat_branch_copied">Branch name copied</string>
+    <!-- Snackbar after the follow-up delivery toggle. -->
+    <string name="session_chat_follow_up_switched_steer">Switched to Steer</string>
+    <string name="session_chat_follow_up_switched_queue">Switched to Queue</string>
+    <!-- Countdown under a rate-limited failure: whole seconds up to 90, then minutes. -->
+    <string name="session_chat_failure_retry_after_seconds">Try again in %1$d s</string>
+    <string name="session_chat_failure_retry_after_minutes">Try again in %1$d min</string>
+    <!-- Caption under a steering message that waits for the next step. -->
+    <string name="component_outgoing_message_pending_caption">Pending · sends at the next step</string>
+    <!-- Shown under a permission or question prompt while a hardware keyboard is connected. -->
+    <string name="component_keyboard_hint_prompt">Press Tab to answer with the keyboard</string>
+    <!-- Session status bar context ring, for screen readers. -->
+    <string name="component_session_status_bar_context_usage">Context usage %1$d percent</string>
+    <string name="component_session_status_bar_context_usage_unavailable">Context usage unavailable</string>
+    <!-- System biometric or passcode prompt title when App Lock is on. -->
+    <string name="app_lock_prompt_title">Unlock OpenCode Mobile</string>
+    <!-- Session Branch Pill: the label when the changes have no line counts. -->
+    <plurals name="component_branch_pill_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <!-- Session Branch Pill popover: how many files have uncommitted changes. -->
+    <plurals name="component_branch_pill_uncommitted_files">
+        <item quantity="one">%1$d uncommitted file</item>
+        <item quantity="other">%1$d uncommitted files</item>
+    </plurals>
+    <!-- Session Branch Pill accessibility. The branch name is the argument. -->
+    <string name="component_branch_pill_a11y_branch">Branch %1$s</string>
+    <string name="component_branch_pill_a11y_worktree_branch">Worktree branch %1$s</string>
+    <!-- Session Branch Pill accessibility: the branch or file, then what changed. -->
+    <string name="component_branch_pill_a11y_no_changes">%1$s, no changes</string>
+    <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
+    <string name="component_branch_pill_a11y_added">%1$s, %2$d added</string>
+    <string name="component_branch_pill_a11y_removed">%1$s, %2$d removed</string>
+    <string name="session_chat_archive_failed">Couldn\'t archive session.</string>
+    <string name="session_chat_delete_failed">Couldn\'t delete session.</string>
+    <string name="session_chat_mcp_load_failed">Couldn\'t load MCP servers. Check the connection and try again.</string>
+    <string name="session_chat_create_failed">Unable to create session</string>
+    <!-- Android: a queued send the server never picked up. -->
+    <string name="session_chat_send_timed_out">Couldn\'t send. Try again.</string>
+    <string name="session_chat_shell_cannot_queue">Shell commands can\'t be queued. Switch to Steer to run it now.</string>
+    <!-- A permission or question reply failed. The _reason forms end with the server's reason. -->
+    <string name="session_chat_reply_error_permission">Couldn\'t send your reply. Try again.</string>
+    <string name="session_chat_reply_error_permission_reason">Couldn\'t send your reply. %1$s.</string>
+    <string name="session_chat_reply_error_question">Couldn\'t send your answer. Try again.</string>
+    <string name="session_chat_reply_error_question_reason">Couldn\'t send your answer. %1$s.</string>
+    <string name="session_chat_reply_error_dismiss">Couldn\'t dismiss the question. Try again.</string>
+    <string name="session_chat_reply_error_dismiss_reason">Couldn\'t dismiss the question. %1$s.</string>
+    <string name="session_chat_permission_unavailable">Permission request is no longer available</string>
+    <string name="session_chat_question_unavailable">Question request is no longer available</string>
+    <string name="session_chat_permission_tree_failed">Unable to refresh permission session tree</string>
+    <string name="session_chat_question_tree_failed">Unable to refresh question session tree</string>
     <string name="session_chat_sheet_timeline_style_picker_title">New: choose your timeline</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">This update adds new ways to follow what the agent is doing.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">You can change this any time in Settings → Timeline Style.</string>
@@ -1097,6 +1231,8 @@
     <string name="settings_section_server">Server</string>
     <string name="settings_section_help_feedback">Help &amp; Feedback</string>
     <string name="settings_section_appearance">Appearance</string>
+    <!-- Appearance row subtitle: the UI theme's name, then the code highlight preset's name. -->
+    <string name="settings_appearance_subtitle">%1$s · %2$s</string>
     <string name="settings_section_home">Home</string>
     <string name="settings_section_session_cache">Session Cache</string>
     <string name="settings_section_privacy">Privacy</string>
@@ -1106,7 +1242,11 @@
         <item quantity="one">%1$d saved</item>
         <item quantity="other">%1$d saved</item>
     </plurals>
-    <string name="settings_servers_summary_saved_active">%1$d saved · %2$s active</string>
+    <!-- %1$d is how many servers are saved, %2$s the active server's name. -->
+    <plurals name="settings_servers_summary_saved_active">
+        <item quantity="one">%1$d saved · %2$s active</item>
+        <item quantity="other">%1$d saved · %2$s active</item>
+    </plurals>
     <string name="settings_send_feedback_title">Send Feedback</string>
     <string name="settings_send_feedback_subtitle">Report a bug or share an idea</string>
     <string name="settings_hide_user_directory_title">Hide User Directory</string>
@@ -1143,17 +1283,16 @@
     <string name="settings_session_cache_size_label">Session Cache Size</string>
     <string name="settings_session_cache_empty">Empty</string>
     <string name="settings_session_cache_bytes">%1$d B</string>
-    <string name="settings_session_cache_kilobytes">%1$d KB</string>
-    <string name="settings_session_cache_megabytes">%1$s MB</string>
-    <string name="settings_session_cache_gigabytes">%1$s GB</string>
     <string name="settings_clear_session_cache_title">Clear Session Cache</string>
     <string name="settings_clear_session_cache_subtitle">Remove cached sessions and messages</string>
     <string name="settings_clear_session_cache_dialog_title">Clear session cache?</string>
     <string name="settings_clear_session_cache_dialog_message">Removes cached sessions and messages. Your connection and credentials stay.</string>
     <string name="settings_clear">Clear</string>
     <string name="settings_app_lock_title">App Lock</string>
-    <string name="settings_app_lock_subtitle_available">Require your face, fingerprint or device passcode when the app returns from the background</string>
-    <string name="settings_app_lock_subtitle_unavailable">Set a device passcode to use App Lock</string>
+    <!-- App Lock uses each platform's own names for the unlock methods, so the
+         English differs from iOS on purpose. -->
+    <string name="settings_app_lock_subtitle_available">Require your fingerprint, face or screen lock when the app returns from the background</string>
+    <string name="settings_app_lock_subtitle_unavailable">Set a screen lock on this device to use App Lock</string>
     <string name="settings_privacy_policy_title">Privacy Policy</string>
     <string name="settings_privacy_policy_subtitle">How the apps handle data</string>
     <string name="settings_analytics_title">Analytics &amp; crash reports</string>
@@ -1217,6 +1356,14 @@
     <string name="appearance_theme_blurb_signal">True white / true black</string>
     <string name="appearance_theme_blurb_hotline">Neutral chrome, loud pink</string>
     <string name="appearance_theme_blurb_phosphor">Neutral chrome, CRT green</string>
+    <!-- The code highlight preset that uses the UI theme's own syntax colors. -->
+    <string name="appearance_syntax_name_match">Match theme</string>
+    <string name="appearance_syntax_blurb_match">Use the UI theme’s own tokens</string>
+    <!-- Built-in code highlight presets' descriptions: the editor theme family each one follows (proper names). -->
+    <string name="appearance_syntax_blurb_nocturne">One Dark family</string>
+    <string name="appearance_syntax_blurb_citrus">Solarized family</string>
+    <string name="appearance_syntax_blurb_paper">GitHub family</string>
+    <string name="appearance_syntax_blurb_neon">Dracula family</string>
     <string name="appearance_preview_light">Light</string>
     <string name="appearance_preview_dark">Dark</string>
     <string name="appearance_preview_sample_message">Walk the token store.</string>
@@ -1430,10 +1577,75 @@
     <string name="changes_accessibility_summary">%1$s, %2$s, %3$s</string>
     <!-- Accessibility label of a changed file. %1$s path, %2$s status (Added, Deleted, Modified), %3$d position, %4$d file count, %5$s additions, %6$s deletions. -->
     <string name="changes_accessibility_file">%1$s, %2$s, file %3$d of %4$d, %5$s, %6$s</string>
-    <string name="component_unified_diff_summary_added">Added file %1$s, %2$d additions, %3$d deletions</string>
+    <!-- Visible label and accessibility part of the Review Changes pill. -->
+    <plurals name="component_review_changes_pill_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <string name="component_review_changes_pill_title">Review changes</string>
+    <!-- Accessibility label of a diff. %1$s is the path, %2$s the additions (changes_count_additions), %3$s the deletions (changes_count_deletions). -->
+    <string name="component_unified_diff_summary_added">Added file %1$s, %2$s, %3$s</string>
     <string name="component_activity_status_running">running</string>
+    <!-- Where a subagent is, on task and child session rows; shown and spoken in lowercase after the title. -->
+    <string name="component_subagent_state_running">running</string>
+    <!-- Spoken after a todo's text. %1$s is the todo, %2$s its status, such as in progress. -->
+    <string name="component_todo_item_accessibility_label">%1$s, %2$s</string>
+    <string name="component_todo_item_status_pending">pending</string>
+    <string name="component_todo_item_status_in_progress">in progress</string>
+    <string name="component_todo_item_status_completed">completed</string>
+    <string name="component_todo_item_status_cancelled">cancelled</string>
+    <!-- Accessibility label of the todos pill. %1$d completed todos, %2$d todos in total. -->
+    <string name="component_todos_pill_accessibility_label">Session todos, %1$d of %2$d completed</string>
+    <!-- Accessibility label of the todos pill. %1$d completed todos, %2$d todos in total, %3$s the todo in progress. -->
+    <string name="component_todos_pill_accessibility_label_active">Session todos, %1$d of %2$d completed, %3$s</string>
+    <!-- A settled thought. %1$s is how long it took, such as 4s. -->
+    <string name="component_reasoning_row_thought_duration">Thought · %1$s</string>
+    <!-- How long a thought took, under a minute: the number is already written in the reader's locale ("6.4"); "s" is the seconds unit. -->
+    <string name="component_reasoning_row_duration_seconds">%1$ss</string>
+    <!-- How long a thought took, in the TUI's compact units: milliseconds, then minutes and seconds, then hours and minutes. -->
+    <string name="component_reasoning_row_duration_ms">%1$dms</string>
+    <string name="component_reasoning_row_duration_minutes_seconds">%1$dm %2$ds</string>
+    <string name="component_reasoning_row_duration_hours_minutes">%1$dh %2$dm</string>
+    <!-- Accessibility hint on a thought row that opens the full thought. -->
+    <string name="component_reasoning_row_shows_thought_hint">Shows the full thought</string>
+    <!-- Accessibility: a diff row's kind, read before its line numbers. -->
+    <string name="component_unified_diff_row_kind_hunk">hunk</string>
+    <string name="component_unified_diff_row_kind_metadata">metadata</string>
+    <string name="component_unified_diff_row_kind_context">context</string>
+    <string name="component_unified_diff_row_kind_addition">addition</string>
+    <string name="component_unified_diff_row_kind_deletion">deletion</string>
+    <string name="component_unified_diff_old_line">old line %1$d</string>
+    <string name="component_unified_diff_new_line">new line %1$d</string>
+    <!-- Accessibility: a floating pill's state, read after its label. -->
+    <string name="component_floating_pill_state_live">In progress</string>
+    <string name="component_floating_pill_state_ready">Ready</string>
+    <string name="component_floating_pill_state_needs_attention">Needs attention</string>
+    <string name="component_floating_pill_state_error">Error</string>
+    <string name="component_floating_pill_state_done">Done</string>
+    <!-- %1$s is the pill's label, %2$s its state, such as Ready. -->
+    <string name="component_floating_pill_accessibility_label">%1$s, %2$s</string>
+    <!-- Close button of a floating pill. %1$s is the pill's label. -->
+    <string name="component_floating_pill_dismiss">Dismiss %1$s</string>
+    <!-- Accessibility state of a folder or a toggling row. -->
+    <string name="common_expanded">Expanded</string>
+    <string name="common_collapsed">Collapsed</string>
+    <!-- Accessibility value of a folder that is loading its children. -->
+    <string name="component_tree_row_loading">Loading</string>
+    <!-- Accessibility hints of a timeline notice whose value can expand. -->
+    <string name="component_timeline_notice_shows_one_line_hint">Shows one line</string>
+    <string name="component_timeline_notice_shows_full_value_hint">Shows the full value</string>
+    <!-- Accessibility label of an attachment. %1$s is the file name, %2$s its kind or detail, such as Image. -->
+    <string name="component_attachment_accessibility_label">%1$s, %2$s</string>
+    <string name="component_subagent_state_waiting_for_input">waiting for input</string>
+    <string name="component_subagent_state_done">done</string>
+    <string name="component_subagent_state_failed">failed</string>
+    <string name="component_subagent_state_stopped">stopped</string>
     <!-- Accessibility: read after a filter tab that has something new since it was last viewed. -->
     <string name="component_filter_tabs_unseen">new</string>
+    <!-- One letter drawn small before the text size slider and large after it, to show smaller and larger text. Not read aloud. Use a common capital letter of your script. -->
+    <string name="component_text_size_slider_sample_letter">A</string>
+    <!-- The day under a message's send time when it was sent yesterday, shown by dragging the message and read by screen readers. -->
+    <string name="component_message_time_yesterday">Yesterday</string>
     <string name="component_composer_reverting_title">Reverting this message</string>
     <!-- Title of a session that has none yet. -->
     <string name="session_new_title">New Session</string>
@@ -1441,7 +1653,8 @@
     <string name="theme_error_preset_not_found">Theme preset not found</string>
     <string name="component_composer_submit">Submit</string>
     <string name="component_composer_select_all_that_apply">Select all that apply</string>
-    <string name="component_unified_diff_summary_modified">Modified file %1$s, %2$d additions, %3$d deletions</string>
+    <!-- Accessibility label of a diff. %1$s is the path, %2$s the additions (changes_count_additions), %3$s the deletions (changes_count_deletions). -->
+    <string name="component_unified_diff_summary_modified">Modified file %1$s, %2$s, %3$s</string>
     <string name="component_hunk_navigation_collapse_context">Collapse context</string>
     <!-- %1$s is the project letter, %2$s the subtitle. -->
     <string name="component_top_bar_project_subtitle">Project %1$s %2$s</string>
@@ -1488,6 +1701,9 @@
         <item quantity="other">Also denies %1$d other waiting requests.</item>
     </plurals>
     <string name="dictation_stopped">Dictation stopped</string>
+    <!-- Android speech recognizer errors. -->
+    <string name="dictation_microphone_failed">Couldn\'t use the microphone</string>
+    <string name="dictation_busy">Dictation is busy</string>
     <string name="component_composer_question_position">%1$d of %2$d</string>
     <string name="session_list_status_ready">Ready</string>
     <string name="session_list_dock_hint_swipe">Opens the project filter. Swipe to switch projects.</string>
@@ -1559,7 +1775,8 @@
         <item quantity="other">%1$d steps</item>
     </plurals>
     <string name="theme_error_apply_failed">Failed to apply theme preset</string>
-    <string name="component_unified_diff_summary_deleted">Deleted file %1$s, %2$d additions, %3$d deletions</string>
+    <!-- Accessibility label of a diff. %1$s is the path, %2$s the additions (changes_count_additions), %3$s the deletions (changes_count_deletions). -->
+    <string name="component_unified_diff_summary_deleted">Deleted file %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">Running</string>
     <!-- %1$s is the number of earlier steps, such as 3 earlier steps. -->
     <string name="component_step_rail_expands">%1$s, expands</string>
@@ -1589,7 +1806,7 @@
     </plurals>
     <!-- Shown for two or more agents. -->
     <plurals name="component_activity_card_agent_count">
-        <item quantity="one">%1$d agents</item>
+        <item quantity="one">%1$d agent</item>
         <item quantity="other">%1$d agents</item>
     </plurals>
     <string name="theme_error_syntax_preset_not_found">Syntax highlight preset not found</string>

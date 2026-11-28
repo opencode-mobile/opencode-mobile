@@ -15,7 +15,7 @@ struct LocalAuthenticationAppLockAuthenticator: AppLockAuthenticating {
 
     func authenticate(reason: String) async -> Bool {
         let context = LAContext()
-        context.localizedCancelTitle = "Cancel"
+        context.localizedCancelTitle = String(localized: "common.cancel", defaultValue: "Cancel")
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil) else { return false }
         do {
             return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)

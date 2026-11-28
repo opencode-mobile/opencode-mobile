@@ -9,7 +9,7 @@ sealed interface AttachmentDestination {
     data object Upload : AttachmentDestination
 
     data class Reject(
-        val message: String,
+        val rejection: AttachmentRejection,
     ) : AttachmentDestination
 }
 
@@ -25,9 +25,6 @@ enum class InlineRejection {
  * its size limit.
  */
 object AttachmentUploadPolicy {
-    const val DUPLICATE_ERROR = "This file has already been uploaded"
-    const val UPLOAD_FAILED_ERROR = "Upload failed"
-
     fun destination(
         mime: String,
         byteCount: Long,
@@ -38,7 +35,7 @@ object AttachmentUploadPolicy {
         if (uploadAvailable) {
             return if (fitsInline && readsNatively(mime, model)) AttachmentDestination.Inline else AttachmentDestination.Upload
         }
-        return if (fitsInline) AttachmentDestination.Inline else AttachmentDestination.Reject(AttachmentLimits.TOO_LARGE_ERROR)
+        return if (fitsInline) AttachmentDestination.Inline else AttachmentDestination.Reject(AttachmentRejection.TooLarge())
     }
 
     /** `capabilities.input.image` / `.pdf` of the selected model; unknown model reads as native. */

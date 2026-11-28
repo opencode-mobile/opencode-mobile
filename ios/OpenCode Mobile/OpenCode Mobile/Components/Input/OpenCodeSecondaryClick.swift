@@ -143,6 +143,12 @@ private struct OpenCodeSecondaryClickArea: UIViewRepresentable {
             true
         }
 
+        /// Menu images bypass OpenCodeIconImage, so directional glyphs mirror here.
+        private static func menuImage(_ icon: OpenCodeIcon) -> UIImage? {
+            let image = UIImage(named: icon.rawValue)
+            return icon.mirrorsInRightToLeft ? image?.imageFlippedForRightToLeftLayoutDirection() : image
+        }
+
         func contextMenuInteraction(
             _ interaction: UIContextMenuInteraction,
             configurationForMenuAtLocation location: CGPoint
@@ -152,7 +158,7 @@ private struct OpenCodeSecondaryClickArea: UIViewRepresentable {
                 UIMenu(children: items.map { item in
                     UIAction(
                         title: item.title,
-                        image: item.icon.flatMap { UIImage(named: $0.rawValue) },
+                        image: item.icon.flatMap(Self.menuImage),
                         attributes: item.destructive ? .destructive : []
                     ) { _ in item.action() }
                 })

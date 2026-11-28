@@ -28,8 +28,26 @@ export function loadManifest() {
       source: entry.source ?? "lucide",
       iosAssetName: entry.ios_asset_name ?? `lucide_${name}`,
       notes: entry.notes ?? null,
+      mirrorsInRtl: parseMirrorsInRtl(entry),
     };
   });
+}
+
+function parseMirrorsInRtl(entry) {
+  const value = entry.mirrors_in_rtl ?? false;
+  if (typeof value !== "boolean") {
+    throw new Error(`mirrors_in_rtl must be true or false (catalog name ${entry.name})`);
+  }
+  return value;
+}
+
+/** One line per icon in icons/.manifest-hash; any generated-output input belongs here. */
+export function manifestHash(icons) {
+  return (
+    icons
+      .map((i) => `${i.source}/${i.lucide}/${i.name}:${i.iosAssetName}${i.mirrorsInRtl ? ":mirrors-in-rtl" : ""}`)
+      .join("\n") + "\n"
+  );
 }
 
 export function toPascalCase(snake) {

@@ -22,8 +22,11 @@ struct OpenCodeSessionStatusBar: View {
     }
 
     private var contextAccessibilityLabel: String {
-        guard let contextUsageFraction else { return "Context usage unavailable" }
-        return "Context usage \(Int(contextUsageFraction * 100)) percent"
+        guard let contextUsageFraction else {
+            return String(localized: "component.session_status_bar.context_usage_unavailable", defaultValue: "Context usage unavailable")
+        }
+        let percent = Int(contextUsageFraction * 100)
+        return String(localized: "component.session_status_bar.context_usage", defaultValue: "Context usage \(percent) percent")
     }
 
     private static let touchSize: CGFloat = 22

@@ -344,6 +344,18 @@
         }
       }
     },
+    "app_lock.prompt_title" : {
+      "comment" : "System biometric or passcode prompt title when App Lock is on.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock OpenCode Mobile"
+          }
+        }
+      }
+    },
     "appearance.code_highlight.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -615,6 +627,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Why does the login redirect test fail one run in five?"
+          }
+        }
+      }
+    },
+    "appearance.syntax_blurb.citrus" : {
+      "comment" : "Built-in code highlight preset description: the editor theme family it follows (proper name).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solarized family"
+          }
+        }
+      }
+    },
+    "appearance.syntax_blurb.match" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the UI theme’s own tokens"
+          }
+        }
+      }
+    },
+    "appearance.syntax_blurb.neon" : {
+      "comment" : "Built-in code highlight preset description: the editor theme family it follows (proper name).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dracula family"
+          }
+        }
+      }
+    },
+    "appearance.syntax_blurb.nocturne" : {
+      "comment" : "Built-in code highlight preset description: the editor theme family it follows (proper name).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One Dark family"
+          }
+        }
+      }
+    },
+    "appearance.syntax_blurb.paper" : {
+      "comment" : "Built-in code highlight preset description: the editor theme family it follows (proper name).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub family"
+          }
+        }
+      }
+    },
+    "appearance.syntax_name.match" : {
+      "comment" : "The code highlight preset that uses the UI theme's own syntax colors.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Match theme"
           }
         }
       }
@@ -1019,6 +1102,262 @@
         }
       }
     },
+    "attachment.error.duplicate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file has already been uploaded"
+          }
+        }
+      }
+    },
+    "attachment.error.folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folders can't be attached."
+          }
+        }
+      }
+    },
+    "attachment.error.invalid_data" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment data is invalid."
+          }
+        }
+      }
+    },
+    "attachment.error.model_no_images" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This model does not support image attachments."
+          }
+        }
+      }
+    },
+    "attachment.error.model_no_pdf" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This model does not support PDF attachments."
+          }
+        }
+      }
+    },
+    "attachment.error.model_some" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This model does not support some of the selected attachments."
+          }
+        }
+      }
+    },
+    "attachment.error.too_large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is larger than %lld MB."
+          }
+        }
+      }
+    },
+    "attachment.error.unreadable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment could not be read."
+          }
+        }
+      }
+    },
+    "attachment.error.unsupported_type" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only images, PDFs, or text files can be attached here."
+          }
+        }
+      }
+    },
+    "attachment.error.upload_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upload failed"
+          }
+        }
+      }
+    },
+    "attachment_drop.adds_to_draft" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds them to the message you are writing"
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_files" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop to attach files"
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_files_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_images" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop to attach images"
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_images_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld image"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld images"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "attachment_drop.reject_many" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't attach these"
+          }
+        }
+      }
+    },
+    "attachment_drop.reject_one" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't attach this"
+          }
+        }
+      }
+    },
+    "attachment_drop.skipped_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld will be skipped"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld will be skipped"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "attachment_drop.skipped_detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "attachment_drop.some_skipped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some will be skipped"
+          }
+        }
+      }
+    },
     "bottom_sheet.close" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1048,6 +1387,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Expand"
+          }
+        }
+      }
+    },
+    "byte_count.gigabytes" : {
+      "comment" : "A size in gigabytes, such as 1.5 GB. %@ is the number, already written in the reader's locale.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ GB"
+          }
+        }
+      }
+    },
+    "byte_count.kilobytes" : {
+      "comment" : "A size in kilobytes, such as 1.5 KB. %@ is the number, already written in the reader's locale.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ KB"
+          }
+        }
+      }
+    },
+    "byte_count.megabytes" : {
+      "comment" : "A size in megabytes, such as 1.5 MB. %@ is the number, already written in the reader's locale.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ MB"
+          }
+        }
+      }
+    },
+    "byte_count.terabytes" : {
+      "comment" : "A size in terabytes, such as 1.5 TB. %@ is the number, already written in the reader's locale.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ TB"
           }
         }
       }
@@ -1578,6 +1965,18 @@
         }
       }
     },
+    "common.collapsed" : {
+      "comment" : "Accessibility state of a folder or a toggling row.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapsed"
+          }
+        }
+      }
+    },
     "common.delete" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1607,6 +2006,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Edit"
+          }
+        }
+      }
+    },
+    "common.expanded" : {
+      "comment" : "Accessibility state of a folder or a toggling row.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expanded"
           }
         }
       }
@@ -1731,7 +2142,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld agents"
+                  "value" : "%lld agent"
                 }
               },
               "other" : {
@@ -1925,6 +2336,18 @@
         }
       }
     },
+    "component.attachment.accessibility_label" : {
+      "comment" : "Accessibility label of an attachment. %1$s is the file name, %2$s its kind or detail, such as Image.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "component.attachment.cancel_upload" : {
       "comment" : "%1$s is the file name.",
       "extractionState" : "manual",
@@ -2016,6 +2439,78 @@
         }
       }
     },
+    "component.branch_pill.a11y_added" : {
+      "comment" : "Session Branch Pill accessibility: the branch or file, then what changed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$lld added"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_branch" : {
+      "comment" : "Session Branch Pill accessibility. The branch name is the argument.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branch %@"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_detail" : {
+      "comment" : "Session Branch Pill accessibility: the branch or file, then what changed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_no_changes" : {
+      "comment" : "Session Branch Pill accessibility: the branch or file, then what changed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, no changes"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_removed" : {
+      "comment" : "Session Branch Pill accessibility: the branch or file, then what changed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$lld removed"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_worktree_branch" : {
+      "comment" : "Session Branch Pill accessibility. The branch name is the argument.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree branch %@"
+          }
+        }
+      }
+    },
     "component.branch_pill.based_on" : {
       "comment" : "%1$s is the base branch name.",
       "extractionState" : "manual",
@@ -2039,6 +2534,30 @@
         }
       }
     },
+    "component.branch_pill.files" : {
+      "comment" : "Session Branch Pill: the label when the changes have no line counts.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "component.branch_pill.shows_details_hint" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2046,6 +2565,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Shows branch details"
+          }
+        }
+      }
+    },
+    "component.branch_pill.uncommitted_files" : {
+      "comment" : "Session Branch Pill popover: how many files have uncommitted changes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld uncommitted file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld uncommitted files"
+                }
+              }
+            }
           }
         }
       }
@@ -2786,6 +3329,86 @@
         }
       }
     },
+    "component.floating_pill.accessibility_label" : {
+      "comment" : "%1$s is the pill's label, %2$s its state, such as Ready.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "component.floating_pill.dismiss" : {
+      "comment" : "Close button of a floating pill. %1$s is the pill's label.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss %@"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.error" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.live" : {
+      "comment" : "Accessibility: a floating pill's state, read after its label.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In progress"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.needs_attention" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs attention"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.ready" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready"
+          }
+        }
+      }
+    },
     "component.hunk_navigation.collapse_context" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2954,6 +3577,18 @@
         }
       }
     },
+    "component.keyboard_hint.prompt" : {
+      "comment" : "Shown under a permission or question prompt while a hardware keyboard is connected.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Press Tab to answer with the keyboard"
+          }
+        }
+      }
+    },
     "component.list_item.show_actions" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2973,6 +3608,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Image %@"
+          }
+        }
+      }
+    },
+    "component.message_time.yesterday" : {
+      "comment" : "The day under a message's send time when it was sent yesterday, shown by dragging the message and read by screen readers.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yesterday"
           }
         }
       }
@@ -3006,6 +3653,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Long press to show message actions"
+          }
+        }
+      }
+    },
+    "component.outgoing_message.pending_caption" : {
+      "comment" : "Caption under a steering message that waits for the next step.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pending · sends at the next step"
           }
         }
       }
@@ -3054,6 +3713,78 @@
         }
       }
     },
+    "component.reasoning_row.duration_hours_minutes" : {
+      "comment" : "How long a thought took, in the TUI's compact units. Hours, then minutes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lldh %2$lldm"
+          }
+        }
+      }
+    },
+    "component.reasoning_row.duration_minutes_seconds" : {
+      "comment" : "How long a thought took, in the TUI's compact units. Minutes, then seconds.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lldm %2$llds"
+          }
+        }
+      }
+    },
+    "component.reasoning_row.duration_ms" : {
+      "comment" : "How long a thought took, in the TUI's compact units. Milliseconds.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lldms"
+          }
+        }
+      }
+    },
+    "component.reasoning_row.duration_seconds" : {
+      "comment" : "How long a thought took, under a minute: the number is already written in the reader's locale (\"6.4\"); \"s\" is the seconds unit.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@s"
+          }
+        }
+      }
+    },
+    "component.reasoning_row.shows_thought_hint" : {
+      "comment" : "Accessibility hint on a thought row that opens the full thought.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the full thought"
+          }
+        }
+      }
+    },
+    "component.reasoning_row.thought_duration" : {
+      "comment" : "A settled thought. %1$s is how long it took, such as 4s.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thought · %@"
+          }
+        }
+      }
+    },
     "component.reorderable_list.move_down" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3072,6 +3803,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Move up"
+          }
+        }
+      }
+    },
+    "component.review_changes_pill.files" : {
+      "comment" : "Visible label and accessibility part of the Review Changes pill.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "component.review_changes_pill.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review changes"
           }
         }
       }
@@ -3179,6 +3945,30 @@
         }
       }
     },
+    "component.session_status_bar.context_usage" : {
+      "comment" : "Session status bar context ring, for screen readers.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Context usage %lld percent"
+          }
+        }
+      }
+    },
+    "component.session_status_bar.context_usage_unavailable" : {
+      "comment" : "Session status bar context ring, for screen readers.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Context usage unavailable"
+          }
+        }
+      }
+    },
     "component.skeleton_illustration.connect" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3281,6 +4071,74 @@
         }
       }
     },
+    "component.subagent_state.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "done"
+          }
+        }
+      }
+    },
+    "component.subagent_state.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "failed"
+          }
+        }
+      }
+    },
+    "component.subagent_state.running" : {
+      "comment" : "Where a subagent is, on task and child session rows; shown and spoken in lowercase after the title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "running"
+          }
+        }
+      }
+    },
+    "component.subagent_state.stopped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "stopped"
+          }
+        }
+      }
+    },
+    "component.subagent_state.waiting_for_input" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "waiting for input"
+          }
+        }
+      }
+    },
+    "component.text_size_slider.sample_letter" : {
+      "comment" : "One letter drawn small before the text size slider and large after it, to show smaller and larger text. Not read aloud. Use a common capital letter of your script.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A"
+          }
+        }
+      }
+    },
     "component.thinking" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3299,6 +4157,110 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Thinking…"
+          }
+        }
+      }
+    },
+    "component.timeline_notice.shows_full_value_hint" : {
+      "comment" : "Accessibility hints of a timeline notice whose value can expand.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the full value"
+          }
+        }
+      }
+    },
+    "component.timeline_notice.shows_one_line_hint" : {
+      "comment" : "Accessibility hints of a timeline notice whose value can expand.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows one line"
+          }
+        }
+      }
+    },
+    "component.todo_item.accessibility_label" : {
+      "comment" : "Spoken after a todo's text. %1$s is the todo, %2$s its status, such as in progress.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "component.todo_item.status.cancelled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancelled"
+          }
+        }
+      }
+    },
+    "component.todo_item.status.completed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "completed"
+          }
+        }
+      }
+    },
+    "component.todo_item.status.in_progress" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in progress"
+          }
+        }
+      }
+    },
+    "component.todo_item.status.pending" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pending"
+          }
+        }
+      }
+    },
+    "component.todos_pill.accessibility_label" : {
+      "comment" : "Accessibility label of the todos pill. %1$d completed todos, %2$d todos in total.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session todos, %1$lld of %2$lld completed"
+          }
+        }
+      }
+    },
+    "component.todos_pill.accessibility_label_active" : {
+      "comment" : "Accessibility label of the todos pill. %1$d completed todos, %2$d todos in total, %3$s the todo in progress.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session todos, %1$lld of %2$lld completed, %3$@"
           }
         }
       }
@@ -3323,6 +4285,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Worktree %@"
+          }
+        }
+      }
+    },
+    "component.tree_row.loading" : {
+      "comment" : "Accessibility value of a folder that is loading its children.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading"
           }
         }
       }
@@ -3360,35 +4334,116 @@
         }
       }
     },
-    "component.unified_diff.summary_added" : {
+    "component.unified_diff.new_line" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Added file %1$@, %2$lld additions, %3$lld deletions"
+            "value" : "new line %lld"
+          }
+        }
+      }
+    },
+    "component.unified_diff.old_line" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "old line %lld"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.addition" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "addition"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.context" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "context"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.deletion" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deletion"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.hunk" : {
+      "comment" : "Accessibility: a diff row's kind, read before its line numbers.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hunk"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.metadata" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "metadata"
+          }
+        }
+      }
+    },
+    "component.unified_diff.summary_added" : {
+      "comment" : "Accessibility label of a diff. %1$s is the path, %2$s the additions (changes.count.additions), %3$s the deletions (changes.count.deletions).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Added file %1$@, %2$@, %3$@"
           }
         }
       }
     },
     "component.unified_diff.summary_deleted" : {
+      "comment" : "Accessibility label of a diff. %1$s is the path, %2$s the additions (changes.count.additions), %3$s the deletions (changes.count.deletions).",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deleted file %1$@, %2$lld additions, %3$lld deletions"
+            "value" : "Deleted file %1$@, %2$@, %3$@"
           }
         }
       }
     },
     "component.unified_diff.summary_modified" : {
+      "comment" : "Accessibility label of a diff. %1$s is the path, %2$s the additions (changes.count.additions), %3$s the deletions (changes.count.deletions).",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modified file %1$@, %2$lld additions, %3$lld deletions"
+            "value" : "Modified file %1$@, %2$@, %3$@"
           }
         }
       }
@@ -5694,6 +6749,17 @@
         }
       }
     },
+    "files.error.server_status" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server responded with %lld."
+          }
+        }
+      }
+    },
     "files.find_error" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7524,6 +8590,66 @@
         }
       }
     },
+    "server_error.not_found" : {
+      "comment" : "The app's own words for a server error it recognises; other server errors show the server's text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folder or file not found"
+          }
+        }
+      }
+    },
+    "server_error.not_found_path" : {
+      "comment" : "The argument is the server's path.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folder or file not found · %@"
+          }
+        }
+      }
+    },
+    "server_error.pairing_expired" : {
+      "comment" : "The app's own words for a server error it recognises; other server errors show the server's text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pairing expired, pair again"
+          }
+        }
+      }
+    },
+    "server_error.session_busy" : {
+      "comment" : "The app's own words for a server error it recognises; other server errors show the server's text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session is busy"
+          }
+        }
+      }
+    },
+    "server_error.with_ref" : {
+      "comment" : "The server's error message, then its error reference id.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (%2$@)"
+          }
+        }
+      }
+    },
     "server_health.30_min_ago" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8878,6 +10004,17 @@
         }
       }
     },
+    "session_chat.archive_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't archive session."
+          }
+        }
+      }
+    },
     "session_chat.archived_banner" : {
       "comment" : "%@ is when the open session was archived, such as 2d ago.",
       "extractionState" : "manual",
@@ -8941,6 +10078,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add attachment"
+          }
+        }
+      }
+    },
+    "session_chat.branch_copied" : {
+      "comment" : "Snackbar after the branch pill copied the branch name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branch name copied"
           }
         }
       }
@@ -9221,6 +10370,17 @@
         }
       }
     },
+    "session_chat.create_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to create session"
+          }
+        }
+      }
+    },
     "session_chat.delete_dialog.confirm" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9250,6 +10410,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Delete session"
+          }
+        }
+      }
+    },
+    "session_chat.delete_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't delete session."
+          }
+        }
+      }
+    },
+    "session_chat.failure.retry_after_minutes" : {
+      "comment" : "Countdown under a rate-limited failure, in minutes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again in %lld min"
+          }
+        }
+      }
+    },
+    "session_chat.failure.retry_after_seconds" : {
+      "comment" : "Countdown under a rate-limited failure, in whole seconds.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again in %lld s"
+          }
+        }
+      }
+    },
+    "session_chat.follow_up.switched_queue" : {
+      "comment" : "Snackbar after the follow-up delivery toggle.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switched to Queue"
+          }
+        }
+      }
+    },
+    "session_chat.follow_up.switched_steer" : {
+      "comment" : "Snackbar after the follow-up delivery toggle.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switched to Steer"
           }
         }
       }
@@ -10103,6 +11322,17 @@
         }
       }
     },
+    "session_chat.mcp_load_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load MCP servers. Check the connection and try again."
+          }
+        }
+      }
+    },
     "session_chat.menu.archive" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10202,6 +11432,72 @@
         }
       }
     },
+    "session_chat.model_chip.loading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading model…"
+          }
+        }
+      }
+    },
+    "session_chat.model_chip.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model"
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.load_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to load models. Tap Model to retry."
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.model_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected model is unavailable. Using %@."
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.none_usable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usable models are available. Tap Model to retry."
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.variant_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remembered Variant is unavailable. Using Default."
+          }
+        }
+      }
+    },
     "session_chat.more_options" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10220,6 +11516,61 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Current worktree"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't move the session: %@"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.menu_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to worktree…"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.moves_after_turn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moves to %@ after this turn."
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.no_other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This project has no other worktrees"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.sheet_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to worktree"
           }
         }
       }
@@ -10292,6 +11643,50 @@
         }
       }
     },
+    "session_chat.permission_tree_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to refresh permission session tree"
+          }
+        }
+      }
+    },
+    "session_chat.permission_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permission request is no longer available"
+          }
+        }
+      }
+    },
+    "session_chat.question_tree_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to refresh question session tree"
+          }
+        }
+      }
+    },
+    "session_chat.question_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Question request is no longer available"
+          }
+        }
+      }
+    },
     "session_chat.rename_dialog.save" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10310,6 +11705,78 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rename session"
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.dismiss" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't dismiss the question. Try again."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.dismiss_reason" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't dismiss the question. %@."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.permission" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send your reply. Try again."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.permission_reason" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send your reply. %@."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.question" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send your answer. Try again."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.question_reason" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send your answer. %@."
           }
         }
       }
@@ -10365,6 +11832,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couldn't undo last message."
+          }
+        }
+      }
+    },
+    "session_chat.send_failed_offline" : {
+      "comment" : "iOS: a send tried while the connection is not live.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send. Retry when the connection is live."
+          }
+        }
+      }
+    },
+    "session_chat.send_stalled" : {
+      "comment" : "Snackbar when a prompt upload has gone unanswered for a while; its action retries the send.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Still sending…"
+          }
+        }
+      }
+    },
+    "session_chat.server_changed" : {
+      "comment" : "iOS: the active server changed while a send was on its way.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server changed before this was sent. Your draft is kept."
           }
         }
       }
@@ -10468,6 +11971,61 @@
         }
       }
     },
+    "session_chat.shell_cannot_queue" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shell commands can't be queued. Switch to Steer to run it now."
+          }
+        }
+      }
+    },
+    "session_chat.side_question.copied" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Answer copied"
+          }
+        }
+      }
+    },
+    "session_chat.side_question.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/btw failed: “%@”"
+          }
+        }
+      }
+    },
+    "session_chat.side_question.unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/btw needs a newer opencode server."
+          }
+        }
+      }
+    },
+    "session_chat.side_question.unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/btw needs an opencode v2 server that answers side questions. This server can't answer without adding to the conversation."
+          }
+        }
+      }
+    },
     "session_chat.suggestion.badge_mcp" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10523,6 +12081,18 @@
         }
       }
     },
+    "session_chat.timeline_style_notice" : {
+      "comment" : "Snackbar after the Timeline Style picker; the argument is the chosen style's name (Standard, Step Rail, Activity Card).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timeline: %@. Change it any time in Settings."
+          }
+        }
+      }
+    },
     "session_chat.title_hint" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10542,6 +12112,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "session_chat.turn.sending" : {
+      "comment" : "The turn pill while a large prompt starts uploading.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending…"
+          }
+        }
+      }
+    },
+    "session_chat.turn.sending_percent" : {
+      "comment" : "The turn pill while a large prompt uploads. %1$d is the percent sent.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending %lld%%"
+          }
+        }
+      }
+    },
+    "session_chat.variant_default" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
           }
         }
       }
@@ -10838,13 +12443,25 @@
       }
     },
     "session_chat_sheet.mcp.headline" : {
-      "comment" : "%1$lld connected MCP servers, %2$lld configured.",
+      "comment" : "%1$s connected MCP servers, %2$d configured. The plural follows %2$d.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld of %2$lld connected"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ of %2$lld connected"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ of %2$lld connected"
+                }
+              }
+            }
           }
         }
       }
@@ -12529,17 +14146,19 @@
       }
     },
     "settings.app_lock.subtitle_available" : {
+      "comment" : "Uses Apple's names for the unlock methods. Android words the same key with its own names.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Require your face, fingerprint or device passcode when the app returns from the background"
+            "value" : "Require Face ID, Touch ID or your passcode when the app returns from the background"
           }
         }
       }
     },
     "settings.app_lock.subtitle_unavailable" : {
+      "comment" : "Uses Apple's word passcode. Android words the same key as a screen lock.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -12557,6 +14176,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "App Lock"
+          }
+        }
+      }
+    },
+    "settings.appearance.subtitle" : {
+      "comment" : "Appearance row subtitle: the UI theme's name, then the code highlight preset's name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@"
           }
         }
       }
@@ -13026,12 +14657,25 @@
       }
     },
     "settings.servers_summary.saved_active" : {
+      "comment" : "%1$d is how many servers are saved, %2$s the active server's name.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld saved · %2$@ active"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld saved · %2$@ active"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld saved · %2$@ active"
+                }
+              }
+            }
           }
         }
       }
@@ -13054,39 +14698,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Empty"
-          }
-        }
-      }
-    },
-    "settings.session_cache.gigabytes" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ GB"
-          }
-        }
-      }
-    },
-    "settings.session_cache.kilobytes" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld KB"
-          }
-        }
-      }
-    },
-    "settings.session_cache.megabytes" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ MB"
           }
         }
       }
@@ -14247,6 +15858,78 @@
         }
       }
     },
+    "timeline.role.assistant" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistant"
+          }
+        }
+      }
+    },
+    "timeline.role.command" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command"
+          }
+        }
+      }
+    },
+    "timeline.role.message" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message"
+          }
+        }
+      }
+    },
+    "timeline.role.notice" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notice"
+          }
+        }
+      }
+    },
+    "timeline.role.tool" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tool"
+          }
+        }
+      }
+    },
+    "timeline.role.you" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You"
+          }
+        }
+      }
+    },
     "timeline.state.creating_subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14870,13 +16553,25 @@
       }
     },
     "tool.count.named" : {
-      "comment" : "%1$d is how many times a tool ran, %2$s the tool name.",
+      "comment" : "%1$d is how many times a tool ran (two or more), %2$s the tool name as the server sends it, such as mcp_lookup. Known tools have their own plurals, such as tool.count.read.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld %2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld %2$@"
+                }
+              }
+            }
           }
         }
       }
@@ -15884,6 +17579,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Needs a git repository"
+          }
+        }
+      }
+    },
+    "worktree.request_failed_http" : {
+      "comment" : "A worktree request failed and the server sent no readable message. The number is the HTTP status code.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request failed (HTTP %lld)"
           }
         }
       }

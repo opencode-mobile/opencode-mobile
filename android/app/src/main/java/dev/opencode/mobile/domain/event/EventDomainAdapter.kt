@@ -14,6 +14,7 @@ import dev.opencode.mobile.domain.goal.SessionGoalKickoff
 import dev.opencode.mobile.domain.message.V2ContentPartId
 import dev.opencode.mobile.domain.message.V2TimelineNotices
 import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionBusyStatus
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.toSessionActivity
 import kotlinx.serialization.json.Json
@@ -1359,9 +1360,7 @@ class EventDomainAdapter(
         key: String,
     ): String? = obj?.string(key)
 
-    fun statusLabel(sessionStatus: SessionStatus): String? = sessionStatus.toSessionActivity().statusLabel()
-
-    fun statusLabel(activity: SessionActivity): String? = activity.statusLabel()
+    fun busyStatus(sessionStatus: SessionStatus): SessionBusyStatus? = sessionStatus.toSessionActivity().busyStatus()
 
     /**
      * Status carried by a `session.status` SSE payload.

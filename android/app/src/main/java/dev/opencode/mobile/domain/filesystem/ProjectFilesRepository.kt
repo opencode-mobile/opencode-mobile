@@ -150,8 +150,7 @@ class DefaultProjectFilesRepository
 
         private fun describe(error: Exception): UiText =
             when (error) {
-                // Not keyed yet: needs a files.* key (#886).
-                is ResponseException -> UiText.verbatim("The server responded with ${error.response.status.value}.")
+                is ResponseException -> UiText.resource(R.string.files_error_server_status, error.response.status.value)
                 else -> UiText.resource(R.string.files_error_check_server_connection)
             }
 

@@ -6,10 +6,6 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 data class TimelineRow(
     val id: String,
@@ -100,8 +96,6 @@ data class OptimisticInputs(
 )
 
 object TimelineProjector {
-    private val sentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
-
     fun project(
         frame: DisplayFrame,
         optimisticInputs: OptimisticInputs = OptimisticInputs(),
@@ -283,15 +277,16 @@ object TimelineProjector {
             else -> emptyList()
         }
 
-    fun metadataLabel(message: Message): String {
-        val timeLabel = message.sentAtEpochMs?.let(::formatSentTime)
-        return listOfNotNull(
+    /**
+     * Agent, model and variant for TalkBack. The sent time is not part of it: the view writes
+     * [TimelineRow.sentAtEpochMs] in the current locale and 12/24-hour setting (#886).
+     */
+    fun metadataLabel(message: Message): String =
+        listOfNotNull(
             message.mode?.let(TitleCaseIdentifier::displayName),
             message.model?.let(TitleCaseIdentifier::displayName),
             message.variant?.let(TitleCaseIdentifier::displayName),
-            timeLabel,
         ).joinToString(" · ")
-    }
 
     fun isStreaming(message: Message): Boolean = message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
 
@@ -717,10 +712,4 @@ object TimelineProjector {
                 }
             }
         }
-
-    private fun formatSentTime(epochMs: Long): String =
-        Instant
-            .ofEpochMilli(epochMs)
-            .atZone(ZoneId.systemDefault())
-            .format(sentTimeFormatter)
 }

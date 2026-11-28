@@ -10,13 +10,6 @@ import dev.opencode.mobile.domain.text.UiText
 object SessionCompactChrome {
     val statusLabel: UiText = UiText.resource(R.string.session_chat_compact_status)
 
-    /**
-     * The same label for the working indicator, whose session status labels are still plain
-     * strings end to end (shared with the session status chrome). Moves to [statusLabel] when
-     * that pipeline carries UiText.
-     */
-    const val STATUS_LABEL = "Compacting…"
-
     /** Timeline marker for a server compaction item; the summary opens from it. */
     val markerTitle: UiText = UiText.resource(R.string.timeline_compaction_title)
     val markerAutoSubtitle: UiText = UiText.resource(R.string.timeline_compaction_automatic)

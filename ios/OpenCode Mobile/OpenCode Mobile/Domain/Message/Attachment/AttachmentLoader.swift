@@ -7,18 +7,17 @@ enum AttachmentLoadError: LocalizedError, Equatable {
     case invalidDataURL
     case tooLarge
 
-    var errorDescription: String? {
+    /// What the user is told; see `AttachmentRejection`.
+    nonisolated var rejection: AttachmentRejection {
         switch self {
-        case .unsupportedType:
-            "Only images, PDFs, or text files can be attached here."
-        case .unreadableFile:
-            "The attachment could not be read."
-        case .invalidDataURL:
-            "The attachment data is invalid."
-        case .tooLarge:
-            AttachmentLimits.tooLargeMessage
+        case .unsupportedType: .unsupportedType
+        case .unreadableFile: .unreadable
+        case .invalidDataURL: .invalidData
+        case .tooLarge: .tooLarge()
         }
     }
+
+    var errorDescription: String? { String(localized: rejection.text) }
 }
 
 enum AttachmentDataURL {

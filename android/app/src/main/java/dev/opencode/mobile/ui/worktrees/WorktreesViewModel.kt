@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
 import dev.opencode.mobile.domain.home.worktreePathKey
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.RemoveWorktreeRequest
 import dev.opencode.mobile.domain.worktree.WorktreeRemoveError
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
@@ -105,7 +106,8 @@ sealed interface WorktreesSnackbarUi {
     data class Failed(
         val name: String,
         val directory: String,
-        val message: String?,
+        /** Null when the server could not be reached. */
+        val message: UiText?,
         override val id: Long = System.nanoTime(),
     ) : WorktreesSnackbarUi
 }
@@ -315,7 +317,7 @@ class WorktreesViewModel
                     }
                     else -> {
                         DiagnosticLog.warning(DiagnosticLogArea.Session, "worktree remove failed: ${outcome.message}")
-                        val message = outcome.message.takeUnless { outcome is WorktreeRemoveError.Unreachable }
+                        val message = outcome.text.takeUnless { outcome is WorktreeRemoveError.Unreachable }
                         _state.update {
                             it.copy(snackbar = WorktreesSnackbarUi.Failed(name, worktree.directory, message))
                         }

@@ -81,6 +81,7 @@ import dev.opencode.mobile.domain.message.AttachmentDropSummary
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.attachmentRejection
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.resolve
@@ -157,7 +158,6 @@ import dev.opencode.mobile.ui.sessionchat.dictation.cardPhase
 import dev.opencode.mobile.ui.sessionchat.dictation.dictationLanguageLabel
 import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
 import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveCopy
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
@@ -184,6 +184,8 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
 import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
+import dev.opencode.mobile.ui.text.currentLocale
+import dev.opencode.mobile.ui.text.rememberUiTextLookup
 import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.ui.worktree.NewWorktreeRow
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions
@@ -490,7 +492,7 @@ private fun SessionChatScreenBody(
                         DiagnosticLogAttachment.from(DiagnosticLogBuffer.shared)
                     }
                 }.getOrElse {
-                    viewModel.reportAttachmentError(AttachmentIngestionService.READ_ERROR)
+                    viewModel.reportAttachmentError(it.attachmentRejection())
                     return@launch
                 }
             viewModel.addAttachments(listOf(attachment))
@@ -536,7 +538,7 @@ private fun SessionChatScreenBody(
 
                 override fun onUnavailable(
                     phase: ComposerDictationPhase,
-                    message: String?,
+                    message: UiText?,
                 ) {
                     viewModel.beginDictationUnavailable(phase, message)
                 }
@@ -746,7 +748,7 @@ private fun SessionChatScreenBody(
     OpenCodeDialog(
         visible = showDeleteConfirmation,
         title = stringResource(R.string.session_chat_delete_dialog_title),
-        subtitle = stringResource(R.string.session_chat_delete_dialog_message, uiState.sessionTitle),
+        subtitle = stringResource(R.string.session_chat_delete_dialog_message, OptimisticSessionCreate.displayTitle(uiState.sessionTitle).resolve()),
         primaryOption =
             OpenCodeDialogOption(
                 title = stringResource(R.string.session_chat_delete_dialog_confirm),
@@ -886,10 +888,10 @@ private fun SessionChatScreenBody(
                         )
                         add(
                             OpenCodeOverflowMenuEntry(
-                                title = SessionChatWorktreeMoveCopy.MENU_TITLE,
+                                title = stringResource(R.string.session_chat_move_worktree_menu_title),
                                 icon = OpenCodeIcons.CallSplit,
                                 enabled = uiState.moveToWorktree.availability.enabled,
-                                subtitle = uiState.moveToWorktree.availability.subtitle,
+                                subtitle = uiState.moveToWorktree.availability.subtitle?.resolve(),
                                 testTag = SessionChatWorktreeMoveTags.MENU_ENTRY,
                                 onClick = {
                                     menuExpanded = false
@@ -976,7 +978,7 @@ private fun SessionChatScreenBody(
                         if (drafting) {
                             stringResource(R.string.new_session_title)
                         } else {
-                            titleMenu?.title ?: uiState.sessionTitle.ifBlank { sessionTitle }
+                            titleMenu?.title ?: OptimisticSessionCreate.displayTitle(uiState.sessionTitle.ifBlank { sessionTitle }).resolve()
                         },
                     onTitleClick = titleMenu?.onClick,
                     subtitle = if (drafting) stringResource(R.string.new_session_draft_subtitle) else uiState.projectLabel,
@@ -1050,7 +1052,7 @@ private fun SessionChatScreenBody(
             }
             uiState.composer.modelNotice?.let { notice ->
                 OpenCodeInlineNotice(
-                    message = notice,
+                    message = notice.resolve(),
                     modifier =
                         Modifier
                             .align(Alignment.CenterHorizontally)
@@ -1102,7 +1104,7 @@ private fun SessionChatScreenBody(
                                 isRefreshing = uiState.isRefreshing,
                                 hasOlder = uiState.hasOlder,
                                 isLoadingOlder = uiState.isLoadingOlder,
-                                errorMessage = uiState.errorMessage,
+                                errorMessage = uiState.errorMessage?.resolve(),
                                 sessionBranchPill = uiState.sessionBranchPill,
                                 syncingIndicatorLabel = uiState.syncingIndicatorLabel,
                                 workingIndicatorLabel = uiState.workingIndicatorLabel,
@@ -1364,7 +1366,7 @@ private fun SessionChatScreenBody(
                         if (overlayComposerKind == SessionChatComposerKind.Prompt) {
                             uiState.sideQuestions.unsupportedNotice?.let { notice ->
                                 OpenCodeInlineNotice(
-                                    message = notice,
+                                    message = notice.resolve(),
                                     variant = OpenCodeInlineNoticeVariant.Banner,
                                     modifier =
                                         Modifier
@@ -1432,7 +1434,7 @@ private fun SessionChatScreenBody(
                                             },
                                         submitting = uiState.permissionSubmitting,
                                         actionsEnabled = uiState.canMutate,
-                                        errorMessage = uiState.permissionErrorMessage,
+                                        errorMessage = uiState.permissionErrorMessage?.resolve(),
                                         note = uiState.permissionNote?.text,
                                         otherPendingInSessionCount = uiState.permissionOtherPendingInSession,
                                     )
@@ -1478,7 +1480,7 @@ private fun SessionChatScreenBody(
                                         nextEnabled = answered && index < questionCount - 1 && !submitting,
                                         submitEnabled = answered && index == questionCount - 1 && !submitting,
                                         submitting = submitting,
-                                        errorMessage = uiState.questionErrorMessage,
+                                        errorMessage = uiState.questionErrorMessage?.resolve(),
                                         requestPosition = uiState.questionQueuePosition,
                                         requestCount = uiState.questionQueueCount,
                                         attribution =
@@ -1489,8 +1491,8 @@ private fun SessionChatScreenBody(
                                 }
                                 SessionChatComposerKind.ChildLockout ->
                                     OpenCodeSessionComposerState.ChildLockout(
-                                        selectedModelLabel = uiState.composer.selectedModelLabel,
-                                        selectedVariantLabel = uiState.composer.selectedVariantLabel,
+                                        selectedModelLabel = uiState.composer.selectedModelLabel.resolve(),
+                                        selectedVariantLabel = uiState.composer.selectedVariantLabel.resolve(),
                                         showVariant = uiState.composer.canSelectVariant,
                                     )
                                 SessionChatComposerKind.Prompt ->
@@ -1503,9 +1505,9 @@ private fun SessionChatScreenBody(
                                         attachments =
                                             uiState.composer.attachments.map(AttachmentPresentationMapper::from),
                                         showPendingRevert = uiState.hasPendingRevert,
-                                        selectedModelLabel = uiState.composer.selectedModelLabel,
+                                        selectedModelLabel = uiState.composer.selectedModelLabel.resolve(),
                                         selectedModeLabel = uiState.composer.selectedModeLabel,
-                                        selectedVariantLabel = uiState.composer.selectedVariantLabel,
+                                        selectedVariantLabel = uiState.composer.selectedVariantLabel.resolve(),
                                         showVariant = uiState.composer.canSelectVariant,
                                         sendEnabled =
                                             (
@@ -1744,7 +1746,9 @@ private fun SessionChatScreenBody(
                                                 {
                                                     toolDetailTarget =
                                                         sessionFailureDetailTarget(
-                                                            text = UiText.verbatim(card.message),
+                                                            text =
+                                                                card.message?.let(UiText::verbatim)
+                                                                    ?: UiText.resource(R.string.session_list_status_retrying),
                                                             providerBody = body,
                                                             action = null,
                                                             actionLabel = null,
@@ -1809,7 +1813,7 @@ private fun SessionChatScreenBody(
         // streaming in and settles in place (#1118).
         val thinkingLabel = stringResource(R.string.component_thinking_ellipsis)
         SessionChatToolDetailSheet(
-            target = uiState.presentedThought?.detailTarget(thinkingLabel),
+            target = uiState.presentedThought?.detailTarget(thinkingLabel, rememberUiTextLookup()),
             onDismiss = viewModel::closeThought,
             onOpenLink = { openSessionExternalLink(sheetContext, it) },
         )
@@ -1987,7 +1991,7 @@ private fun SessionChatScreenBody(
                     onValueChange = viewModel::updateRenameDraft,
                     hint = stringResource(R.string.session_chat_title_hint),
                     enabled = !uiState.rename.isSubmitting,
-                    errorMessage = uiState.rename.errorMessage,
+                    errorMessage = uiState.rename.errorMessage?.resolve(),
                 ),
             onDismissRequest = {
                 if (!uiState.rename.isSubmitting) {
@@ -2019,7 +2023,7 @@ private fun SessionChatScreenBody(
                 SessionChatMcpServersSheetContent(
                     servers = uiState.mcpServers,
                     loading = uiState.mcpLoading,
-                    errorMessage = uiState.mcpErrorMessage,
+                    errorMessage = uiState.mcpErrorMessage?.resolve(),
                     summary = uiState.mcpSummary,
                 )
             } else {
@@ -2092,8 +2096,8 @@ private fun SessionChatScreenBody(
             summary.value?.let { shown ->
                 OpenCodeDropOverlay(
                     variant = if (shown.rejected) OpenCodeDropOverlayVariant.Reject else OpenCodeDropOverlayVariant.Accept,
-                    title = shown.title,
-                    subtitle = shown.subtitle,
+                    title = shown.title.resolve(),
+                    subtitle = shown.subtitle.resolve(),
                     previews = shown.previews.map { it.toAttachmentVariant() },
                 )
             }
@@ -2306,7 +2310,7 @@ private fun SessionChatMoveToWorktreeSheet(
     val form = state.form
     OpenCodeBottomSheet(
         visible = state.sheetVisible,
-        title = if (form != null) stringResource(R.string.worktree_form_title) else SessionChatWorktreeMoveCopy.SHEET_TITLE,
+        title = if (form != null) stringResource(R.string.worktree_form_title) else stringResource(R.string.session_chat_move_worktree_sheet_title),
         onDismissRequest = onDismiss,
         headerTrailingAction = form?.let { worktreeCreateBackAction(it, formCallbacks) },
         keyboard = if (form != null && !form.basePickerVisible) OpenCodeBottomSheetKeyboard.Keep else OpenCodeBottomSheetKeyboard.Dismiss,
@@ -2329,7 +2333,7 @@ private fun SessionChatMoveToWorktreeRows(
     state.rows.forEach { row ->
         OpenCodeListItem(
             title = row.title,
-            subtitle = row.subtitle,
+            subtitle = row.subtitle.resolve(),
             selected = row.isCurrent,
             enabled = state.submittingDirectory == null || state.submittingDirectory == row.directory,
             startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),

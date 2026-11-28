@@ -373,11 +373,11 @@ final class SessionChatNewSessionDraft {
         }
         switch sessionError {
         case let .http(_, message):
-            return message ?? "Unable to create session"
+            return message ?? String(localized: "session_chat.create_failed", defaultValue: "Unable to create session")
         case .transport:
-            return "Unable to reach the server"
+            return String(localized: "connection.error.unreachable", defaultValue: "Unable to reach the server")
         case .decoding:
-            return "Unable to read server response"
+            return String(localized: "home.session_error.unreadable_response", defaultValue: "Unable to read server response")
         }
     }
 

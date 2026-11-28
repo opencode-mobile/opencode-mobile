@@ -27,6 +27,13 @@ class UiTextTest {
             val (one, other) = plurals.getValue(id)
             return String.format(if (count == 1) one else other, *args)
         }
+
+        override fun dateTime(
+            epochMs: Long,
+            style: DateTimeStyle,
+        ): String = "$style@$epochMs"
+
+        override fun number(number: UiText.Number): String = "${number.value}"
     }
 
     @Test

@@ -212,7 +212,7 @@ enum SessionChatPillSlots {
     /// `thinking`: a thought streams at the end of the turn, so a plain Working reads Thinking
     /// and opens that thought. Compacting, Retrying and Sending keep their own label.
     static func turnStatus(
-        label: String?,
+        label: SessionTurnLabel?,
         fading: Bool,
         isAwaitingUser: Bool,
         items: [SessionChatActivityItem],
@@ -259,7 +259,7 @@ enum SessionChatPillSlots {
             )
         }
         guard let label else { return nil }
-        if thinking, !fading, label == OpenCodeActivityText.working {
+        if thinking, !fading, label == .working {
             return SessionChatTurnStatusSlot(
                 phase: .working(label: OpenCodeActivityText.thinking),
                 compact: awayFromEnd || keyboardVisible,
@@ -269,7 +269,7 @@ enum SessionChatPillSlots {
             )
         }
         return SessionChatTurnStatusSlot(
-            phase: WorkingTurnIndicator.showsIdleMark(label: label) ? .done : .working(label: label),
+            phase: WorkingTurnIndicator.showsIdleMark(label: label) ? .done : .working(label: label.text),
             compact: awayFromEnd || keyboardVisible,
             leaving: fading
         )

@@ -30,25 +30,43 @@ final class SessionContextViewModel {
     private let worktree: String
     private let repository: any SessionContextRepository
     private let numberFormatter: NumberFormatter
+    private let percentFormatter: NumberFormatter
     private let currencyFormatter: NumberFormatter
     private let dateFormatter: DateFormatter
 
-    init(sessionID: String, worktree: String, repository: any SessionContextRepository) {
+    /// Numbers, costs and dates are written in `locale` and `timeZone` (#886). iOS relaunches
+    /// the app when its language changes, so formatting here does not go stale.
+    init(
+        sessionID: String,
+        worktree: String,
+        repository: any SessionContextRepository,
+        locale: Locale = .current,
+        timeZone: TimeZone = .current
+    ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.repository = repository
 
         let numberFormatter = NumberFormatter()
+        numberFormatter.locale = locale
         numberFormatter.numberStyle = .decimal
         self.numberFormatter = numberFormatter
 
+        let percentFormatter = NumberFormatter()
+        percentFormatter.locale = locale
+        percentFormatter.numberStyle = .percent
+        self.percentFormatter = percentFormatter
+
+        // Providers report costs in US dollars, whatever the reader's locale.
         let currencyFormatter = NumberFormatter()
+        currencyFormatter.locale = locale
         currencyFormatter.numberStyle = .currency
         currencyFormatter.currencyCode = "USD"
         self.currencyFormatter = currencyFormatter
 
         let dateFormatter = DateFormatter()
-        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.locale = locale
+        dateFormatter.timeZone = timeZone
         dateFormatter.dateStyle = .medium
         dateFormatter.timeStyle = .short
         self.dateFormatter = dateFormatter
@@ -130,7 +148,7 @@ final class SessionContextViewModel {
     }
 
     private func percent(_ value: Int?) -> String {
-        value.map { "\($0)%" } ?? "—"
+        value.map { percentFormatter.string(from: NSNumber(value: Double($0) / 100)) ?? "\($0)%" } ?? "—"
     }
 
     private func currency(_ value: Double) -> String {

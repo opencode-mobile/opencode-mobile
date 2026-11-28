@@ -1,17 +1,29 @@
 package dev.opencode.mobile.ui.text
 
 import android.content.res.Resources
+import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
+import dev.opencode.mobile.domain.text.DateTimeStyle
+import dev.opencode.mobile.domain.text.LocalizedNumberFormat
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.domain.time.LocalizedDateTimeFormat
+import java.time.ZoneId
+import java.util.Locale
 
-/** [UiTextLookup] backed by Android [Resources]. */
+/** [UiTextLookup] backed by Android [Resources]; dates follow the same configuration's locale. */
 class ResourcesUiTextLookup(
     private val resources: Resources,
 ) : UiTextLookup {
+    private val dates: LocalizedDateTimeFormat by lazy {
+        platformDateTimeFormat(resources.configuration.locales[0])
+    }
+
     override fun string(
         id: Int,
         args: Array<out Any>,
@@ -22,6 +34,46 @@ class ResourcesUiTextLookup(
         count: Int,
         args: Array<out Any>,
     ): String = resources.getQuantityString(id, count, *args)
+
+    override fun dateTime(
+        epochMs: Long,
+        style: DateTimeStyle,
+    ): String = dates.format(epochMs, style)
+
+    override fun number(number: UiText.Number): String = LocalizedNumberFormat.format(number, resources.configuration.locales[0])
+}
+
+/**
+ * [LocalizedDateTimeFormat] with the platform's CLDR patterns for [locale], in the device time
+ * zone. [is24Hour] is the reader's clock setting (`DateFormat.is24HourFormat`), for times.
+ */
+fun platformDateTimeFormat(
+    locale: Locale,
+    zone: ZoneId = ZoneId.systemDefault(),
+    is24Hour: Boolean = false,
+): LocalizedDateTimeFormat =
+    LocalizedDateTimeFormat(
+        locale = locale,
+        zone = zone,
+        monthDayPattern = DateFormat.getBestDateTimePattern(locale, "MMMd"),
+        weekdayMonthDayPattern = DateFormat.getBestDateTimePattern(locale, "EEEEMMMd"),
+        timePattern = DateFormat.getBestDateTimePattern(locale, if (is24Hour) "Hm" else "hm"),
+    )
+
+/** The current configuration's locale; recomposes when the language changes. */
+@Composable
+@ReadOnlyComposable
+fun currentLocale(): Locale = LocalConfiguration.current.locales[0]
+
+/**
+ * A [UiTextLookup] for the current configuration, kept across recompositions and replaced when
+ * the resources or locale change, for code that resolves text outside a composable.
+ */
+@Composable
+fun rememberUiTextLookup(): UiTextLookup {
+    val resources = LocalResources.current
+    val locale = currentLocale()
+    return remember(resources, locale) { ResourcesUiTextLookup(resources) }
 }
 
 /** Resolves in the current configuration; recomposes when the locale changes, like stringResource. */

@@ -15,13 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-import java.text.NumberFormat
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.util.Locale
-
 import javax.inject.Inject
 
 @HiltViewModel
@@ -100,82 +93,82 @@ class SessionContextViewModel
                         SessionContextStatItem(
                             "session",
                             label(R.string.session_context_stat_session),
-                            snapshot.sessionTitle,
+                            SessionContextStatValue.Text(snapshot.sessionTitle),
                         ),
                         SessionContextStatItem(
                             "messages",
                             label(R.string.session_context_stat_messages),
-                            number(snapshot.messageCounts.total),
+                            count(snapshot.messageCounts.total),
                         ),
                         SessionContextStatItem(
                             "provider",
                             label(R.string.session_context_stat_provider),
-                            snapshot.providerLabel ?: "—",
+                            SessionContextStatValue.Text(snapshot.providerLabel),
                         ),
                         SessionContextStatItem(
                             "model",
                             label(R.string.session_context_stat_model),
-                            snapshot.modelLabel ?: "—",
+                            SessionContextStatValue.Text(snapshot.modelLabel),
                         ),
                         SessionContextStatItem(
                             "limit",
                             label(R.string.session_context_stat_context_limit),
-                            number(tokenStats?.contextLimit),
+                            count(tokenStats?.contextLimit),
                         ),
                         SessionContextStatItem(
                             "total",
                             label(R.string.session_context_stat_total_tokens),
-                            number(tokenStats?.total),
+                            count(tokenStats?.total),
                         ),
                         SessionContextStatItem(
                             "usage",
                             label(R.string.session_context_stat_usage),
-                            percent(tokenStats?.usagePercent),
+                            SessionContextStatValue.Percent(tokenStats?.usagePercent),
                         ),
                         SessionContextStatItem(
                             "input",
                             label(R.string.session_context_stat_input_tokens),
-                            number(tokenStats?.input),
+                            count(tokenStats?.input),
                         ),
                         SessionContextStatItem(
                             "output",
                             label(R.string.session_context_stat_output_tokens),
-                            number(tokenStats?.output),
+                            count(tokenStats?.output),
                         ),
                         SessionContextStatItem(
                             "reasoning",
                             label(R.string.session_context_stat_reasoning_tokens),
-                            number(tokenStats?.reasoning),
+                            count(tokenStats?.reasoning),
                         ),
                         SessionContextStatItem(
                             "cache",
                             label(R.string.session_context_stat_cache_tokens),
-                            "${number(tokenStats?.cacheRead)} / ${number(tokenStats?.cacheWrite)}",
+                            SessionContextStatValue.CountPair(tokenStats?.cacheRead, tokenStats?.cacheWrite),
                         ),
                         SessionContextStatItem(
                             "user",
                             label(R.string.session_context_stat_user_messages),
-                            number(snapshot.messageCounts.user),
+                            count(snapshot.messageCounts.user),
                         ),
                         SessionContextStatItem(
                             "assistant",
                             label(R.string.session_context_stat_assistant_messages),
-                            number(snapshot.messageCounts.assistant),
+                            count(snapshot.messageCounts.assistant),
                         ),
                         SessionContextStatItem(
                             "cost",
                             label(R.string.session_context_stat_total_cost),
-                            currency(snapshot.totalCost),
+                            SessionContextStatValue.Cost(snapshot.totalCost),
                         ),
                         SessionContextStatItem(
                             "created",
                             label(R.string.session_context_stat_created),
-                            time(snapshot.createdAtEpochMs),
+                            SessionContextStatValue.Moment(snapshot.createdAtEpochMs),
                         ),
                         SessionContextStatItem(
                             "activity",
                             label(R.string.session_context_stat_last_activity),
-                            time(snapshot.lastActivityEpochMs),
+                            SessionContextStatValue.Moment(snapshot.lastActivityEpochMs),
                         ),
                     ),
                 breakdown = snapshot.breakdown,
@@ -192,22 +185,9 @@ class SessionContextViewModel
             @StringRes fallback: Int,
         ): UiText = throwable.message?.let(UiText::verbatim) ?: UiText.resource(fallback)
 
-        private fun number(value: Int): String = NumberFormat.getIntegerInstance(Locale.US).format(value)
+        private fun count(value: Int): SessionContextStatValue = SessionContextStatValue.Count(value.toLong())
 
-        private fun number(value: Long?): String = value?.let { NumberFormat.getIntegerInstance(Locale.US).format(it) } ?: "—"
-
-        private fun percent(value: Int?): String = value?.let { "$it%" } ?: "—"
-
-        private fun currency(value: Double): String = NumberFormat.getCurrencyInstance(Locale.US).format(value)
-
-        private fun time(epochMs: Long?): String =
-            epochMs
-                ?.let {
-                    Instant
-                        .ofEpochMilli(it)
-                        .atZone(ZoneId.systemDefault())
-                        .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(Locale.US))
-                } ?: "—"
+        private fun count(value: Long?): SessionContextStatValue = SessionContextStatValue.Count(value)
     }
 
 data class SessionContextUiState(
@@ -232,6 +212,6 @@ data class SessionContextDisplayState(
 data class SessionContextStatItem(
     val id: String,
     val label: UiText,
-    /** Session content and formatted numbers, shown as is. */
-    val value: String,
+    /** Session content shown as is, or a number, cost or date the screen formats. */
+    val value: SessionContextStatValue,
 )

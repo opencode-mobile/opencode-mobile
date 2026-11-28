@@ -12,44 +12,59 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 
 private val ReviewChangesPillShape = RoundedCornerShape(percent = 50)
 
-private fun reviewChangesPillFileLabel(changedFileCount: Int): String =
-    "$changedFileCount ${if (changedFileCount == 1) "file" else "files"}"
+private fun reviewChangesPillFileLabel(
+    changedFileCount: Int,
+    lookup: UiTextLookup,
+): String = UiText.plural(R.plurals.component_review_changes_pill_files, changedFileCount).resolve(lookup)
 
 fun reviewChangesPillSummary(
     changedFileCount: Int,
     additions: Int,
     deletions: Int,
-): String = reviewChangesPillSummaryContent(changedFileCount, additions, deletions).visibleLabel
+    lookup: UiTextLookup,
+): String = reviewChangesPillSummaryContent(changedFileCount, additions, deletions, lookup).visibleLabel
 
 fun reviewChangesPillAccessibilityLabel(
     changedFileCount: Int,
     additions: Int,
     deletions: Int,
-): String = reviewChangesPillSummaryContent(changedFileCount, additions, deletions).accessibilityLabel
+    lookup: UiTextLookup,
+): String = reviewChangesPillSummaryContent(changedFileCount, additions, deletions, lookup).accessibilityLabel
 
 private fun reviewChangesPillSummaryContent(
     changedFileCount: Int,
     additions: Int,
     deletions: Int,
+    lookup: UiTextLookup,
 ) = ReviewChangesPillSummary(
-    fileLabel = reviewChangesPillFileLabel(changedFileCount),
+    title = UiText.resource(R.string.component_review_changes_pill_title).resolve(lookup),
+    fileLabel = reviewChangesPillFileLabel(changedFileCount, lookup),
     additionLabel = additions.takeIf { it > 0 }?.let { "+$it" },
     deletionLabel = deletions.takeIf { it > 0 }?.let { "−$it" },
-    additionAccessibilityLabel = additions.takeIf { it > 0 }?.let { "$it ${if (it == 1) "addition" else "additions"}" },
-    deletionAccessibilityLabel = deletions.takeIf { it > 0 }?.let { "$it ${if (it == 1) "deletion" else "deletions"}" },
+    additionAccessibilityLabel =
+        additions.takeIf { it > 0 }?.let { UiText.plural(R.plurals.changes_count_additions, it).resolve(lookup) },
+    deletionAccessibilityLabel =
+        deletions.takeIf { it > 0 }?.let { UiText.plural(R.plurals.changes_count_deletions, it).resolve(lookup) },
 )
 
 private data class ReviewChangesPillSummary(
+    val title: String,
     val fileLabel: String,
     val additionLabel: String?,
     val deletionLabel: String?,
@@ -61,7 +76,7 @@ private data class ReviewChangesPillSummary(
 
     val accessibilityLabel: String
         get() =
-            listOfNotNull("Review changes", fileLabel, additionAccessibilityLabel, deletionAccessibilityLabel)
+            listOfNotNull(title, fileLabel, additionAccessibilityLabel, deletionAccessibilityLabel)
                 .joinToString(", ")
 }
 
@@ -116,7 +131,12 @@ fun OpenCodeReviewChangesPill(
     val summary =
         when (variant) {
             OpenCodeReviewChangesPillVariant.LatestTurn ->
-                reviewChangesPillSummaryContent(changedFileCount, additions, deletions)
+                reviewChangesPillSummaryContent(
+                    changedFileCount,
+                    additions,
+                    deletions,
+                    ResourcesUiTextLookup(LocalResources.current),
+                )
         }
     val interactionSource = remember { MutableInteractionSource() }
     val contentColor =

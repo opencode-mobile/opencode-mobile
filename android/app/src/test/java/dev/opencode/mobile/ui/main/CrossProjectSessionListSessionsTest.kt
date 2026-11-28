@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.main
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.ResolvedHomePath
+import dev.opencode.mobile.domain.session.SessionBusyStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.LetterAccent
@@ -334,7 +335,7 @@ class CrossProjectSessionListSessionsTest {
                 section(
                     worktree = "/repo",
                     session(id = "main", title = "Main", updatedAtEpochMs = 10L, directory = "/repo"),
-                    session(id = "wt", title = "Checkout", updatedAtEpochMs = 20L, directory = "/repo-wt", statusLabel = "Working"),
+                    session(id = "wt", title = "Checkout", updatedAtEpochMs = 20L, directory = "/repo-wt", busyStatus = SessionBusyStatus.Running),
                 ),
                 section(worktree = "/repo-wt"),
             )
@@ -403,13 +404,13 @@ class CrossProjectSessionListSessionsTest {
         title: String,
         updatedAtEpochMs: Long?,
         directory: String? = null,
-        statusLabel: String? = null,
+        busyStatus: SessionBusyStatus? = null,
     ): SessionSummary =
         SessionSummary(
             id = id,
             title = title,
             updatedAtEpochMs = updatedAtEpochMs,
             directory = directory,
-            statusLabel = statusLabel,
+            busyStatus = busyStatus,
         )
 }

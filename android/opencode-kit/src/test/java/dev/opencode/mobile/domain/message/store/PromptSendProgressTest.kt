@@ -19,10 +19,4 @@ class PromptSendProgressTest {
         assertTrue(PromptSendProgress.shouldShow(PromptSendProgress.VISIBLE_BODY_THRESHOLD, hasAttachments = false))
         assertFalse(PromptSendProgress.shouldShow(10, hasAttachments = false))
     }
-
-    @Test
-    fun label_ellipsisThenPercent() {
-        assertEquals("Sending…", PromptSendProgress.label(0))
-        assertEquals("Sending 25%", PromptSendProgress.label(25))
-    }
 }

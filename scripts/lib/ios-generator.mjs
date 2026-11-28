@@ -67,6 +67,12 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
 ${cases}
 
     var accessibilityIdentifier: String { rawValue }
+
+    /// Directional glyphs (back, forward, disclosure) that point the other way in
+    /// right-to-left layouts. Set by \`mirrors_in_rtl\` in icons/manifest.yaml.
+    var mirrorsInRightToLeft: Bool {
+${mirrorSwitch(icons)}
+    }
 }
 
 /// Lucide catalog icon rendered as a template asset.
@@ -88,6 +94,7 @@ struct OpenCodeIconImage: View {
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
+            .flipsForRightToLeftLayoutDirection(icon.mirrorsInRightToLeft)
             .frame(width: explicitSize, height: explicitSize)
     }
 }
@@ -95,6 +102,17 @@ struct OpenCodeIconImage: View {
 
   mkdirSync(dirname(outputFile), { recursive: true });
   writeFileSync(outputFile, swift, "utf8");
+}
+
+function mirrorSwitch(icons) {
+  const mirrored = icons.filter((icon) => icon.mirrorsInRtl).map((icon) => `.${toCamelCase(icon.name)}`);
+  if (mirrored.length === 0) return "        false";
+  return `        switch self {
+        case ${mirrored.join(", ")}:
+            true
+        default:
+            false
+        }`;
 }
 
 function toCamelCase(snake) {

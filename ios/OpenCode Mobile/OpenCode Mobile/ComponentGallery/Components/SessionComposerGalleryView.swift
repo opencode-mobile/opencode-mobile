@@ -192,8 +192,8 @@ struct SessionComposerGalleryView: View {
         case .childLockout:
             .childLockout(
                 .init(
-                    selectedModelLabel: "Claude Sonnet 4",
-                    selectedVariantLabel: "High",
+                    selectedModelLabel: .verbatim("Claude Sonnet 4"),
+                    selectedVariantLabel: .verbatim("High"),
                     showVariant: true
                 )
             )
@@ -315,9 +315,9 @@ struct SessionComposerGalleryView: View {
                 mentionRanges: mentionRanges,
                 attachments: attachments,
                 showPendingRevert: showPendingRevert,
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: shellMode
                     ? ComposerShellCommand.command(text) != nil

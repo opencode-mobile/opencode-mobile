@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.session.NewSessionDraft
 import dev.opencode.mobile.domain.session.NewSessionDraftStart
 import dev.opencode.mobile.domain.session.NewSessionDraftStore
 import dev.opencode.mobile.domain.session.NewSessionPlace
+import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.text.UiText
@@ -421,7 +422,7 @@ class SessionChatNewSessionDraft(
                 isCreating = false,
                 sendError =
                     (error as? NewSessionDraftWorktreeFailure)?.text
-                        ?: UiText.verbatim(createSessionErrorMessage(error)),
+                        ?: createSessionErrorMessage(error),
             )
         }
     }
@@ -538,8 +539,8 @@ class SessionChatNewSessionDraft(
             } catch (error: Exception) {
                 if (!isOnDraftProfile()) throw NewSessionProfileChanged()
                 val message =
-                    ((error as? WorktreeCreateError)?.message ?: error.message?.takeIf { it.isNotBlank() })
-                        ?.let(UiText::verbatim)
+                    (error as? WorktreeCreateError)?.text
+                        ?: error.message?.takeIf { it.isNotBlank() }?.let(UiText::verbatim)
                         ?: UiText.resource(R.string.worktree_unknown_error)
                 throw NewSessionDraftWorktreeFailure(UiText.resource(R.string.worktree_create_failed, message))
             }
@@ -548,12 +549,16 @@ class SessionChatNewSessionDraft(
         return created.directory
     }
 
-    private fun createSessionErrorMessage(error: Throwable): String =
+    /** Server text stays verbatim; the app's own fallbacks are keyed. */
+    private fun createSessionErrorMessage(error: Throwable): UiText =
         when (error) {
-            is SessionError.Http -> error.message ?: "Unable to create session"
-            is SessionError.Transport -> "Unable to reach the server"
-            is SessionError.Decoding -> "Unable to read server response"
-            else -> error.message ?: "Unable to create session"
+            is SessionError.Http ->
+                ServerErrorMessage.text(error)
+                    ?: error.message?.let(UiText::verbatim)
+                    ?: UiText.resource(R.string.session_chat_create_failed)
+            is SessionError.Transport -> UiText.resource(R.string.connection_error_unreachable)
+            is SessionError.Decoding -> UiText.resource(R.string.home_session_error_unreadable_response)
+            else -> error.message?.let(UiText::verbatim) ?: UiText.resource(R.string.session_chat_create_failed)
         }
 }
 

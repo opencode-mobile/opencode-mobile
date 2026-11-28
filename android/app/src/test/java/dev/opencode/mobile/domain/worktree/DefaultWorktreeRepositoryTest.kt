@@ -5,6 +5,8 @@ import dev.opencode.mobile.data.remote.V1WorktreeHttp
 import dev.opencode.mobile.data.remote.WorktreeHttpException
 import dev.opencode.mobile.data.remote.WorktreeRemote
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.ui.text.EnglishStrings
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -220,7 +222,7 @@ class DefaultWorktreeRepositoryTest {
             repository.onConnection("http://mac")
             assertTrue(repository.canCreate.value)
 
-            assertEquals(WorktreeCreateCopy.UNSUPPORTED, createFailure(repository))
+            assertEquals("This server can't create worktrees", createFailure(repository))
             assertFalse(repository.canCreate.value)
 
             repository.onConnection("http://mac")
@@ -273,7 +275,7 @@ class DefaultWorktreeRepositoryTest {
             repository.create(CreateWorktreeRequest("proj", "/repo", "one", baseRef = null))
             null
         } catch (error: WorktreeCreateError) {
-            error.message
+            error.text.resolve(EnglishStrings)
         }
 
     private data class V2Create(

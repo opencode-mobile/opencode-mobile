@@ -59,11 +59,18 @@ const STRUCTURED_KEY = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
 const ANDROID_ONLY = new Set([
   "app_name", // launcher label; iOS uses CFBundleDisplayName
   "session_chat_copy_too_long", // Android's clipboard rejects a clip of a few MB; iOS copies any length
+  "session_chat_send_timed_out", // Android times out a queued send; iOS refuses it while offline (session_chat.send_failed_offline)
+  "dictation_microphone_failed", // Android SpeechRecognizer error; iOS shows the system error
+  "dictation_busy", // Android SpeechRecognizer error; iOS shows the system error
 ]);
 
 /** iOS-only catalog keys, by iOS key. */
 const IOS_ONLY = new Set([
   "server_health.error_log_date_time", // iOS joins date and time itself; Android's DateUtils formats both
+  "attachment.error.invalid_data", // iOS validates a loaded data: URL against its type; Android builds its own
+  "session_chat.send_stalled", // iOS-only stalled-upload snackbar with Retry (#1002); Android has no stall watch yet
+  "session_chat.send_failed_offline", // iOS refuses a send while the connection is not live; Android times the send out instead
+  "session_chat.server_changed", // iOS pins a send to its server; Android has no pinned-connection check
 ]);
 
 const ANDROID_PLACEHOLDER = /%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[sdfxXoeEgGc]/g;

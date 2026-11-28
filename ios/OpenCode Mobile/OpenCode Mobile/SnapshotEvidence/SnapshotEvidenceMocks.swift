@@ -51,7 +51,7 @@ struct SnapshotEvidenceMessage: Identifiable, Sendable {
 
 enum SnapshotEvidenceMocks {
     static let sessionTitle = "Assistant message"
-    static let userMetadata = "Build · DeepSeek V4 Flash · 9:05 PM"
+    static let userMetadata = "Build · DeepSeek V4 Flash"
     static let childSessionTitle = "Find auth bugs"
     /// Home filtered to a worktree with no sessions while sibling worktrees have some.
     static let worktreeEmptyMessage = SessionListWorktreeEmptyCopy.otherWorktrees
@@ -107,9 +107,9 @@ enum SnapshotEvidenceMocks {
         .prompt(
             .init(
                 text: "",
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: false,
                 showStop: false,
@@ -154,8 +154,8 @@ enum SnapshotEvidenceMocks {
     static var childLockoutComposer: OpenCodeSessionComposerState {
         .childLockout(
             .init(
-                selectedModelLabel: "Claude Sonnet 4",
-                selectedVariantLabel: "High",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
+                selectedVariantLabel: .verbatim("High"),
                 showVariant: true
             )
         )

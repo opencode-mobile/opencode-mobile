@@ -511,7 +511,7 @@ internal fun SessionChatContextSlotView(
                     OpenCodeFloatingPill(
                         layout = OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.List, "${item.completed}/${item.total}"),
                         state = OpenCodeFloatingPillState.Ready,
-                        accessibilityLabel = sessionTodosPillAccessibilityLabel(item.completed, item.total, todosActivePreview),
+                        accessibilityLabel = sessionTodosPillAccessibilityLabel(item.completed, item.total, todosActivePreview).resolve(),
                         onClick = onTodosClick,
                     )
                 is SessionChatContextItem.Branch ->

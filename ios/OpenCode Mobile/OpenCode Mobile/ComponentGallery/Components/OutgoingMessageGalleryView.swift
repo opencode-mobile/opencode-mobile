@@ -45,7 +45,7 @@ struct OutgoingMessageGalleryView: View {
                     .init(id: "pdf", filename: "requirements.pdf", variant: .pdf),
                     .init(id: "text", filename: "notes.md", variant: .text),
                 ] : [],
-                metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
+                metadataLabel: "Build · DeepSeek V4 Flash",
                 sentAt: Date().addingTimeInterval(-26 * 60 * 60),
                 onTap: {}
             )
@@ -58,13 +58,13 @@ struct OutgoingMessageGalleryView: View {
                 .foregroundStyle(OpenCodeColors.textBase)
             OpenCodeOutgoingMessage(
                 text: "Use the staging bucket instead.",
-                metadataLabel: "Build · DeepSeek V4 Flash · 9:06 PM",
+                metadataLabel: "Build · DeepSeek V4 Flash",
                 steering: .delivered(showsLabel: true),
                 onTap: {}
             )
             OpenCodeOutgoingMessage(
                 text: "And skip the migration step.",
-                metadataLabel: "Build · DeepSeek V4 Flash · 9:07 PM",
+                metadataLabel: "Build · DeepSeek V4 Flash",
                 steering: .pending(showsLabel: true)
             )
         }

@@ -1,9 +1,12 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineStyleOption
+import dev.opencode.mobile.ui.settings.settingsTitleRes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -15,7 +18,7 @@ import kotlinx.coroutines.launch
 
 data class SessionChatTimelineOffersRegionState(
     /** The notice the picker's answer leaves. */
-    val notice: String? = null,
+    val notice: UiText? = null,
     /** One-time Timeline Style picker (#805). */
     val timelineStylePickerVisible: Boolean = false,
     /** Taken when the picker shows, so its rows stay put while the sheet slides out. */
@@ -106,7 +109,8 @@ class SessionChatTimelineOffers(
         /** Pause after the first history load before the Timeline Style picker rises (#805). */
         const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = 600L
 
-        fun timelineStylePickerNotice(style: SessionChatTimelineStyle): String =
-            "Timeline: ${style.title}. Change it any time in Settings."
+        /** "Timeline: Step Rail. Change it any time in Settings.", with the keyed style name. */
+        fun timelineStylePickerNotice(style: SessionChatTimelineStyle): UiText =
+            UiText.resource(R.string.session_chat_timeline_style_notice, UiText.resource(style.settingsTitleRes()))
     }
 }

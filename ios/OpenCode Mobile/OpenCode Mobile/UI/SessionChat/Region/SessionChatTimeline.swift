@@ -1200,7 +1200,7 @@ final class SessionChatTimeline {
 
     private func errorMessage(_ error: Error) -> String {
         if let messageError = error as? MessageError {
-            return messageError.localizedDescription
+            return messageError.displayMessage
         }
         return error.localizedDescription
     }

@@ -13,10 +13,10 @@ enum OpenCodeSessionTodoItemStatus: CaseIterable, Hashable {
 
     var accessibilityPhrase: String {
         switch self {
-        case .pending: "pending"
-        case .inProgress: "in progress"
-        case .completed: "completed"
-        case .cancelled: "cancelled"
+        case .pending: String(localized: "component.todo_item.status.pending", defaultValue: "pending")
+        case .inProgress: String(localized: "component.todo_item.status.in_progress", defaultValue: "in progress")
+        case .completed: String(localized: "component.todo_item.status.completed", defaultValue: "completed")
+        case .cancelled: String(localized: "component.todo_item.status.cancelled", defaultValue: "cancelled")
         }
     }
 }
@@ -72,7 +72,13 @@ struct OpenCodeSessionTodoItem: View {
         .padding(.horizontal, Self.paddingHorizontal)
         .padding(.vertical, Self.paddingVertical)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(content), \(status.accessibilityPhrase)")
+        .accessibilityLabel(Self.accessibilityLabel(content: content, status: status))
+    }
+
+    /// "Summarize README, in progress": the todo, then its status.
+    static func accessibilityLabel(content: String, status: OpenCodeSessionTodoItemStatus) -> String {
+        let phrase = status.accessibilityPhrase
+        return String(localized: "component.todo_item.accessibility_label", defaultValue: "\(content), \(phrase)")
     }
 
     private var isFinished: Bool {

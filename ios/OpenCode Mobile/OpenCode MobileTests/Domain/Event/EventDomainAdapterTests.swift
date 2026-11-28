@@ -874,13 +874,13 @@ struct EventDomainAdapterTests {
         #expect(event?.sessionID == "ses-1")
     }
 
-    @Test func statusLabel_mapsBusyAndRetry() {
+    @Test func busyStatus_mapsBusyAndRetry() {
         let adapter = EventDomainAdapter()
-        let busy = adapter.statusLabel(from: SessionStatus(sessionID: "1", raw: ["type": "busy"]))
-        let retry = adapter.statusLabel(from: SessionStatus(sessionID: "1", raw: ["type": "retry"]))
-        let idle = adapter.statusLabel(from: SessionStatus(sessionID: "1", raw: ["type": "idle"]))
-        #expect(busy == "Working")
-        #expect(retry == "Retrying")
+        let busy = adapter.busyStatus(from: SessionStatus(sessionID: "1", raw: ["type": "busy"]))
+        let retry = adapter.busyStatus(from: SessionStatus(sessionID: "1", raw: ["type": "retry"]))
+        let idle = adapter.busyStatus(from: SessionStatus(sessionID: "1", raw: ["type": "idle"]))
+        #expect(busy == .running)
+        #expect(retry == .retrying(attempt: nil))
         #expect(idle == nil)
     }
 
@@ -892,7 +892,7 @@ struct EventDomainAdapterTests {
         let status = adapter.sessionStatus(from: event!)
         #expect(status?.sessionID == "ses-1")
         #expect(status?.raw["type"] == "busy")
-        #expect(adapter.statusLabel(from: status!) == "Working")
+        #expect(adapter.busyStatus(from: status!) == .running)
         #expect(adapter.sessionActivity(from: event!)?.activity == .running)
     }
 
@@ -911,8 +911,8 @@ struct EventDomainAdapterTests {
         } else {
             Issue.record("expected retrying")
         }
-        #expect(adapter.statusLabel(from: adapter.sessionStatus(from: event!)!) == "Retrying · 3")
-        #expect(parsed?.activity.chatStatusLabel == "Retrying · 3 · rate limited")
+        #expect(adapter.busyStatus(from: adapter.sessionStatus(from: event!)!) == .retrying(attempt: 3))
+        #expect(parsed?.activity.chatStatus == .text("Retrying · 3 · rate limited"))
     }
 
     @Test func sessionActivity_readsV2RetryAtAndErrorMessage() {

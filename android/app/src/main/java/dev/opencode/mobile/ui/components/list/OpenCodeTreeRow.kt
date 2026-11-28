@@ -26,6 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -34,7 +36,9 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -133,11 +137,15 @@ fun OpenCodeTreeRow(
     val selected = state == OpenCodeTreeRowState.Selected
     val contentAlpha = if (state == OpenCodeTreeRowState.Dimmed) TREE_ROW_DIMMED_ALPHA else 1f
     val shape = RoundedCornerShape(OpenCodeRadius.small)
+    // ChevronRight auto-mirrors in RTL, so it turns the other way to point down when expanded.
+    val expandedRotation = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -90f else 90f
     val chevronRotation by animateFloatAsState(
-        targetValue = if (disclosure == OpenCodeTreeRowDisclosure.Expanded) 90f else 0f,
+        targetValue = if (disclosure == OpenCodeTreeRowDisclosure.Expanded) expandedRotation else 0f,
         label = "treeRowDisclosure",
     )
     val resolvedSubtitle = subtitle?.takeIf { it.isNotBlank() }
+    val expandedLabel = stringResource(R.string.common_expanded)
+    val collapsedLabel = stringResource(R.string.common_collapsed)
     val description =
         listOfNotNull(
             title,
@@ -164,8 +172,8 @@ fun OpenCodeTreeRow(
                     contentDescription = description
                     this.selected = selected
                     when (disclosure) {
-                        OpenCodeTreeRowDisclosure.Expanded -> stateDescription = "Expanded"
-                        OpenCodeTreeRowDisclosure.Collapsed -> stateDescription = "Collapsed"
+                        OpenCodeTreeRowDisclosure.Expanded -> stateDescription = expandedLabel
+                        OpenCodeTreeRowDisclosure.Collapsed -> stateDescription = collapsedLabel
                         OpenCodeTreeRowDisclosure.None -> Unit
                     }
                 },

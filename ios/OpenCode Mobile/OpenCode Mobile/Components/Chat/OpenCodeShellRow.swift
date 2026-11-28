@@ -101,7 +101,7 @@ struct OpenCodeShellRow: View {
 
 /// "Shell, npm test, Run the tests, 1:04".
 func buildShellRowAccessibilityLabel(command: String, description: String?, elapsed: String?) -> String {
-    var parts = ["Shell", command]
+    var parts = [String(localized: "tool.title.shell", defaultValue: "Shell"), command]
     if let description, !description.isEmpty { parts.append(description) }
     if let elapsed, !elapsed.isEmpty { parts.append(elapsed) }
     return parts.joined(separator: ", ")

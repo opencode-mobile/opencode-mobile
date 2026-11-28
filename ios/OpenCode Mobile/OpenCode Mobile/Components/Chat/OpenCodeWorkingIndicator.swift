@@ -70,16 +70,12 @@ struct OpenCodeWorkingIndicator: View {
         switch state {
         case .idle:
             true
-        case .collapsed:
-            WorkingTurnIndicator.showsIdleMark(label: label)
-        case .working, .expanded:
+        case .collapsed, .working, .expanded:
             false
         }
     }
 
-    private var animatesIdle: Bool {
-        markIsIdle || WorkingTurnIndicator.showsIdleMark(label: label)
-    }
+    private var animatesIdle: Bool { markIsIdle }
 }
 
 private struct OpenCodeWorkingStatusMark: View {

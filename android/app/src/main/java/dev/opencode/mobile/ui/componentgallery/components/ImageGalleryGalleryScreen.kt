@@ -63,7 +63,7 @@ fun ImageGalleryGalleryScreen() {
             val sent = SnapshotEvidenceGalleryMocks.images(3)
             OpenCodeOutgoingMessage(
                 text = "Here are the three screens.",
-                metadataLabel = "Build · Example Model · 9:05 PM",
+                metadataLabel = "Build · Example Model",
                 content =
                     listOf(
                         OpenCodeOutgoingMessageContent.ImageGallery(id = "sent", images = sent),

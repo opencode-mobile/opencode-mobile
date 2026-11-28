@@ -60,7 +60,7 @@ enum ServerHealthText {
     }
 
     static func percent(_ value: Double?) -> String {
-        value.map(ServerHealthFormat.percent) ?? placeholder
+        value.map { ServerHealthFormat.percent($0) } ?? placeholder
     }
 }
 

@@ -217,7 +217,7 @@ class SessionChatGoal(
 
     private fun failureNotice(
         action: SessionGoalAction,
-        message: String?,
+        message: UiText?,
     ): UiText {
         val (plain, withReason) =
             when (action) {

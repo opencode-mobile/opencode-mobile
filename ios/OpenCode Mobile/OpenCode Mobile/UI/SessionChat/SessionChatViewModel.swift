@@ -947,8 +947,12 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
-    static let branchCopiedMessage = "Branch name copied"
-    static let sendStalledMessage = "Still sending…"
+    static var branchCopiedMessage: String {
+        String(localized: "session_chat.branch_copied", defaultValue: "Branch name copied")
+    }
+    static var sendStalledMessage: String {
+        String(localized: "session_chat.send_stalled", defaultValue: "Still sending…")
+    }
 
     /// Retry on the "Still sending…" snackbar.
     func retryStalledSend() {
@@ -1869,7 +1873,7 @@ final class SessionChatViewModel {
             ? uiState.timelineFrame
             : nextTimelineFrame
         let sessionStatusLabel =
-            isCompacting ? SessionCompactChrome.statusLabel : infoState.sessionStatusLabel
+            isCompacting ? .text(SessionCompactChrome.statusLabel) : infoState.sessionStatusLabel
         let turnStatusResolution = turnStatus.resolve(
             SessionChatTurnStatusInputs(
                 sessionStatusLabel: sessionStatusLabel,
@@ -2139,7 +2143,7 @@ final class SessionChatViewModel {
         )
     }
 
-    private func effectiveCompacting(localCompacting: Bool, sessionStatusLabel: String?) -> Bool {
+    private func effectiveCompacting(localCompacting: Bool, sessionStatusLabel: SessionTurnLabel?) -> Bool {
         if localCompacting { return true }
         return SessionCompactionPresence.isActive(
             messages: timeline.loadedMessages(),

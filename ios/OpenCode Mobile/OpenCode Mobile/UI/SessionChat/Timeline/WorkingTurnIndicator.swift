@@ -7,7 +7,8 @@ import Foundation
 /// Then Done holds and fades. A stopped turn, or one that ended while disconnected, leaves
 /// quietly, and a failed turn hands the pill to its failure at once.
 enum WorkingTurnIndicator {
-    static let idleLabel = "Idle"
+    /// The label of a turn that ended; the pill shows Done for it.
+    static let idleLabel: SessionTurnLabel = .idle
     /// How long the last active label stays after the session goes idle.
     static let turnSettleMilliseconds: Int64 = 500
     static let turnDoneHoldMilliseconds: Int64 = 3_000
@@ -17,7 +18,7 @@ enum WorkingTurnIndicator {
     static let reconnectConfirmMilliseconds: Int64 = 5_000
 
     struct Chrome: Equatable {
-        var label: String?
+        var label: SessionTurnLabel?
         var fading: Bool
 
         static let unmounted = Chrome(label: nil, fading: false)
@@ -27,7 +28,7 @@ enum WorkingTurnIndicator {
     /// ending started to fade; nil while the turn is on its way to Done.
     struct Hold: Equatable {
         var startedAtMs: Int64
-        var label: String
+        var label: SessionTurnLabel
         var quietFadeAtMs: Int64?
     }
 
@@ -47,7 +48,7 @@ enum WorkingTurnIndicator {
         case failed
     }
 
-    static func showsIdleMark(label: String) -> Bool {
+    static func showsIdleMark(label: SessionTurnLabel) -> Bool {
         label == idleLabel
     }
 
@@ -57,18 +58,18 @@ enum WorkingTurnIndicator {
     /// The active label, highest priority first: Retrying or Compacting, Sending, Working. A
     /// pending request keeps the turn active even if the status is momentarily nil.
     static func labelForActiveTurn(
-        statusLabel: String?,
+        statusLabel: SessionTurnLabel?,
         isCompacting: Bool = false,
         isRetrying: Bool = false,
         isAwaitingUser: Bool = false,
         sendProgressPercent: Int? = nil
-    ) -> String? {
-        if isCompacting { return SessionCompactChrome.statusLabel }
+    ) -> SessionTurnLabel? {
+        if isCompacting { return .text(SessionCompactChrome.statusLabel) }
         if isRetrying, let statusLabel { return statusLabel }
         if let sendProgressPercent {
-            return PromptSendProgress.label(percent: sendProgressPercent)
+            return .text(PromptSendProgress.label(percent: sendProgressPercent))
         }
-        return statusLabel ?? (isAwaitingUser ? OpenCodeActivityText.working : nil)
+        return statusLabel ?? (isAwaitingUser ? .working : nil)
     }
 
     /// Whether the user stopped the last turn: its newest assistant reply carries the server's
@@ -90,7 +91,7 @@ enum WorkingTurnIndicator {
     /// The next pill chrome. `connectionLost` keeps the last state while the status cannot be
     /// trusted. `hideImmediately` is an unbound session.
     static func resolveFooter(
-        activeLabel: String?,
+        activeLabel: SessionTurnLabel?,
         ending: Ending = .completed,
         connectionLost: Bool = false,
         hideImmediately: Bool,
@@ -105,7 +106,7 @@ enum WorkingTurnIndicator {
         if hold == nil, previous.label == nil { return Resolution(chrome: .unmounted, hold: nil) }
         if ending == .failed { return Resolution(chrome: .unmounted, hold: nil) }
         if hold == nil, connectionLost { return Resolution(chrome: previous, hold: nil) }
-        var next = hold ?? Hold(startedAtMs: nowMs, label: previous.label ?? "")
+        var next = hold ?? Hold(startedAtMs: nowMs, label: previous.label ?? idleLabel)
         let settleEndsAt = next.startedAtMs + turnSettleMilliseconds
         if nowMs < settleEndsAt {
             return Resolution(

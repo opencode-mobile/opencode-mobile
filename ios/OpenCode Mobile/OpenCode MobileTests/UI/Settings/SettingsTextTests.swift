@@ -13,6 +13,7 @@ struct SettingsTextTests {
         let text = SettingsView.serversSubtitle(count: 2, activeName: "servers.title")
 
         #expect(text.resolved == "2 saved · servers.title active")
+        #expect(SettingsView.serversSubtitle(count: 1, activeName: "servers.title").resolved == "1 saved · servers.title active")
     }
 
     @Test func serversSubtitle_noActive_countsSaved() {
@@ -24,6 +25,19 @@ struct SettingsTextTests {
         #expect(SettingsView.recentWindowHoursLabel(4).resolved == "4 hours")
         // 1 is not an allowed window and sanitizes to the nearest one.
         #expect(SettingsView.recentWindowHoursLabel(1).resolved == "2 hours")
+    }
+
+    @Test func presetText_keysMatchThemeAndBuiltInBlurbs() {
+        #expect(SyntaxHighlightPreset.match.displayName == "Match theme")
+        #expect(SyntaxHighlightPreset.match.displayBlurb == "Use the UI theme’s own tokens")
+        // Built-in descriptions come from the catalog, not the preset file.
+        #expect(SyntaxHighlightPreset(id: "nocturne", name: "Nocturne", blurb: "file text").displayBlurb == "One Dark family")
+        #expect(ThemePreset(id: "linen", name: "Linen", blurb: "file text").displayBlurb == "Warm paper / espresso")
+        // A preset the app does not know keeps its file's name and description.
+        let custom = SyntaxHighlightPreset(id: "custom", name: "Custom", blurb: "Mine")
+        #expect(custom.displayName == "Custom")
+        #expect(custom.displayBlurb == "Mine")
+        #expect(ThemePreset(id: "custom", name: "Custom", blurb: "Mine").displayBlurb == "Mine")
     }
 
     @Test func diagnosticsLabels() {

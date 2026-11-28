@@ -107,7 +107,9 @@ final class SessionInfo {
                         return
                     }
                     if let boundError {
-                        sessionInfo.state.errorMessage = boundError
+                        sessionInfo.state.errorMessage = boundError.isEmpty
+                            ? String(localized: "timeline.failure.session_work_failed", defaultValue: "Session work failed")
+                            : boundError
                         sessionInfo.notifyChange()
                     }
                     if hasTitleUpdate {
@@ -376,7 +378,7 @@ final class SessionInfo {
                 var isRetrying = false
                 if snapshot.seeded, case .retrying = activity { isRetrying = true }
                 state.applyStatus(
-                    authoritative: snapshot.chatStatusLabel(for: state.sessionID),
+                    authoritative: snapshot.chatStatus(for: state.sessionID),
                     hasResolved: snapshot.seeded,
                     retryCard: card,
                     isRetrying: isRetrying
@@ -428,18 +430,17 @@ final class SessionInfo {
         DiagnosticLog.info(.session, "session.updated title session=\(state.sessionID)")
     }
 
-    private func renameErrorMessage(_ error: Error) -> String {
-        if let sessionError = error as? SessionError {
-            switch sessionError {
-            case let .http(_, message):
-                return message ?? "Request failed"
-            case .transport:
-                return "Unable to reach the server"
-            case .decoding:
-                return "Unable to read server response"
-            }
+    /// Server and system text stays verbatim; the app's own fallbacks are keyed (same keys as Home).
+    private func renameErrorMessage(_ error: Error) -> OpenCodeText {
+        guard let sessionError = error as? SessionError else { return .verbatim(error.localizedDescription) }
+        switch sessionError {
+        case let .http(_, message):
+            return OpenCodeText.verbatim(ifPresent: message) ?? "home.session_error.request_failed"
+        case .transport:
+            return "connection.error.unreachable"
+        case .decoding:
+            return "home.session_error.unreadable_response"
         }
-        return error.localizedDescription
     }
 
     func clearTransientErrors() {
@@ -452,7 +453,11 @@ final class SessionInfo {
         onChange?()
     }
 
-    private static let emptyTitleError = "Enter a session title"
-    private static let archiveError = "Couldn't archive session."
-    private static let deleteError = "Couldn't delete session."
+    private static let emptyTitleError: OpenCodeText = "home.session_error.empty_title"
+    private static var archiveError: String {
+        String(localized: "session_chat.archive_failed", defaultValue: "Couldn't archive session.")
+    }
+    private static var deleteError: String {
+        String(localized: "session_chat.delete_failed", defaultValue: "Couldn't delete session.")
+    }
 }

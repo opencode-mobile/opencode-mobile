@@ -45,7 +45,7 @@ fun TruncationRowGalleryScreen(modifier: Modifier = Modifier) {
         Text(text = "In a message", style = MaterialTheme.typography.titleMedium)
         OpenCodeOutgoingMessage(
             text = TruncationRowGallerySample,
-            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            metadataLabel = "Build · DeepSeek V4 Flash",
             content =
                 listOf(
                     OpenCodeOutgoingMessageContent.Text(

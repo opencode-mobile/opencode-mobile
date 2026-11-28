@@ -4,29 +4,29 @@ import XCTest
 final class SessionListStatusMappingTests: XCTestCase {
     func testRunningOutranksReady() {
         XCTAssertEqual(
-            sessionListStatus(statusLabel: "Working", isReady: true),
+            sessionListStatus(busyStatus: .running, isReady: true),
             .running
         )
         XCTAssertEqual(
-            sessionListStatus(statusLabel: "Retrying", isReady: true),
+            sessionListStatus(busyStatus: .retrying(attempt: nil), isReady: true),
             .retrying(attempt: nil)
         )
         XCTAssertEqual(
-            sessionListStatus(statusLabel: "Retrying · 2", isReady: true),
+            sessionListStatus(busyStatus: .retrying(attempt: 2), isReady: true),
             .retrying(attempt: 2)
         )
     }
 
     func testReadyWhenIdleAndFlagged() {
         XCTAssertEqual(
-            sessionListStatus(statusLabel: nil, isReady: true),
+            sessionListStatus(busyStatus: nil, isReady: true),
             .ready
         )
     }
 
     func testIdleWhenNotReady() {
         XCTAssertEqual(
-            sessionListStatus(statusLabel: nil, isReady: false),
+            sessionListStatus(busyStatus: nil, isReady: false),
             .idle
         )
     }
@@ -40,15 +40,15 @@ final class SessionListStatusMappingTests: XCTestCase {
     }
 
     func testServerUnreadMapsOutcomeToDoneFailedStopped() {
-        XCTAssertEqual(sessionListStatus(statusLabel: nil, isReady: false, unreadOutcome: .succeeded), .done)
-        XCTAssertEqual(sessionListStatus(statusLabel: nil, isReady: false, unreadOutcome: .failed), .failed)
-        XCTAssertEqual(sessionListStatus(statusLabel: nil, isReady: false, unreadOutcome: .interrupted), .stopped)
+        XCTAssertEqual(sessionListStatus(busyStatus: nil, isReady: false, unreadOutcome: .succeeded), .done)
+        XCTAssertEqual(sessionListStatus(busyStatus: nil, isReady: false, unreadOutcome: .failed), .failed)
+        XCTAssertEqual(sessionListStatus(busyStatus: nil, isReady: false, unreadOutcome: .interrupted), .stopped)
     }
 
     func testRunningOutranksServerUnread() {
-        XCTAssertEqual(sessionListStatus(statusLabel: "Working", isReady: false, unreadOutcome: .succeeded), .running)
+        XCTAssertEqual(sessionListStatus(busyStatus: .running, isReady: false, unreadOutcome: .succeeded), .running)
         XCTAssertEqual(
-            sessionListStatus(statusLabel: "Retrying · 3", isReady: false, unreadOutcome: .failed),
+            sessionListStatus(busyStatus: .retrying(attempt: 3), isReady: false, unreadOutcome: .failed),
             .retrying(attempt: 3)
         )
     }
@@ -72,7 +72,7 @@ final class SessionListStatusMappingTests: XCTestCase {
     }
 
     private func sessionListStatus(
-        statusLabel: String?,
+        busyStatus: SessionBusyStatus?,
         isReady: Bool,
         unreadOutcome: SessionIdleOutcome? = nil
     ) -> SessionListStatus {
@@ -80,7 +80,7 @@ final class SessionListStatusMappingTests: XCTestCase {
             id: "ses-1",
             title: "Session",
             worktree: "/repo",
-            statusLabel: statusLabel,
+            busyStatus: busyStatus,
             isReady: isReady,
             unreadOutcome: unreadOutcome
         ).sessionListStatus()

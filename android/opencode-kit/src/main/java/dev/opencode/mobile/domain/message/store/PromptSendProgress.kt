@@ -21,8 +21,6 @@ object PromptSendProgress {
         bytesTotal: Long,
         hasAttachments: Boolean,
     ): Boolean = hasAttachments || bytesTotal >= VISIBLE_BODY_THRESHOLD
-
-    fun label(percent: Int): String = if (percent <= 0) "Sending…" else "Sending $percent%"
 }
 
 class PromptSendProgressReporter(

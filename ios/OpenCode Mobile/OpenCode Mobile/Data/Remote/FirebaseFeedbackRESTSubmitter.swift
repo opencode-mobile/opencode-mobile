@@ -18,7 +18,9 @@ nonisolated struct FirebaseFeedbackConfiguration: Equatable, Sendable {
 /// Compiled in every configuration so the stub tests cover it; only the
 /// release seam constructs it with a real App Check token provider.
 nonisolated final class FirebaseFeedbackRESTSubmitter: FeedbackSubmitter {
-    static let failedMessage = "Couldn't send the report."
+    static var failedMessage: String {
+        String(localized: "feedback.error.failed", defaultValue: "Couldn't send the report.")
+    }
     /// Refresh errors that mean the anonymous user is gone: sign up again.
     static let signUpAgainErrors = ["USER_NOT_FOUND", "USER_DISABLED", "TOKEN_EXPIRED", "INVALID_REFRESH_TOKEN"]
 

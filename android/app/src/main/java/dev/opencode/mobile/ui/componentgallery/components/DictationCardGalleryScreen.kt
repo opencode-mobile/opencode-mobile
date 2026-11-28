@@ -17,6 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeDictationCard
 import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
@@ -107,7 +108,7 @@ fun DictationCardGalleryScreen(modifier: Modifier = Modifier) {
             onDevice = true,
             elapsedLabel = "0:12",
             unavailableReason = unavailableReason,
-            errorMessage = "Dictation stopped",
+            errorMessage = UiText.verbatim("Dictation stopped"),
             // The level slider doubles as download progress in the Downloading state.
             downloadProgress = if (variant == DictationCardGalleryVariant.ModelDownloading) level else null,
             onCancel = {},

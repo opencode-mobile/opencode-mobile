@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import androidx.annotation.StringRes
 import dev.opencode.mobile.ui.main.AddProjectSheetUi
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.AgentMention
@@ -45,6 +46,29 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellOutputUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
+/**
+ * A model variant as shown in the composer chip and picker: the server's variant name verbatim,
+ * or the app's own "Default" (`session_chat_variant_default`, same key on iOS).
+ */
+object SessionChatVariantText {
+    fun label(variant: String?): UiText =
+        if (variant == null || variant.equals(ModelSelection.DefaultVariantLabel, ignoreCase = true)) {
+            UiText.resource(R.string.session_chat_variant_default)
+        } else {
+            UiText.verbatim(TitleCaseIdentifier.displayName(variant))
+        }
+}
+
+/** The composer's model notices; model names come from the server and stay arguments. */
+object SessionChatModelNotice {
+    val loadFailed: UiText get() = UiText.resource(R.string.session_chat_model_notice_load_failed)
+    val noneUsable: UiText get() = UiText.resource(R.string.session_chat_model_notice_none_usable)
+    val variantUnavailable: UiText get() = UiText.resource(R.string.session_chat_model_notice_variant_unavailable)
+
+    fun modelUnavailable(modelLabel: String): UiText =
+        UiText.resource(R.string.session_chat_model_notice_model_unavailable, UiText.verbatim(modelLabel))
+}
+
 data class SessionChatComposerState(
     val text: String = "",
     val attachments: List<Attachment> = emptyList(),
@@ -53,9 +77,9 @@ data class SessionChatComposerState(
     val selectedMode: String = SelectableAgent.DefaultId,
     val selectableAgents: List<SelectableAgent> = SelectableAgent.Fallback,
     val selectedVariant: String? = null,
-    val modelNotice: String? = null,
+    val modelNotice: UiText? = null,
     val isModelSelectionReady: Boolean = false,
-    val modelCatalogError: String? = null,
+    val modelCatalogError: UiText? = null,
     val agentMentions: List<AgentMention> = emptyList(),
     val fileMentions: List<FileMention> = emptyList(),
     val skillMentions: List<SkillMention> = emptyList(),
@@ -75,11 +99,17 @@ data class SessionChatComposerState(
             selectableAgents.firstOrNull { it.id.equals(selectedMode, ignoreCase = true) }?.displayName
                 ?: SelectableAgent.displayNameFor(selectedMode)
 
-    val selectedModelLabel: String
-        get() = if (isModelSelectionReady) selectedModel?.modelLabel ?: "Model" else "Loading model…"
+    /** The model chip: the server's model name, or app text while none is chosen or it loads. */
+    val selectedModelLabel: UiText
+        get() =
+            when {
+                !isModelSelectionReady -> UiText.resource(R.string.session_chat_model_chip_loading)
+                else -> selectedModel?.modelLabel?.let(UiText::verbatim) ?: UiText.resource(R.string.session_chat_model_chip_placeholder)
+            }
 
-    val selectedVariantLabel: String
-        get() = TitleCaseIdentifier.displayName(selectedVariant ?: ModelSelection.DefaultVariantLabel)
+    /** The server's variant name, or the app's own "Default". */
+    val selectedVariantLabel: UiText
+        get() = SessionChatVariantText.label(selectedVariant)
 
     val variantOptions: List<String>
         get() = listOf(ModelSelection.DefaultVariantLabel) + selectedModel?.option?.variants.orEmpty()
@@ -144,7 +174,7 @@ data class SessionRenameUiState(
     val isDialogVisible: Boolean = false,
     val draftTitle: String = "",
     val isSubmitting: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
 )
 
 enum class SessionChatSnackbarTone {
@@ -212,7 +242,7 @@ data class ComposerDictationUiState(
     val languageLabel: String = "",
     val onDevice: Boolean = true,
     val startedAtEpochMs: Long = 0L,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
     /** Model download progress, 0..1, while [phase] is ModelDownloading; null when unknown. */
     val downloadProgress: Float? = null,
 )
@@ -231,9 +261,9 @@ data class SessionChatUiState(
     val hasOlder: Boolean = false,
     val isLoadingOlder: Boolean = false,
     val isAborting: Boolean = false,
-    val sessionStatusLabel: String? = null,
+    val sessionStatusLabel: UiText? = null,
     /** The turn pill's active label (Working, Retrying, Compacting…, Sending), or Idle for Done. */
-    val workingIndicatorLabel: String? = null,
+    val workingIndicatorLabel: UiText? = null,
     /** Live rate-limit countdown. Hidden for content-filter retries. */
     val retryCard: SessionRetryCard? = null,
     /** The session is in `retry` status: the composer owns the countdown, failure marks show none. */
@@ -274,7 +304,7 @@ data class SessionChatUiState(
     val pendingSend: PendingSend? = null,
     val messagesFromCache: Boolean = false,
     val contextUsageFraction: Float? = null,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
     val snackbar: SessionChatSnackbar? = null,
     val isLifecycleActionInFlight: Boolean = false,
     val shouldLeaveSession: Boolean = false,
@@ -287,7 +317,7 @@ data class SessionChatUiState(
     /** The permission dock is collapsed to a "Review permission" pill above the composer. */
     val permissionDockHidden: Boolean = false,
     val permissionSubmitting: Boolean = false,
-    val permissionErrorMessage: String? = null,
+    val permissionErrorMessage: UiText? = null,
     /** "Deny with a note" draft for [permissionRequest]; non-null shows the note step. */
     val permissionNote: PermissionNoteDraft? = null,
     /** Other waiting permission requests of [permissionRequest]'s session, which a deny also rejects. */
@@ -307,7 +337,7 @@ data class SessionChatUiState(
     val questionCustomText: String = "",
     val questionCustomSelected: Boolean = false,
     val questionSubmitting: Boolean = false,
-    val questionErrorMessage: String? = null,
+    val questionErrorMessage: UiText? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
     /** Parent of the loaded session; a child opened without a navigation parent still locks the composer. */
@@ -334,7 +364,7 @@ data class SessionChatUiState(
     val mcpPageVisible: Boolean = false,
     val mcpServers: List<McpServer> = emptyList(),
     val mcpLoading: Boolean = false,
-    val mcpErrorMessage: String? = null,
+    val mcpErrorMessage: UiText? = null,
     val mcpSummary: McpServerSummary = McpServerSummary.Empty,
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
@@ -596,7 +626,7 @@ data class SessionChatTimelineRegionState(
     val isSyncingMessages: Boolean = false,
     val hasOlder: Boolean = false,
     val isLoadingOlder: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
 )
 
 /** Child session ids visible in the timeline (running subagent/task rows). */
@@ -651,8 +681,9 @@ data class SessionChatComposerRegionState(
     val isSending: Boolean = false,
     val sendProgressPercent: Int? = null,
     val isAborting: Boolean = false,
-    val errorMessage: String? = null,
-    val abortErrorMessage: String? = null,
+    /** Attachment rejections are keyed text; send and command failures are the server's words. */
+    val errorMessage: UiText? = null,
+    val abortErrorMessage: UiText? = null,
     val serverCommands: List<ServerCommand> = emptyList(),
     val mentionableAgents: List<MentionableAgent> = emptyList(),
     val slashSuggestionsVisible: Boolean = false,
@@ -661,7 +692,7 @@ data class SessionChatComposerRegionState(
     val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
     val fileSuggestions: List<SessionChatAtSuggestion> = emptyList(),
     val fileSuggestionQuery: String? = null,
-    val followUpNotice: String? = null,
+    val followUpNotice: UiText? = null,
 )
 
 fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
@@ -711,7 +742,8 @@ data class SessionInfoRegionState(
     val sessionTitle: String = "",
     /** The loaded session's parent; set even when navigation did not say it is a child. */
     val parentId: String? = null,
-    val sessionStatusLabel: String? = null,
+    /** Working or Retrying while the session is busy; null while it is idle. */
+    val sessionStatusLabel: UiText? = null,
     val retryCard: SessionRetryCard? = null,
     val isRetrying: Boolean = false,
     val hasResolvedSessionStatus: Boolean = false,
@@ -722,7 +754,7 @@ data class SessionInfoRegionState(
     val composerEnabled: Boolean = false,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val isLifecycleActionInFlight: Boolean = false,
-    val lifecycleErrorMessage: String? = null,
+    val lifecycleErrorMessage: UiText? = null,
     val shouldLeaveSession: Boolean = false,
     val errorMessage: String? = null,
     /** When the open session was archived; null while it is not (or not loaded yet). */
@@ -732,7 +764,7 @@ data class SessionInfoRegionState(
 )
 
 fun SessionInfoRegionState.withStatus(
-    authoritative: String?,
+    authoritative: UiText?,
     hasResolved: Boolean = true,
     retryCard: SessionRetryCard? = null,
     isRetrying: Boolean = false,
@@ -796,8 +828,8 @@ data class SessionChatInboxRegionState(
     /** The pending permission the user tucked away to reach the composer (never rejects it). */
     val permissionHiddenId: String? = null,
     val permissionSubmittingId: String? = null,
-    val permissionError: String? = null,
-    val permissionTopologyError: String? = null,
+    val permissionError: UiText? = null,
+    val permissionTopologyError: UiText? = null,
     /**
      * The note the user is writing to deny a permission request with ("Deny with a note").
      * Non-null swaps that request's prompt for the note step; paging, the request going away,
@@ -812,8 +844,8 @@ data class SessionChatInboxRegionState(
     /** The pending question the user collapsed to an "Answer question" pill (never dismisses it). */
     val questionHiddenId: String? = null,
     val questionSubmittingId: String? = null,
-    val questionError: String? = null,
-    val questionTopologyError: String? = null,
+    val questionError: UiText? = null,
+    val questionTopologyError: UiText? = null,
     val questionSessions: List<Session> = emptyList(),
     val questionWizardIndex: Int = 0,
     val questionDrafts: Map<Int, QuestionAnswerDraft> = emptyMap(),
@@ -937,7 +969,7 @@ data class SessionChatCommandsRegionState(
     val mcpPageVisible: Boolean = false,
     val mcpServers: List<McpServer> = emptyList(),
     val mcpLoading: Boolean = false,
-    val mcpErrorMessage: String? = null,
+    val mcpErrorMessage: UiText? = null,
     val mcpSummary: McpServerSummary = McpServerSummary.Empty,
     val hasPendingRevert: Boolean = false,
     /** First reverted message while a revert is pending; the timeline hides it and later turns. */
@@ -1110,12 +1142,13 @@ data class SessionChatAttachmentItem(
         ) + thumbnailPath.hashCode()
 }
 
-fun MessageRole.displayLabel(): String =
+@StringRes
+fun MessageRole.displayLabelRes(): Int =
     when (this) {
-        MessageRole.User -> "You"
-        MessageRole.Assistant -> "Assistant"
-        MessageRole.Command -> "Command"
-        MessageRole.Tool -> "Tool"
-        MessageRole.Notice -> "Notice"
-        MessageRole.Unknown -> "Message"
+        MessageRole.User -> R.string.timeline_role_you
+        MessageRole.Assistant -> R.string.timeline_role_assistant
+        MessageRole.Command -> R.string.timeline_role_command
+        MessageRole.Tool -> R.string.timeline_role_tool
+        MessageRole.Notice -> R.string.timeline_role_notice
+        MessageRole.Unknown -> R.string.timeline_role_message
     }

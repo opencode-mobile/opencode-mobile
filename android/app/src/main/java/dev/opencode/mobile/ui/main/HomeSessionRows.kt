@@ -55,7 +55,7 @@ internal object HomeSessionRows {
                     val sourceId = sourceByRoot[session.id] ?: session.id
                     adapter.toSessionSummary(
                         session,
-                        statusLabel = if (showsStatus) activity.entries[sourceId]?.activity?.statusLabel() else null,
+                        busyStatus = if (showsStatus) activity.entries[sourceId]?.activity?.busyStatus() else null,
                         isReady = !serverReadState && session.id in readyIds,
                         statusStale = activity.fromCache && !activity.seeded,
                         // Waits for seeded status (iOS parity): a session running again with an

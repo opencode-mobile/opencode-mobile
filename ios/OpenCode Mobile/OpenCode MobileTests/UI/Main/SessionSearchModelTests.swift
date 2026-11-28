@@ -517,7 +517,7 @@ struct SessionSearchModelTests {
                 adapter.listItem(
                     from: session("a-login", title: "Login flow", directory: alpha, updated: 30),
                     worktree: alpha,
-                    statusLabel: "Working"
+                    busyStatus: .running
                 ),
                 adapter.listItem(from: session("a-misc", title: "Misc", directory: alpha, updated: 20), worktree: alpha),
             ],

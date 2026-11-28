@@ -45,6 +45,8 @@ struct OpenCodeTreeRow: View {
     let tag: String?
     let action: () -> Void
 
+    @Environment(\.layoutDirection) private var layoutDirection
+
     init(
         title: String,
         subtitle: String? = nil,
@@ -137,7 +139,8 @@ struct OpenCodeTreeRow: View {
         case let .folder(isExpanded):
             OpenCodeIconImage(icon: .chevronRight, size: OpenCodeTreeRowMetrics.disclosureSize)
                 .foregroundStyle(OpenCodeColors.iconWeakBase)
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                // chevronRight mirrors in RTL, so it turns the other way to point down.
+                .rotationEffect(.degrees(isExpanded ? (layoutDirection == .rightToLeft ? -90 : 90) : 0))
                 .animation(.easeOut(duration: 0.15), value: isExpanded)
                 .frame(width: OpenCodeTreeRowMetrics.disclosureSize)
         case .file:
@@ -186,8 +189,10 @@ struct OpenCodeTreeRow: View {
     private var accessibilityValue: String {
         switch kind {
         case let .folder(isExpanded):
-            if state == .loading { return "Loading" }
-            return isExpanded ? "Expanded" : "Collapsed"
+            if state == .loading { return String(localized: "component.tree_row.loading", defaultValue: "Loading") }
+            return isExpanded
+                ? String(localized: "common.expanded", defaultValue: "Expanded")
+                : String(localized: "common.collapsed", defaultValue: "Collapsed")
         case .file:
             return ""
         }

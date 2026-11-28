@@ -96,7 +96,8 @@ struct SessionChatLiveThoughtTests {
         let live = SessionChatThoughtSheetState(partID: "r1", text: "Checking.", isStreaming: true, durationMs: nil)
         #expect(thoughtPresentation(live)?.durationLabel == "Thinking\u{2026}")
         let settled = SessionChatThoughtSheetState(partID: "r1", text: "Checking.", isStreaming: false, durationMs: 1_500)
-        #expect(thoughtPresentation(settled)?.durationLabel == "1.5s")
+        // Locale-dependent number ("1.5s", "1,5s"); `SessionChatTimelineBlocksTests` pins locales.
+        #expect(thoughtPresentation(settled)?.durationLabel == SessionChatTimelineBlocks.thoughtDurationLabel(1_500))
         #expect(settled.detailTarget.body == "Checking.")
     }
 
@@ -109,7 +110,7 @@ struct SessionChatLiveThoughtTests {
     // MARK: Turn pill
 
     private func slot(
-        label: String? = "Working",
+        label: SessionTurnLabel? = .working,
         fading: Bool = false,
         awaiting: Bool = false,
         items: [SessionChatActivityItem] = [],
@@ -140,8 +141,8 @@ struct SessionChatLiveThoughtTests {
     }
 
     @Test func otherTurnLabelsAndRequestsWinOverThinking() {
-        #expect(slot(label: "Compacting\u{2026}")?.phase == .working(label: "Compacting\u{2026}"))
-        #expect(slot(label: "Compacting\u{2026}")?.tapItem == nil)
+        #expect(slot(label: .text("Compacting\u{2026}"))?.phase == .working(label: "Compacting\u{2026}"))
+        #expect(slot(label: .text("Compacting\u{2026}"))?.tapItem == nil)
         #expect(slot(label: WorkingTurnIndicator.idleLabel)?.phase == .done)
         #expect(slot(label: nil) == nil)
         #expect(slot(awaiting: true)?.phase == .attention(label: "Waiting for you", mark: .pulsingDot))

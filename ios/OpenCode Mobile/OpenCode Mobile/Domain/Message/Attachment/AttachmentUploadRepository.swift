@@ -13,9 +13,6 @@ nonisolated enum AttachmentUploadError: Error, Equatable, Sendable {
     case failed
     /// The user cancelled.
     case cancelled
-
-    /// What the composer shows when an upload fails for transport or auth reasons.
-    static let failedMessage = "Upload failed"
 }
 
 nonisolated protocol AttachmentUploadRepository: Sendable {

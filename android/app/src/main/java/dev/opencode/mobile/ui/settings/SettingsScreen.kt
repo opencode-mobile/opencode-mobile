@@ -194,7 +194,7 @@ fun SettingsScreen(
                     title = appearanceTitle,
                     selected = selectedDetail == SettingsDetail.Appearance,
                     // Preset names are theme data, shown as is.
-                    subtitle = listOf(currentTheme.name, currentSyntax.name).joinToString(" · "),
+                    subtitle = stringResource(R.string.settings_appearance_subtitle, currentTheme.name, currentSyntax.displayName()),
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, appearanceTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
@@ -521,7 +521,7 @@ fun SettingsScreen(
                 val starOnGitHubTitle = stringResource(R.string.settings_star_on_github_title)
                 OpenCodeListItem(
                     title = starOnGitHubTitle,
-                    subtitle = "opencode-mobile/opencode-mobile",
+                    subtitle = SourceCode.REPOSITORY,
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Star, starOnGitHubTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,

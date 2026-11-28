@@ -114,7 +114,7 @@ class TimelineProjectorTest {
                     id = "optimistic-1",
                     role = MessageRole.User,
                     text = "Hello",
-                    metadataLabel = "build · deepseek-v4-flash-free · high · 10:21 AM",
+                    metadataLabel = "build · deepseek-v4-flash-free · high",
                     isPending = true,
                     blocks =
                         listOf(
@@ -231,7 +231,7 @@ class TimelineProjectorTest {
         assertEquals(listOf("msg-user-0", "msg-user-1"), reconciled.rows.map { it.id })
         assertFalse(reconciled.rows.any { it.id == "optimistic-1" })
         assertEquals(
-            "build · deepseek-v4-flash-free · high · 10:21 AM",
+            "build · deepseek-v4-flash-free · high",
             reconciled.rows.single { it.id == "msg-user-1" }.metadataLabel,
         )
         assertEquals(setOf("msg-user-1"), reconciled.insertedRowIDs)
@@ -301,7 +301,7 @@ class TimelineProjectorTest {
                     id = "optimistic-photo",
                     role = MessageRole.User,
                     text = "What is it",
-                    metadataLabel = "build · 1:21 PM",
+                    metadataLabel = "build",
                     isPending = true,
                     blocks =
                         listOf(
@@ -433,7 +433,7 @@ class TimelineProjectorTest {
                     id = "optimistic",
                     role = MessageRole.User,
                     text = collapsed,
-                    metadataLabel = "Build · 12:48 AM",
+                    metadataLabel = "Build",
                     isPending = true,
                     blocks =
                         listOf(
@@ -482,7 +482,7 @@ class TimelineProjectorTest {
                     id = "optimistic-photo",
                     role = MessageRole.User,
                     text = "What",
-                    metadataLabel = "Build · MiMo V2.5 Free · 7:58 PM",
+                    metadataLabel = "Build · MiMo V2.5 Free",
                     isPending = true,
                     blocks =
                         listOf(
@@ -543,7 +543,7 @@ class TimelineProjectorTest {
         assertFalse(reconciled.rows.any { it.isPending })
         assertEquals(setOf("optimistic-photo"), reconciled.removedRowIDs)
         assertEquals(listOf(pendingAttachment), reconciled.rows.single().attachments)
-        assertEquals("Build · MiMo V2.5 Free · 7:58 PM", reconciled.rows.single().metadataLabel)
+        assertEquals("Build · MiMo V2.5 Free", reconciled.rows.single().metadataLabel)
     }
 
     @Test
@@ -589,7 +589,7 @@ class TimelineProjectorTest {
                     id = "optimistic-photo",
                     role = MessageRole.User,
                     text = "What",
-                    metadataLabel = "Build · 7:58 PM",
+                    metadataLabel = "Build",
                     isPending = true,
                     blocks =
                         listOf(
@@ -659,7 +659,7 @@ class TimelineProjectorTest {
         assertEquals(listOf("msg-old", "msg-new"), reconciled.rows.map { it.id })
         assertTrue(reconciled.rows[0].attachments.isEmpty())
         assertEquals(listOf(pendingAttachment), reconciled.rows[1].attachments)
-        assertEquals("Build · 7:58 PM", reconciled.rows[1].metadataLabel)
+        assertEquals("Build", reconciled.rows[1].metadataLabel)
         assertEquals(setOf("optimistic-photo"), reconciled.removedRowIDs)
     }
 
@@ -1431,7 +1431,7 @@ class TimelineProjectorTest {
                     id = "optimistic-1",
                     role = MessageRole.User,
                     text = "Hello",
-                    metadataLabel = "build · deepseek-v4-flash-free · high · 10:21 AM",
+                    metadataLabel = "build · deepseek-v4-flash-free · high",
                     pendingDelivery = FollowUpDelivery.Steer,
                     isPending = true,
                     blocks =
@@ -1479,7 +1479,7 @@ class TimelineProjectorTest {
                     id = "optimistic-1",
                     role = MessageRole.User,
                     text = "Hello",
-                    metadataLabel = "build · deepseek-v4-flash-free · high · 10:21 AM",
+                    metadataLabel = "build · deepseek-v4-flash-free · high",
                     isPending = true,
                     blocks =
                         listOf(
@@ -1697,7 +1697,7 @@ class TimelineProjectorTest {
                     id = "optimistic-file",
                     role = MessageRole.User,
                     text = "",
-                    metadataLabel = "Build · 10:21 AM",
+                    metadataLabel = "Build",
                     isPending = true,
                     blocks =
                         listOf(
@@ -1847,7 +1847,7 @@ class TimelineProjectorTest {
                     id = "optimistic-1",
                     role = MessageRole.User,
                     text = "What is this",
-                    metadataLabel = "Build · Scripted · 10:58 PM",
+                    metadataLabel = "Build · Scripted",
                     isPending = true,
                     blocks =
                         listOf(

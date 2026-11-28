@@ -99,14 +99,15 @@ struct OpenCodeMessageTimeRevealTests {
     @Test func accessibilityValueKeepsAgentModelAndTime() {
         let today = Self.time(Self.date(2026, 10, 29, 21, 5))
         #expect(
-            OpenCodeOutgoingMessage.accessibilityValue(metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM", time: today)
+            Self.plain(OpenCodeOutgoingMessage.accessibilityValue(metadataLabel: "Build · DeepSeek V4 Flash", time: today))
                 == "Build · DeepSeek V4 Flash · 9:05 PM"
         )
         let yesterday = Self.time(Self.date(2026, 10, 28, 21, 5))
         #expect(
-            OpenCodeOutgoingMessage.accessibilityValue(metadataLabel: "Build · 9:05 PM", time: yesterday)
+            Self.plain(OpenCodeOutgoingMessage.accessibilityValue(metadataLabel: "Build", time: yesterday))
                 == "Yesterday, Build · 9:05 PM"
         )
+        #expect(OpenCodeOutgoingMessage.accessibilityValue(metadataLabel: "Build", time: nil) == "Build")
         #expect(Self.plain(OpenCodeOutgoingMessage.accessibilityValue(metadataLabel: "", time: yesterday)) == "Yesterday, 9:05 PM")
     }
 }

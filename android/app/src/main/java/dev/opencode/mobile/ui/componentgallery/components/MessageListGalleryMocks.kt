@@ -13,7 +13,7 @@ data class MessageListGalleryMessage(
 )
 
 object MessageListGalleryMocks {
-    private const val USER_METADATA = "Build · DeepSeek V4 Flash · 9:05 PM"
+    private const val USER_METADATA = "Build · DeepSeek V4 Flash"
 
     val messages: List<MessageListGalleryMessage> =
         listOf(

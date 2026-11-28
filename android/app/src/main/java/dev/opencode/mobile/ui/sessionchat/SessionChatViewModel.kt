@@ -47,6 +47,7 @@ import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
+import dev.opencode.mobile.domain.message.AttachmentRejection
 import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
@@ -426,8 +427,8 @@ class SessionChatViewModel
         private var lastSnackbarKey: String? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
-        private var turnDiffNotice: String? = null
-        private var branchCopiedNotice: String? = null
+        private var turnDiffNotice: UiText? = null
+        private var branchCopiedNotice: UiText? = null
 
         internal var dictationFinishDelayMs: Long
             get() = dictation.finishDelayMs
@@ -1005,7 +1006,7 @@ class SessionChatViewModel
 
         fun beginDictationUnavailable(
             phase: ComposerDictationPhase,
-            message: String? = null,
+            message: UiText? = null,
             languageLabel: String = "",
         ) {
             dictation.beginUnavailable(phase, message, languageLabel)
@@ -1109,8 +1110,8 @@ class SessionChatViewModel
             composer.removeAttachment(id)
         }
 
-        fun reportAttachmentError(message: String) {
-            composer.reportAttachmentError(message)
+        fun reportAttachmentError(rejection: AttachmentRejection) {
+            composer.reportAttachmentError(rejection)
         }
 
         fun retryModelCatalog() {
@@ -1388,7 +1389,7 @@ class SessionChatViewModel
 
         /** The last turn moved folders, so its combined diff cannot be shown. Stay on this screen. */
         fun presentTurnDiffUnavailable() {
-            turnDiffNotice = TurnDiffUnavailable.MESSAGE
+            turnDiffNotice = UiText.resource(R.string.changes_error_turn_moved_folders)
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             publishUiState()
@@ -1579,13 +1580,13 @@ class SessionChatViewModel
                     )
                     publishUiState()
                 },
-                onSendFailed = { optimisticId, error ->
+                onSendFailed = { optimisticId, error, appCaused ->
                     newSessionDraft.endCreating()
                     armedSendAcceptance = null
                     pendingSend = null
                     // Server and transport errors stay the timeline error; app text goes to the snackbar.
-                    timeline.failOptimisticSend(optimisticId, (error as? UiText.Verbatim)?.value)
-                    if (error !is UiText.Verbatim) commands.reportActionError(error)
+                    timeline.failOptimisticSend(optimisticId, error.takeUnless { appCaused })
+                    if (appCaused) commands.reportActionError(error)
                     publishUiState()
                 },
                 serverAlreadyAccepted = ::serverAlreadyAccepted,
@@ -2154,19 +2155,21 @@ class SessionChatViewModel
                     when {
                         draftSendError != null -> draftSendError
                         infoState.unarchiveFailed -> UiText.resource(R.string.archived_sessions_unarchive_failed)
-                        infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
-                        worktreeMove.state.value.errorMessage != null -> TimelineText.verbatim(worktreeMove.state.value.errorMessage)
-                        composerState.errorMessage != null -> UiText.verbatim(composerState.errorMessage)
-                        composerState.abortErrorMessage != null -> UiText.verbatim(composerState.abortErrorMessage)
+                        infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
+                        worktreeMove.state.value.errorMessage != null -> worktreeMove.state.value.errorMessage
+                        composerState.errorMessage != null -> composerState.errorMessage
+                        composerState.abortErrorMessage != null -> composerState.abortErrorMessage
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
                         goal.state.value.notice != null -> goal.state.value.notice
-                        turnDiffNotice != null -> TimelineText.verbatim(turnDiffNotice)
-                        infoState.errorMessage != null -> UiText.verbatim(infoState.errorMessage)
+                        turnDiffNotice != null -> turnDiffNotice
+                        infoState.errorMessage != null ->
+                            infoState.errorMessage.takeIf { it.isNotBlank() }?.let(UiText::verbatim)
+                                ?: UiText.resource(R.string.timeline_failure_session_work_failed)
                         inboxSnapshot.permissionRequests.isEmpty() &&
-                            inboxSnapshot.permissionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.permissionTopologyError)
+                            inboxSnapshot.permissionTopologyError != null -> inboxSnapshot.permissionTopologyError
                         inboxSnapshot.questionRequests.isEmpty() &&
-                            inboxSnapshot.questionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.questionTopologyError)
-                        timelineState.errorMessage != null -> UiText.verbatim(timelineState.errorMessage)
+                            inboxSnapshot.questionTopologyError != null -> inboxSnapshot.questionTopologyError
+                        timelineState.errorMessage != null -> timelineState.errorMessage
                         else -> null
                     }
                 }
@@ -2176,13 +2179,15 @@ class SessionChatViewModel
                     transientError,
                     retryNewSessionDraft = transientError != null && transientError == draftSendError,
                     sideQuestions.state.value.notice,
-                    TimelineText.verbatim(composerState.followUpNotice ?: worktreeMove.state.value.notice)
+                    composerState.followUpNotice
+                        ?: worktreeMove.state.value.notice
                         ?: commandsState.actionSuccessMessage
-                        ?: TimelineText.verbatim(branchCopiedNotice ?: timelineOffersState.notice),
+                        ?: branchCopiedNotice
+                        ?: timelineOffersState.notice,
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
-                    SessionCompactChrome.STATUS_LABEL
+                    SessionCompactChrome.statusLabel
                 } else {
                     infoState.sessionStatusLabel
                 }
@@ -2426,7 +2431,7 @@ class SessionChatViewModel
                     lastSnackbarKey = key
                 }
                 return SessionChatSnackbar(
-                    message = UiText.verbatim(sideQuestionNotice.message),
+                    message = sideQuestionNotice.message,
                     tone = if (sideQuestionNotice.isError) SessionChatSnackbarTone.Error else SessionChatSnackbarTone.Default,
                     id = snackbarSequence,
                     action = sideQuestionNotice.retryId?.let { SessionChatSnackbarAction.RetrySideQuestion(it) },
@@ -2472,7 +2477,7 @@ class SessionChatViewModel
 
         private fun effectiveCompacting(
             localCompacting: Boolean,
-            sessionStatusLabel: String?,
+            sessionStatusLabel: UiText?,
         ): Boolean {
             if (localCompacting) return true
             return SessionCompactionPresence.isActive(
@@ -2519,12 +2524,12 @@ class SessionChatViewModel
         companion object {
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
-            const val BRANCH_COPIED_MESSAGE = "Branch name copied"
+            val BRANCH_COPIED_MESSAGE: UiText = UiText.resource(R.string.session_chat_branch_copied)
 
             /** Pause after the first history load before the Timeline Style picker rises (#805). */
             const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = SessionChatTimelineOffers.TIMELINE_STYLE_PICKER_DELAY_MILLIS
 
-            fun timelineStylePickerNotice(style: SessionChatTimelineStyle): String =
+            fun timelineStylePickerNotice(style: SessionChatTimelineStyle): UiText =
                 SessionChatTimelineOffers.timelineStylePickerNotice(style)
         }
     }

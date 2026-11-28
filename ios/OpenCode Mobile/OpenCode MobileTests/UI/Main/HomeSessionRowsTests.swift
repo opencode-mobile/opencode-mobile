@@ -32,7 +32,7 @@ struct HomeSessionRowsTests {
         #expect(result.items.count == 10_000)
         #expect(result.unresolvedBusyIDs.isEmpty)
         #expect(result.items.first?.id == "root-9999")
-        let working = Set(result.items.filter { $0.statusLabel == "Working" }.map(\.id))
+        let working = Set(result.items.filter { $0.busyStatus == .running }.map(\.id))
         #expect(working == Set((0 ..< 50).map { "root-\($0 * 200)" }))
     }
 

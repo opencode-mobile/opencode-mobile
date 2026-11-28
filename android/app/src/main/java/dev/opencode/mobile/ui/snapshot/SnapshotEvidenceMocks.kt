@@ -32,7 +32,7 @@ data class SnapshotEvidenceMessage(
 
 object SnapshotEvidenceMocks {
     const val SESSION_TITLE = "Assistant message"
-    const val USER_METADATA = "Build · DeepSeek V4 Flash · 9:05 PM"
+    const val USER_METADATA = "Build · DeepSeek V4 Flash"
     const val CHILD_SESSION_TITLE = "Find auth bugs"
 
     /** Home filtered to a worktree with no sessions while sibling worktrees have some. */

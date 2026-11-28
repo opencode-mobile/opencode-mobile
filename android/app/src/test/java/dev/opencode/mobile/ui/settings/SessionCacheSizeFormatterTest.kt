@@ -2,6 +2,8 @@ package dev.opencode.mobile.ui.settings
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.ui.text.GermanFormatsStrings
 import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -25,5 +27,13 @@ class SessionCacheSizeFormatterTest {
     fun formatsMegabytesAndGigabytes() {
         assertEquals("1.5 MB", SessionCacheSizeFormatter.format((1.5 * 1024 * 1024).toLong()).english())
         assertEquals("1.0 GB", SessionCacheSizeFormatter.format(1024L * 1024L * 1024L).english())
+        assertEquals("1,023.0 GB", SessionCacheSizeFormatter.format(1023L * 1024L * 1024L * 1024L).english())
+        assertEquals("2.0 TB", SessionCacheSizeFormatter.format(2L * 1024L * 1024L * 1024L * 1024L).english())
+    }
+
+    @Test
+    fun numbersFollowTheReadersLocale() {
+        assertEquals("1,5 MB", SessionCacheSizeFormatter.format((1.5 * 1024 * 1024).toLong()).resolve(GermanFormatsStrings))
+        assertEquals("1.023,0 GB", SessionCacheSizeFormatter.format(1023L * 1024L * 1024L * 1024L).resolve(GermanFormatsStrings))
     }
 }

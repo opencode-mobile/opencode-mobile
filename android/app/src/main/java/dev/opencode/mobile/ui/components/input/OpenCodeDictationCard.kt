@@ -86,7 +86,7 @@ data class ComposerDictationCardModel(
     val onDevice: Boolean,
     val elapsedLabel: String,
     val unavailableReason: OpenCodeDictationUnavailableReason? = null,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
     val downloadProgress: Float? = null,
 )
 
@@ -113,7 +113,8 @@ fun OpenCodeDictationCard(
     onDevice: Boolean,
     elapsedLabel: String,
     unavailableReason: OpenCodeDictationUnavailableReason? = null,
-    errorMessage: String? = null,
+    /** Why the recognizer stopped; null reads "Dictation stopped". */
+    errorMessage: UiText? = null,
     downloadProgress: Float? = null,
     onCancel: () -> Unit,
     onInsert: () -> Unit,
@@ -425,7 +426,7 @@ private fun DictationStatusRow(
 @Composable
 private fun DictationUnavailableBody(
     reason: OpenCodeDictationUnavailableReason?,
-    errorMessage: String?,
+    errorMessage: UiText?,
     languageLabel: String,
     downloadProgress: Float?,
 ) {
@@ -511,7 +512,7 @@ private const val SPEECH_SYSTEM_NAME = "Android"
 /** Model copy names Android, so a slow or deferred system download is not read as an app fault. */
 internal fun unavailableCopy(
     reason: OpenCodeDictationUnavailableReason?,
-    errorMessage: String?,
+    errorMessage: UiText?,
     languageLabel: String,
 ): DictationUnavailableCopy {
     val model =
@@ -546,7 +547,7 @@ internal fun unavailableCopy(
             )
         OpenCodeDictationUnavailableReason.RecognizerError, null ->
             DictationUnavailableCopy(
-                errorMessage?.takeIf { it.isNotBlank() }?.let(UiText::verbatim) ?: UiText.resource(R.string.dictation_stopped),
+                errorMessage?.takeUnless { it is UiText.Verbatim && it.value.isBlank() } ?: UiText.resource(R.string.dictation_stopped),
                 null,
             )
     }

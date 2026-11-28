@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
@@ -25,10 +26,9 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentDestination
-import dev.opencode.mobile.domain.message.AttachmentDropRouting
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
-import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.AttachmentKind
+import dev.opencode.mobile.domain.message.AttachmentRejection
 import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.AttachmentUpload
 import dev.opencode.mobile.domain.message.AttachmentUploadPolicy
@@ -43,6 +43,7 @@ import dev.opencode.mobile.domain.message.PromptModelSelection
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgress
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
+import dev.opencode.mobile.domain.message.text
 import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.model.ModelCatalogStore
@@ -56,6 +57,8 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.model.modelSelectionIdentity
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.ServerErrorMessage
+import dev.opencode.mobile.domain.session.ServerErrorReason
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
@@ -69,6 +72,7 @@ import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerState
+import dev.opencode.mobile.ui.sessionchat.SessionChatModelNotice
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
@@ -96,10 +100,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.UUID
 
 /**
@@ -532,8 +532,8 @@ class SessionChatComposer(
                     updateComposer {
                         it.copy(
                             isModelSelectionReady = false,
-                            modelCatalogError = "Unable to load models. Tap Model to retry.",
-                            modelNotice = "Unable to load models. Tap Model to retry.",
+                            modelCatalogError = SessionChatModelNotice.loadFailed,
+                            modelNotice = SessionChatModelNotice.loadFailed,
                         )
                     }
                 }
@@ -620,7 +620,7 @@ class SessionChatComposer(
         val variantNotice =
             rememberedVariant
                 ?.takeIf { !ModelVariants.isDefault(it, option.variants) && it !in option.variants }
-                ?.let { "Remembered Variant is unavailable. Using Default." }
+                ?.let { SessionChatModelNotice.variantUnavailable }
         initialSelectionState = resolvedInitialSelectionState()
         val droppedForModel =
             _state.value.composer.attachments
@@ -649,7 +649,7 @@ class SessionChatComposer(
                         modelCatalogError = null,
                         modelNotice =
                             when {
-                                staleCached != null -> "Selected model is unavailable. Using ${option.modelLabel}."
+                                staleCached != null -> SessionChatModelNotice.modelUnavailable(option.modelLabel)
                                 variantNotice != null -> variantNotice
                                 else -> null
                             },
@@ -1001,9 +1001,9 @@ class SessionChatComposer(
         }
         discardStoredAttachments(duplicates + tooLarge)
         when {
-            tooLarge.isNotEmpty() -> reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
-            duplicates.isNotEmpty() -> reportAttachmentError(AttachmentUploadPolicy.DUPLICATE_ERROR)
-            rejected.isNotEmpty() -> reportAttachmentError(unsupportedAttachmentMessage(rejected))
+            tooLarge.isNotEmpty() -> reportAttachmentError(AttachmentRejection.TooLarge())
+            duplicates.isNotEmpty() -> reportAttachmentError(AttachmentRejection.Duplicate)
+            rejected.isNotEmpty() -> reportAttachmentError(unsupportedAttachmentRejection(rejected))
             staged.isNotEmpty() -> _state.update { it.copy(errorMessage = null) }
         }
         if (rejected.isNotEmpty()) discardStoredAttachments(rejected)
@@ -1026,7 +1026,7 @@ class SessionChatComposer(
         val error = result.errors.firstOrNull()
         when {
             quiet && error != null -> reportAttachmentError(error)
-            quiet && skippedFolders > 0 -> reportAttachmentError(AttachmentDropRouting.FOLDER_ERROR)
+            quiet && skippedFolders > 0 -> reportAttachmentError(AttachmentRejection.Folder)
         }
         return _state.value.composer.attachments.size > before
     }
@@ -1095,17 +1095,17 @@ class SessionChatComposer(
                     null -> updateAttachment(attachment.id) { it.copy(upload = AttachmentUpload.Inline) }
                     InlineRejection.TooLarge -> {
                         dropAttachment(attachment.id)
-                        reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
+                        reportAttachmentError(AttachmentRejection.TooLarge())
                     }
                     InlineRejection.Unsupported -> {
                         dropAttachment(attachment.id)
-                        reportAttachmentError(unsupportedAttachmentMessage(listOf(attachment)))
+                        reportAttachmentError(unsupportedAttachmentRejection(listOf(attachment)))
                     }
                 }
             }
             AttachmentUploadResult.TransportFailure -> {
                 dropAttachment(attachment.id)
-                reportAttachmentError(AttachmentUploadPolicy.UPLOAD_FAILED_ERROR)
+                reportAttachmentError(AttachmentRejection.UploadFailed)
             }
         }
     }
@@ -1147,9 +1147,9 @@ class SessionChatComposer(
         dropAttachment(id)
     }
 
-    fun reportAttachmentError(message: String) {
-        _state.update { it.copy(errorMessage = message) }
-        DiagnosticLog.warning(DiagnosticLogArea.Chat, "attachment rejected error=$message")
+    fun reportAttachmentError(rejection: AttachmentRejection) {
+        _state.update { it.copy(errorMessage = rejection.text) }
+        DiagnosticLog.warning(DiagnosticLogArea.Chat, "attachment rejected error=${rejection.logMessage}")
     }
 
     fun selectModel(option: ModelSelectionOption) {
@@ -1239,8 +1239,11 @@ class SessionChatComposer(
         worktree: String,
         onOptimisticRows: suspend (List<SessionChatMessageItem>) -> Unit,
         onSendAccepted: suspend () -> Unit,
-        /** [error] is app text for a failure the app caused, else the server or transport error as is. */
-        onSendFailed: (optimisticId: String, error: UiText) -> Unit,
+        /**
+         * [error] is the failure text. [appCaused] marks a failure the app caused (shown as a
+         * notice); otherwise it is the server or transport error, shown on the timeline.
+         */
+        onSendFailed: (optimisticId: String, error: UiText, appCaused: Boolean) -> Unit,
         isSessionBusy: Boolean,
         supportsFollowUp: Boolean,
         commandKeepsClientMessageId: Boolean = false,
@@ -1392,7 +1395,7 @@ class SessionChatComposer(
                     )
                     _state.update { it.copy(isSending = false, sendProgressPercent = null) }
                     firstSend?.settleFailed(sendJobActive = isActive)
-                    onSendFailed(display.id, UiText.verbatim(PENDING_SEND_TIMEOUT_ERROR))
+                    onSendFailed(display.id, PENDING_SEND_TIMEOUT_ERROR, false)
                     return@launchSend
                 }
                 val hasAttachments = attachments.isNotEmpty()
@@ -1441,7 +1444,7 @@ class SessionChatComposer(
                             if (
                                 supportsFollowUp &&
                                 composer.followUpDelivery != FollowUpDelivery.Queue &&
-                                errorMessage(busy) == "Session is busy"
+                                isSessionBusy(busy)
                             ) {
                                 send(FollowUpDelivery.Queue)
                             } else {
@@ -1522,10 +1525,8 @@ class SessionChatComposer(
                 )
                 _state.update { it.copy(isSending = false, sendProgressPercent = null) }
                 firstSend?.settleFailed(sendJobActive = isActive)
-                onSendFailed(
-                    display.id,
-                    (throwable as? SessionChatRevertCommitFailure)?.text ?: UiText.verbatim(errorMessage(throwable)),
-                )
+                val revertFailure = (throwable as? SessionChatRevertCommitFailure)?.text
+                onSendFailed(display.id, revertFailure ?: errorMessage(throwable), revertFailure != null)
             }
         }
         return true
@@ -2034,8 +2035,8 @@ class SessionChatComposer(
             updateComposer {
                 it.copy(
                     isModelSelectionReady = false,
-                    modelCatalogError = "No usable models are available. Tap Model to retry.",
-                    modelNotice = "No usable models are available. Tap Model to retry.",
+                    modelCatalogError = SessionChatModelNotice.noneUsable,
+                    modelNotice = SessionChatModelNotice.noneUsable,
                 )
             }
             return
@@ -2064,7 +2065,7 @@ class SessionChatComposer(
                 attachments = composer.attachments.filter { option.acceptsAttachmentKind(it.kind) },
                 modelNotice =
                     if (refreshed == null) {
-                        "Selected model is unavailable. Using ${option.modelLabel}."
+                        SessionChatModelNotice.modelUnavailable(option.modelLabel)
                     } else {
                         composer.modelNotice
                     },
@@ -2079,12 +2080,12 @@ class SessionChatComposer(
         option: ModelSelectionOption,
     ): String? = remembered?.takeIf { it.isNotBlank() && it in option.variants }
 
+    /** Like [TimelineProjector.metadataLabel]: the view adds the sent time in the current locale. */
     private fun composerMetadataLabel(composer: SessionChatComposerState): String =
         listOfNotNull(
             composer.selectedModeLabel,
             composer.selectedModel?.modelLabel,
             composer.selectedVariant?.let(TitleCaseIdentifier::displayName),
-            formatSentTime(System.currentTimeMillis()),
         ).joinToString(" · ")
 
     private fun applySelectableAgents(agents: List<SelectableAgent>) {
@@ -2253,37 +2254,46 @@ class SessionChatComposer(
         return (listOf(leading) + skillMentions).sortedBy { it.start }
     }
 
-    private fun formatSentTime(epochMs: Long): String =
-        Instant
-            .ofEpochMilli(epochMs)
-            .atZone(ZoneId.systemDefault())
-            .format(SentTimeFormatter)
-
-    private fun unsupportedAttachmentMessage(rejected: List<Attachment>): String {
+    private fun unsupportedAttachmentRejection(rejected: List<Attachment>): AttachmentRejection {
         val kinds = rejected.map { it.kind }.toSet()
         return when (kinds) {
-            setOf(AttachmentKind.Image) -> "This model does not support image attachments."
-            setOf(AttachmentKind.Pdf) -> "This model does not support PDF attachments."
-            setOf(AttachmentKind.File) -> AttachmentIngestionService.UNSUPPORTED_ERROR
-            else -> "This model does not support some of the selected attachments."
+            setOf(AttachmentKind.Image) -> AttachmentRejection.ModelWithoutImages
+            setOf(AttachmentKind.Pdf) -> AttachmentRejection.ModelWithoutPdf
+            setOf(AttachmentKind.File) -> AttachmentRejection.UnsupportedType
+            else -> AttachmentRejection.ModelWithoutSome
         }
     }
 
     private fun isTransportFailure(throwable: Throwable): Boolean =
         throwable is MessageError.Transport || throwable is CommandError.Transport
 
-    private fun errorMessage(throwable: Throwable): String =
+    /** Server text stays verbatim; the app's own fallbacks are keyed. */
+    private fun errorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is MessageError.Http -> throwable.message ?: "Request failed"
-            is MessageError.Transport -> "Unable to reach the server"
-            is MessageError.Decoding -> "Unable to read server response"
-            is CommandError.Http -> throwable.message ?: "Request failed"
-            is CommandError.Transport -> "Unable to reach the server"
-            is CommandError.Decoding -> "Unable to read server response"
-            is SessionError.Http -> throwable.message ?: "Request failed"
-            is SessionError.Transport -> "Unable to reach the server"
-            is SessionError.Decoding -> "Unable to read server response"
-            else -> throwable.message ?: "Something went wrong"
+            is MessageError.Http -> ServerErrorMessage.text(throwable) ?: serverOrRequestFailed(throwable.message)
+            is CommandError.Http -> serverOrRequestFailed(throwable.message)
+            is SessionError.Http -> ServerErrorMessage.text(throwable) ?: serverOrRequestFailed(throwable.message)
+            is MessageError.Transport,
+            is CommandError.Transport,
+            is SessionError.Transport,
+            -> UiText.resource(R.string.connection_error_unreachable)
+            is MessageError.Decoding,
+            is CommandError.Decoding,
+            is SessionError.Decoding,
+            -> UiText.resource(R.string.home_session_error_unreadable_response)
+            else -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_generic)
+        }
+
+    private fun serverOrRequestFailed(message: String?): UiText =
+        message?.let(UiText::verbatim) ?: UiText.resource(R.string.session_chat_activity_request_failed)
+
+    /** The server's busy reply: its typed reason, or a command error's own "Session is busy" text. */
+    private fun isSessionBusy(throwable: Throwable): Boolean =
+        when (throwable) {
+            is MessageError.Http, is SessionError.Http -> ServerErrorMessage.from(throwable) == ServerErrorReason.SessionBusy
+            is CommandError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
+            is MessageError, is CommandError, is SessionError -> false
+            else -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
         }
 
     private fun logSendFailure(throwable: Throwable) {
@@ -2303,9 +2313,9 @@ class SessionChatComposer(
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
         internal const val CATALOG_REFRESH_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10
-        const val PENDING_SEND_TIMEOUT_ERROR = "Couldn't send. Try again."
-        const val SHELL_CANNOT_QUEUE_ERROR = "Shell commands can't be queued. Switch to Steer to run it now."
-        private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+        val PENDING_SEND_TIMEOUT_ERROR: UiText = UiText.resource(R.string.session_chat_send_timed_out)
+        private const val SESSION_BUSY_SERVER_MESSAGE = "Session is busy"
+        val SHELL_CANNOT_QUEUE_ERROR: UiText = UiText.resource(R.string.session_chat_shell_cannot_queue)
     }
 
     private sealed interface InitialSelection {

@@ -13,8 +13,11 @@ enum PromptSendProgress {
         hasAttachments || bytesTotal >= visibleBodyThreshold
     }
 
+    /// The turn pill while the prompt body is on the wire, in the reader's language.
     static func label(percent: Int) -> String {
-        percent <= 0 ? "Sending…" : "Sending \(percent)%"
+        percent <= 0
+            ? String(localized: "session_chat.turn.sending", defaultValue: "Sending\u{2026}")
+            : String(localized: "session_chat.turn.sending_percent", defaultValue: "Sending \(percent)%")
     }
 }
 

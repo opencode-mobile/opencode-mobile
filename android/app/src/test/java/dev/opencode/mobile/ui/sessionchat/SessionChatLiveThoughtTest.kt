@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusAttentionMark
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
@@ -107,10 +108,10 @@ class SessionChatLiveThoughtTest {
     @Test
     fun sheetSublineSaysThinkingUntilTheThoughtSettles() {
         val live = SessionChatThoughtSheetState(partId = "r1", text = "Checking.", isStreaming = true, durationMs = null)
-        assertEquals("Thinking…", live.detailTarget("Thinking…").presentation?.thoughtDuration())
+        assertEquals("Thinking…", live.detailTarget("Thinking…", EnglishStrings).presentation?.thoughtDuration())
         val settled = SessionChatThoughtSheetState(partId = "r1", text = "Checking.", isStreaming = false, durationMs = 1_500)
-        assertEquals("1.5s", settled.detailTarget("Thinking…").presentation?.thoughtDuration())
-        assertEquals("Checking.", settled.detailTarget("Thinking…").body)
+        assertEquals("1.5s", settled.detailTarget("Thinking…", EnglishStrings).presentation?.thoughtDuration())
+        assertEquals("Checking.", settled.detailTarget("Thinking…", EnglishStrings).body)
     }
 
     private fun ToolResultPresentation.thoughtDuration(): String? = (this as? ToolResultPresentation.Thought)?.durationLabel
@@ -118,7 +119,7 @@ class SessionChatLiveThoughtTest {
     // Turn pill
 
     private fun slot(
-        label: String? = "Working",
+        label: UiText? = SessionChatStatusText.working,
         fading: Boolean = false,
         awaiting: Boolean = false,
         items: List<SessionChatActivityItem> = emptyList(),
@@ -148,9 +149,9 @@ class SessionChatLiveThoughtTest {
 
     @Test
     fun otherTurnLabelsAndRequestsWinOverThinking() {
-        assertEquals(OpenCodeTurnStatusPillPhase.Working("Compacting…"), slot(label = "Compacting…")?.phase)
-        assertNull(slot(label = "Compacting…")?.item)
-        assertEquals(OpenCodeTurnStatusPillPhase.Done, slot(label = WorkingTurnIndicator.IDLE_LABEL)?.phase)
+        assertEquals(OpenCodeTurnStatusPillPhase.Working("Compacting…"), slot(label = SessionCompactChrome.statusLabel)?.phase)
+        assertNull(slot(label = SessionCompactChrome.statusLabel)?.item)
+        assertEquals(OpenCodeTurnStatusPillPhase.Done, slot(label = WorkingTurnIndicator.idleLabel)?.phase)
         assertNull(slot(label = null))
         assertEquals(
             OpenCodeTurnStatusPillPhase.Attention("Waiting for you", OpenCodeTurnStatusAttentionMark.PulsingDot),

@@ -2,7 +2,7 @@ import Foundation
 
 /// What the open session's turn shows, resolved inside the Screen Model's publish.
 struct SessionChatTurnStatusResolution {
-    var workingIndicatorLabel: String?
+    var workingIndicatorLabel: SessionTurnLabel?
     var workingIndicatorFading: Bool
     /// The turn is running and not waiting on the user: what makes a rail or card live.
     var isTurnWorking: Bool
@@ -15,7 +15,7 @@ struct SessionChatTurnStatusResolution {
 /// values publish already derived from them.
 struct SessionChatTurnStatusInputs {
     /// The status shown in the header: the compact label while compacting.
-    var sessionStatusLabel: String?
+    var sessionStatusLabel: SessionTurnLabel?
     var isCompacting: Bool
     var isSessionBound: Bool
     var messages: [SessionChatRow]
@@ -137,12 +137,12 @@ final class SessionChatTurnStatus {
         let workingIndicatorLabel = workingResolution.chrome.label
         let workingIndicatorFading = workingResolution.chrome.fading
         let workingLampKey =
-            "\(workingIndicatorLabel ?? "none"):\(workingIndicatorFading ? 1 : 0):\(workingHold != nil ? 1 : 0)"
+            "\(workingIndicatorLabel?.text ?? "none"):\(workingIndicatorFading ? 1 : 0):\(workingHold != nil ? 1 : 0)"
         if !loggedWorkingLamp || lastWorkingLamp != workingLampKey {
             loggedWorkingLamp = true
             lastWorkingLamp = workingLampKey
             OpenCodeLog.sessionChat.info(
-                "workingLamp label=\(workingIndicatorLabel ?? "none") fading=\(workingIndicatorFading ? 1 : 0) hold=\(self.workingHold != nil ? 1 : 0) status=\(inputs.sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) ending=\(String(describing: ending))"
+                "workingLamp label=\(workingIndicatorLabel?.text ?? "none") fading=\(workingIndicatorFading ? 1 : 0) hold=\(self.workingHold != nil ? 1 : 0) status=\(inputs.sessionStatusLabel?.text ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) ending=\(String(describing: ending))"
             )
         }
         let pendingResolution = pendingPromptsGate.resolve(inputs.pendingPrompts, nowMs: clock.nowMs())

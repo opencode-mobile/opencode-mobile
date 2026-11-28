@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusAttentionMark
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 import dev.opencode.mobile.ui.text.EnglishStrings
@@ -34,7 +36,7 @@ class SessionChatTurnStatusSlotTest {
     )
 
     private fun slot(
-        label: String? = "Working",
+        label: UiText? = SessionChatStatusText.working,
         fading: Boolean = false,
         awaiting: Boolean = false,
         items: List<SessionChatActivityItem> = emptyList(),
@@ -46,6 +48,24 @@ class SessionChatTurnStatusSlotTest {
         label: String,
         mark: OpenCodeTurnStatusAttentionMark,
     ) = OpenCodeTurnStatusPillPhase.Attention(label, mark)
+
+    /** The pill resolves the typed label through the lookup it is given. */
+    @Test
+    fun compactingShowsTheKeyedStatus() {
+        val marked =
+            object : UiTextLookup by EnglishStrings {
+                override fun string(
+                    id: Int,
+                    args: Array<out Any>,
+                ) = "keyed:" + EnglishStrings.string(id, args)
+            }
+
+        assertEquals(
+            OpenCodeTurnStatusPillPhase.Working("keyed:Compacting…"),
+            SessionChatPillSlots.turnStatus(SessionCompactChrome.statusLabel, false, false, emptyList(), false, false, marked)?.phase,
+        )
+        assertEquals(OpenCodeTurnStatusPillPhase.Working("Compacting…"), slot(label = SessionCompactChrome.statusLabel)?.phase)
+    }
 
     // Priority ladder
 
@@ -71,8 +91,8 @@ class SessionChatTurnStatusSlotTest {
             slot(items = listOf(waitingSubagent))?.phase,
         )
         assertEquals(OpenCodeTurnStatusPillPhase.Working("Working"), slot()?.phase)
-        assertEquals(OpenCodeTurnStatusPillPhase.Working("Compacting…"), slot(label = "Compacting…")?.phase)
-        assertEquals(OpenCodeTurnStatusPillPhase.Done, slot(label = WorkingTurnIndicator.IDLE_LABEL)?.phase)
+        assertEquals(OpenCodeTurnStatusPillPhase.Working("Compacting…"), slot(label = SessionCompactChrome.statusLabel)?.phase)
+        assertEquals(OpenCodeTurnStatusPillPhase.Done, slot(label = WorkingTurnIndicator.idleLabel)?.phase)
         assertNull(slot(label = null))
     }
 
@@ -95,7 +115,7 @@ class SessionChatTurnStatusSlotTest {
         assertEquals(SessionChatActivityItem.AnswerQuestion, slot(items = listOf(SessionChatActivityItem.AnswerQuestion))?.item)
         assertNull(slot(awaiting = true)?.item)
         assertNull(slot()?.item)
-        assertNull(slot(label = WorkingTurnIndicator.IDLE_LABEL)?.item)
+        assertNull(slot(label = WorkingTurnIndicator.idleLabel)?.item)
         assertFalse(slot(items = listOf(SessionChatActivityItem.ReviewPermission))?.isClosable == true)
     }
 
@@ -111,7 +131,7 @@ class SessionChatTurnStatusSlotTest {
 
     @Test
     fun workingAndDoneFoldAwayFromTheEndOrWithTheKeyboard() {
-        listOf("Working", WorkingTurnIndicator.IDLE_LABEL).forEach { label ->
+        listOf(SessionChatStatusText.working, WorkingTurnIndicator.idleLabel).forEach { label ->
             assertEquals(false, slot(label = label)?.compact)
             assertEquals(true, slot(label = label, away = true)?.compact)
             assertEquals(true, slot(label = label, keyboard = true)?.compact)
@@ -197,18 +217,18 @@ class SessionChatTurnStatusSlotTest {
     fun theRowStaysReservedThroughEveryStateUntilTheFade() {
         listOf(
             slot(),
-            slot(label = WorkingTurnIndicator.IDLE_LABEL),
+            slot(label = WorkingTurnIndicator.idleLabel),
             slot(awaiting = true),
             slot(items = listOf(SessionChatActivityItem.ReviewPermission)),
             slot(items = listOf(failed)),
             slot(items = listOf(waitingSubagent)),
         ).forEach { assertEquals(true, it?.reservesRow) }
-        assertEquals(false, slot(label = WorkingTurnIndicator.IDLE_LABEL, fading = true)?.reservesRow)
+        assertEquals(false, slot(label = WorkingTurnIndicator.idleLabel, fading = true)?.reservesRow)
     }
 
     @Test
     fun aRequestArrivingDuringTheFadeTakesTheRowBack() {
-        val attentionSlot = slot(label = WorkingTurnIndicator.IDLE_LABEL, fading = true, awaiting = true)
+        val attentionSlot = slot(label = WorkingTurnIndicator.idleLabel, fading = true, awaiting = true)
 
         assertEquals(false, attentionSlot?.leaving)
         assertEquals(true, attentionSlot?.reservesRow)

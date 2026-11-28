@@ -105,10 +105,13 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func thoughtDurationLabel_matchesTuiBuckets() {
-        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(438) == "438ms")
-        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400) == "6.4s")
-        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(127_000) == "2m 7s")
-        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(nil) == nil)
+        let en = Locale(identifier: "en_US")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(438, locale: en) == "438ms")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400, locale: en) == "6.4s")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(127_000, locale: en) == "2m 7s")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(nil, locale: en) == nil)
+        // The decimal follows the locale; the TUI's unit letters stay.
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400, locale: Locale(identifier: "de_DE")) == "6,4s")
     }
 
     @Test func build_hidesBlankReasoning() {
@@ -1604,6 +1607,22 @@ struct SessionChatTimelineBlocksTests {
         #expect(group.count == 2)
         #expect(english(group.title) == "2 tools")
         #expect(english(group.subtitle) == "2 shells")
+    }
+
+    @Test func build_collapseOn_unknownToolCountsKeepTheServerName() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "mcp-1", toolName: "mcp_lookup", status: .completed)),
+                .tool(ToolPart(id: "mcp-2", toolName: "mcp_lookup", status: .completed)),
+                .tool(ToolPart(id: "mcp-3", toolName: "mcp_other", status: .completed)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        guard case .toolGroup(_, let group) = blocks.single else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(english(group.subtitle) == "2 mcp_lookup · mcp_other")
     }
 
     @Test func build_collapseOn_hiddenToolDoesNotBreakGroup() {

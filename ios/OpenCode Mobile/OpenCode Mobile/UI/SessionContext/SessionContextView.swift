@@ -129,8 +129,13 @@ struct SessionContextView: View {
     /// "System 12.5%": the part's name and its share with one decimal.
     private func legend(for item: SessionContextBreakdownItem) -> LocalizedStringResource {
         let name = String(localized: label(for: item.kind))
-        let percent = String(format: "%.1f%%", locale: .current, item.displayPercent)
+        let percent = Self.breakdownPercent(item.displayPercent)
         return LocalizedStringResource("session_context.breakdown.legend", defaultValue: "\(name) \(percent)")
+    }
+
+    /// A part's share with one decimal, in `locale`: "12.5%", "12,5 %" in de-DE.
+    static func breakdownPercent(_ value: Double, locale: Locale = .current) -> String {
+        (value / 100).formatted(.percent.precision(.fractionLength(1)).locale(locale))
     }
 
     private func label(for kind: SessionContextBreakdownItem.Kind) -> LocalizedStringResource {

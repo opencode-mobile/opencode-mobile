@@ -31,10 +31,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 class SessionDomainAdapter {
     fun toSession(dto: SessionDto): Session =
@@ -109,7 +105,7 @@ class SessionDomainAdapter {
 
     fun toSessionSummary(
         session: Session,
-        statusLabel: String? = null,
+        busyStatus: SessionBusyStatus? = null,
         isReady: Boolean = false,
         statusStale: Boolean = false,
         unreadOutcome: SessionIdleOutcome? = null,
@@ -117,8 +113,7 @@ class SessionDomainAdapter {
         SessionSummary(
             id = session.id,
             title = session.title,
-            statusLabel = statusLabel,
-            updatedAtLabel = session.updatedAtEpochMs?.let(::updatedAtLabel),
+            busyStatus = busyStatus,
             updatedAtEpochMs = session.updatedAtEpochMs,
             isReady = isReady,
             statusStale = statusStale,
@@ -344,12 +339,15 @@ class SessionDomainAdapter {
     fun mapError(throwable: Throwable): SessionError =
         when (throwable) {
             is SessionError -> throwable
-            is HttpBodyResponseException ->
+            is HttpBodyResponseException -> {
+                // A reason the app explains leaves no message: the UI keys it from the body.
+                val reason = ServerErrorMessage.reason(throwable.bodyText)
                 SessionError.Http(
                     statusCode = throwable.response.status.value,
-                    message = ServerErrorMessage.userFacing(throwable.bodyText) ?: throwable.message,
+                    message = if (reason != null) reason.serverText else throwable.message,
                     body = throwable.bodyText,
                 )
+            }
             is ResponseException ->
                 SessionError.Http(
                     statusCode = throwable.response.status.value,
@@ -358,18 +356,6 @@ class SessionDomainAdapter {
             is JsonConvertException -> SessionError.Decoding(throwable)
             else -> SessionError.Transport(throwable)
         }
-
-    private fun updatedAtLabel(epochMs: Long): String =
-        Instant
-            .ofEpochMilli(epochMs)
-            .atZone(ZoneId.systemDefault())
-            .format(updatedAtFormatter)
-
-    private companion object {
-        val updatedAtFormatter: DateTimeFormatter =
-            DateTimeFormatter
-                .ofPattern("MMM d • h:mm a", Locale.US)
-    }
 
     private fun toTokenUsage(dto: MessageTokensDto?): MessageTokenUsage? {
         dto ?: return null

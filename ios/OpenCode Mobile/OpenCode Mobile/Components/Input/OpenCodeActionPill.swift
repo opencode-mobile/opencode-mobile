@@ -48,7 +48,7 @@ struct OpenCodeActionPill: View {
     private var label: String {
         switch variant {
         case .scrollToEnd:
-            "Scroll to end"
+            String(localized: "session_chat.navigation.scroll_to_end", defaultValue: "Scroll to end")
         }
     }
 

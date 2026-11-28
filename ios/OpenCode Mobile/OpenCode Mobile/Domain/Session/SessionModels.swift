@@ -80,6 +80,31 @@ struct SessionStatus: Sendable, Equatable {
     let raw: [String: String]
 }
 
+/// What a session row says about a busy session. Typed, so rows map it to their status pill
+/// without reading text, and equal while only the server's retry reason changes.
+nonisolated enum SessionBusyStatus: Sendable, Hashable {
+    case running
+    case retrying(attempt: Int?)
+}
+
+/// The turn pill's label. Typed so status logic never compares display text: Working and the
+/// ended turn are cases; Retrying, Compacting and Sending arrive already in the reader's language.
+nonisolated enum SessionTurnLabel: Hashable, Sendable {
+    case working
+    /// Shown as is.
+    case text(String)
+    /// The turn ended. Never shown as text: the pill shows Done for it.
+    case idle
+
+    var text: String {
+        switch self {
+        case .working: String(localized: "component.activity_card.working", defaultValue: "Working")
+        case let .text(text): text
+        case .idle: String(localized: "session_list.status.idle", defaultValue: "Idle")
+        }
+    }
+}
+
 nonisolated enum SessionActivity: Sendable, Equatable {
     case idle
     case running
@@ -99,30 +124,39 @@ nonisolated enum SessionActivity: Sendable, Equatable {
         }
     }
 
-    var statusLabel: String? {
+    /// The busy state a session row shows, without the server's retry text.
+    var busyStatus: SessionBusyStatus? {
         switch self {
         case .idle:
             nil
         case .running:
-            "Working"
+            .running
         case let .retrying(attempt, _, _, _, _, _):
-            if let attempt {
-                "Retrying · \(attempt)"
-            } else {
-                "Retrying"
-            }
+            .retrying(attempt: attempt)
         }
     }
 
-    /// In-chat label. The home list keeps `statusLabel` ("Retrying · N") because
-    /// it parses the attempt off that exact prefix.
-    var chatStatusLabel: String? {
-        guard case let .retrying(_, _, message, _, _, _) = self else { return statusLabel }
-        let base = statusLabel
-        guard let reason = message?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else {
-            return base
+    /// In-chat label: Working, or Retrying in the reader's language with the server's retry
+    /// reason verbatim.
+    var chatStatus: SessionTurnLabel? {
+        switch self {
+        case .idle:
+            return nil
+        case .running:
+            return .working
+        case let .retrying(attempt, _, message, _, _, _):
+            let base =
+                if let attempt {
+                    String(localized: "session_list.status.retrying_attempt", defaultValue: "Retrying · \(attempt)")
+                } else {
+                    String(localized: "session_list.status.retrying", defaultValue: "Retrying")
+                }
+            guard let reason = message?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else {
+                return .text(base)
+            }
+            let text = String(reason.prefix(80))
+            return .text(String(localized: "timeline.list_separator", defaultValue: "\(base) · \(text)"))
         }
-        return "\(base ?? "Retrying") · \(reason.prefix(80))"
     }
 
     /// Live countdown card. Content-filter retries stay a caption only.
@@ -133,7 +167,10 @@ nonisolated enum SessionActivity: Sendable, Equatable {
         if errorType?.caseInsensitiveCompare("provider.content-filter") == .orderedSame { return nil }
         guard let nextAtMs else { return nil }
         let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let text = trimmed.isEmpty ? "Retrying" : String(trimmed.prefix(80))
+        let text =
+            trimmed.isEmpty
+                ? String(localized: "session_list.status.retrying", defaultValue: "Retrying")
+                : String(trimmed.prefix(80))
         return SessionRetryCard(
             message: text,
             attempt: attempt,
@@ -203,16 +240,16 @@ nonisolated struct SessionActivitySnapshot: Sendable, Equatable {
         self.fromCache = fromCache
     }
 
-    func statusLabel(for sessionID: String) -> String? {
+    func busyStatus(for sessionID: String) -> SessionBusyStatus? {
         guard let entry = entries[sessionID] else { return nil }
         guard seeded || entry.source == .cached else { return nil }
-        return entry.activity.statusLabel
+        return entry.activity.busyStatus
     }
 
-    func chatStatusLabel(for sessionID: String) -> String? {
+    func chatStatus(for sessionID: String) -> SessionTurnLabel? {
         guard let entry = entries[sessionID] else { return nil }
         guard seeded || entry.source == .cached else { return nil }
-        return entry.activity.chatStatusLabel
+        return entry.activity.chatStatus
     }
 
     func isBusy(for sessionID: String) -> Bool {
@@ -488,7 +525,7 @@ extension SessionError: LocalizedError {
         case let .transport(message):
             return message
         case let .http(_, message):
-            return message ?? "Request failed"
+            return message ?? MessageError.requestFailedText
         case let .decoding(message):
             return message
         }

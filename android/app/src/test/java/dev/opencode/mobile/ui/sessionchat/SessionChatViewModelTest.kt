@@ -39,6 +39,7 @@ import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
+import dev.opencode.mobile.domain.message.AttachmentRejection
 import dev.opencode.mobile.domain.message.AttachmentUpload
 import dev.opencode.mobile.domain.message.AttachmentUploadResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
@@ -2313,7 +2314,7 @@ class SessionChatViewModelTest {
 
             assertEquals(null, sessionRepository.updateRequest)
             assertTrue(viewModel.uiState.value.rename.isDialogVisible)
-            assertEquals("Enter a session title", viewModel.uiState.value.rename.errorMessage)
+            assertEquals("Enter a session title", viewModel.uiState.value.rename.errorMessage?.english())
             assertEquals("Original title", viewModel.uiState.value.sessionTitle)
         }
 
@@ -2379,7 +2380,7 @@ class SessionChatViewModelTest {
 
             assertTrue(viewModel.uiState.value.rename.isDialogVisible)
             assertFalse(viewModel.uiState.value.rename.isSubmitting)
-            assertEquals("boom", viewModel.uiState.value.rename.errorMessage)
+            assertEquals("boom", viewModel.uiState.value.rename.errorMessage?.english())
             assertEquals("Original title", viewModel.uiState.value.sessionTitle)
         }
 
@@ -2961,11 +2962,12 @@ class SessionChatViewModelTest {
             viewModel.addAttachments(listOf(testAttachment()))
             viewModel.sendPrompt()
             runCurrent()
-            assertEquals("Sending 25%", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Sending 25%", viewModel.uiState.value.workingIndicatorLabel?.english())
             sendGate.complete(Unit)
             advanceUntilIdle()
             assertFalse(
                 viewModel.uiState.value.workingIndicatorLabel
+                    ?.english()
                     .orEmpty()
                     .startsWith("Sending"),
             )
@@ -3986,7 +3988,7 @@ class SessionChatViewModelTest {
 
             assertEquals(
                 "No usable models are available. Tap Model to retry.",
-                viewModel.uiState.value.composer.modelCatalogError,
+                viewModel.uiState.value.composer.modelCatalogError?.english(),
             )
             assertEquals(false, viewModel.uiState.value.composer.isModelSelectionReady)
 
@@ -4068,7 +4070,7 @@ class SessionChatViewModelTest {
             assertEquals(3, models.calls)
             assertEquals(
                 "No usable models are available. Tap Model to retry.",
-                viewModel.uiState.value.composer.modelCatalogError,
+                viewModel.uiState.value.composer.modelCatalogError?.english(),
             )
         }
 
@@ -4298,7 +4300,7 @@ class SessionChatViewModelTest {
             )
             assertEquals(
                 "Selected model is unavailable. Using Claude Sonnet.",
-                viewModel.uiState.value.composer.modelNotice,
+                viewModel.uiState.value.composer.modelNotice?.english(),
             )
         }
 
@@ -4965,7 +4967,7 @@ class SessionChatViewModelTest {
             val v1 = createViewModel(repository = FakeMessageRepository(), homeProjectsSnapshot = moveProjectsSnapshot())
             v1.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Needs an opencode v2 server", v1.uiState.value.moveToWorktree.availability.subtitle)
+            assertEquals("Needs an opencode v2 server", v1.uiState.value.moveToWorktree.availability.subtitle?.english())
             assertFalse(v1.uiState.value.moveToWorktree.availability.enabled)
 
             // One checkout: the sheet still opens while "New worktree…" can make another.
@@ -4988,7 +4990,7 @@ class SessionChatViewModelTest {
                 )
             singlePlain.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("This project has no other worktrees", singlePlain.uiState.value.moveToWorktree.availability.subtitle)
+            assertEquals("This project has no other worktrees", singlePlain.uiState.value.moveToWorktree.availability.subtitle?.english())
             assertEquals("Needs a git repository", singlePlain.uiState.value.moveToWorktree.newWorktree.subtitle?.english())
 
             val v2 =
@@ -5011,7 +5013,7 @@ class SessionChatViewModelTest {
                 androidx.compose.runtime.snapshots.Snapshot
                     .sendApplyNotifications()
                 advanceUntilIdle()
-                assertEquals("Turn on Worktrees in Settings", v2.uiState.value.moveToWorktree.availability.subtitle)
+                assertEquals("Turn on Worktrees in Settings", v2.uiState.value.moveToWorktree.availability.subtitle?.english())
             } finally {
                 HomeDisplayPreferences.updateShowsWorktrees(true)
             }
@@ -5194,7 +5196,7 @@ class SessionChatViewModelTest {
 
                 viewModel.updateComposerText("/btw why?")
                 advanceUntilIdle()
-                assertEquals(SessionChatSideQuestionsCopy.UNSUPPORTED, viewModel.uiState.value.sideQuestions.unsupportedNotice)
+                assertEquals(SessionChatSideQuestionsCopy.unsupported, viewModel.uiState.value.sideQuestions.unsupportedNotice)
                 assertFalse(viewModel.uiState.value.sideQuestions.composerMode)
 
                 viewModel.sendPrompt()
@@ -5499,7 +5501,7 @@ class SessionChatViewModelTest {
 
             val composer = viewModel.uiState.value.composer
             assertEquals("gpt-5", composer.selectedModel?.option?.modelId)
-            assertEquals("Selected model is unavailable. Using ${gpt.modelLabel}.", composer.modelNotice)
+            assertEquals("Selected model is unavailable. Using ${gpt.modelLabel}.", composer.modelNotice?.english())
         }
 
     @Test
@@ -7537,8 +7539,8 @@ class SessionChatViewModelTest {
                 )
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel?.english())
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             viewModel.abort()
             runCurrent()
@@ -7645,8 +7647,8 @@ class SessionChatViewModelTest {
             viewModel.runClientSlashAction(ClientSlashAction.Compact)
             advanceUntilIdle()
 
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.workingIndicatorLabel)
 
             hold.complete(Unit)
             runCurrent()
@@ -7659,12 +7661,12 @@ class SessionChatViewModelTest {
             )
             assertNull(viewModel.uiState.value.sessionStatusLabel)
             // The last active label holds through the settle, then Done.
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
         }
 
@@ -7681,7 +7683,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             // POST /compact returned (enqueued): no success yet, still Compacting….
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
             assertNull(viewModel.uiState.value.snackbar)
 
             repository.messages =
@@ -7750,7 +7752,7 @@ class SessionChatViewModelTest {
 
             viewModel.runClientSlashAction(ClientSlashAction.Compact)
             advanceUntilIdle()
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
 
             // The live compaction item completes while POST /compact is still in flight.
             repository.messages = repository.messages + completedCompactionMessage(summary = "## Goal\nShip it")
@@ -7793,7 +7795,7 @@ class SessionChatViewModelTest {
             repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
             advanceUntilIdle()
             // Enqueue not confirmed yet: idle alone does not end the compaction.
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
 
             hold.complete(Unit)
             advanceUntilIdle()
@@ -7809,14 +7811,14 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             viewModel.branchNameCopied()
-            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message?.english())
+            assertEquals("Branch name copied", viewModel.uiState.value.snackbar?.message?.english())
             val firstId = viewModel.uiState.value.snackbar?.id
 
             viewModel.consumeSnackbar()
             assertNull(viewModel.uiState.value.snackbar)
 
             viewModel.branchNameCopied()
-            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message?.english())
+            assertEquals("Branch name copied", viewModel.uiState.value.snackbar?.message?.english())
             assertNotEquals(firstId, viewModel.uiState.value.snackbar?.id)
         }
 
@@ -7874,7 +7876,7 @@ class SessionChatViewModelTest {
             // The post-enqueue re-check must see the session still busy, not treat it as idle.
             hold.complete(Unit)
             advanceUntilIdle()
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
             assertNull(viewModel.uiState.value.snackbar)
 
             repository.messages = repository.messages + completedCompactionMessage(summary = "## Goal\nShip it")
@@ -7919,26 +7921,26 @@ class SessionChatViewModelTest {
                 )
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
             runCurrent()
             assertNull(viewModel.uiState.value.sessionStatusLabel)
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS - 1)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             testDispatcher.scheduler.advanceTimeBy(1)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_DONE_HOLD_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertTrue(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_FADE_MS)
@@ -7965,11 +7967,11 @@ class SessionChatViewModelTest {
             runCurrent()
             repository.eventStream.emit(busyStatusEvent())
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS + WorkingTurnIndicator.TURN_DONE_HOLD_MS)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
         }
 
@@ -8002,7 +8004,7 @@ class SessionChatViewModelTest {
             runCurrent()
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertTrue(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_FADE_MS)
@@ -8030,7 +8032,7 @@ class SessionChatViewModelTest {
                 )
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             liveUpdates.set(liveChrome(LiveUpdatesLabel.Offline))
             runCurrent()
@@ -8039,15 +8041,15 @@ class SessionChatViewModelTest {
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS * 4)
             runCurrent()
             // Offline the pill keeps its last state.
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             liveUpdates.set(liveChrome(LiveUpdatesLabel.Live))
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertTrue(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_FADE_MS)
@@ -8080,7 +8082,7 @@ class SessionChatViewModelTest {
             runCurrent()
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
         }
 
@@ -8101,7 +8103,7 @@ class SessionChatViewModelTest {
                 )
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             // A momentarily null status with a request pending is still an active turn.
             repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
@@ -8109,15 +8111,15 @@ class SessionChatViewModelTest {
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS + WorkingTurnIndicator.TURN_DONE_HOLD_MS)
             runCurrent()
             assertNull(viewModel.uiState.value.sessionStatusLabel)
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             permissions.requests.value = emptyList()
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
         }
 
     @Test
@@ -8184,8 +8186,8 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.workingIndicatorLabel)
         }
 
     @Test
@@ -8222,8 +8224,8 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel?.english())
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
         }
 
     @Test
@@ -8298,7 +8300,7 @@ class SessionChatViewModelTest {
             assertFalse(repository.sendPromptAsyncCalled)
             assertEquals(false, viewModel.uiState.value.isSending)
             assertEquals(
-                SessionChatComposer.PENDING_SEND_TIMEOUT_ERROR,
+                "Couldn't send. Try again.",
                 viewModel.uiState.value.snackbar
                     ?.message
                     ?.english(),
@@ -8339,7 +8341,7 @@ class SessionChatViewModelTest {
 
             assertEquals(callsBefore + 1, models.calls)
             assertEquals(true, second.uiState.value.composer.isModelSelectionReady)
-            assertEquals(gpt4Option.modelLabel, second.uiState.value.composer.selectedModelLabel)
+            assertEquals(UiText.verbatim(gpt4Option.modelLabel), second.uiState.value.composer.selectedModelLabel)
         }
 
     @Test
@@ -8502,7 +8504,7 @@ class SessionChatViewModelTest {
             runCurrent()
 
             assertEquals(false, second.uiState.value.composer.isModelSelectionReady)
-            assertEquals("Loading model…", second.uiState.value.composer.selectedModelLabel)
+            assertEquals("Loading model…", second.uiState.value.composer.selectedModelLabel.english())
         }
 
     @Test
@@ -8529,7 +8531,7 @@ class SessionChatViewModelTest {
             )
             assertEquals(
                 "Selected model is unavailable. Using ${sonnetOption.modelLabel}.",
-                viewModel.uiState.value.composer.modelNotice,
+                viewModel.uiState.value.composer.modelNotice?.english(),
             )
         }
 
@@ -8656,7 +8658,7 @@ class SessionChatViewModelTest {
             viewModel.dictationInsert()
             viewModel.beginDictationUnavailable(
                 ComposerDictationPhase.RecognizerError,
-                "late",
+                UiText.verbatim("late"),
             )
 
             assertEquals(ComposerDictationPhase.Finishing, viewModel.uiState.value.dictation?.phase)
@@ -8940,7 +8942,7 @@ class SessionChatViewModelTest {
 
             val added =
                 viewModel.addPastedOrDroppedAttachments(
-                    AttachmentIngestionResult(emptyList(), listOf("The attachment could not be read.")),
+                    AttachmentIngestionResult(emptyList(), listOf(AttachmentRejection.Unreadable)),
                     skippedFolders = 0,
                 )
             runCurrent()
@@ -9042,7 +9044,7 @@ class SessionChatViewModelTest {
                     .isEmpty(),
             )
             assertEquals(
-                AttachmentLimits.TOO_LARGE_ERROR,
+                "This file is larger than 20 MB.",
                 viewModel.uiState.value.snackbar
                     ?.message
                     ?.english(),

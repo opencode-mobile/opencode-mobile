@@ -7,6 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.SpeechRecognizer
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
 import kotlin.math.sqrt
 
@@ -32,7 +34,7 @@ interface ComposerDictationSession {
 
         fun onUnavailable(
             phase: ComposerDictationPhase,
-            message: String?,
+            message: UiText?,
         )
     }
 }
@@ -63,18 +65,18 @@ class SystemComposerDictationSession(
         if (Looper.myLooper() != Looper.getMainLooper()) return
         stop()
         if (Build.VERSION.SDK_INT < 31) {
-            listener.onUnavailable(ComposerDictationPhase.RecognizerError, "Dictation stopped")
+            listener.onUnavailable(ComposerDictationPhase.RecognizerError, null)
             return
         }
         if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-            listener.onUnavailable(ComposerDictationPhase.RecognizerError, "Dictation stopped")
+            listener.onUnavailable(ComposerDictationPhase.RecognizerError, null)
             return
         }
         val recognizer =
             try {
                 SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
             } catch (_: RuntimeException) {
-                listener.onUnavailable(ComposerDictationPhase.RecognizerError, "Dictation stopped")
+                listener.onUnavailable(ComposerDictationPhase.RecognizerError, null)
                 return
             }
         this.listener = listener
@@ -113,13 +115,13 @@ class SystemComposerDictationSession(
         try {
             recognizer.startListening(dictationRecognitionIntent(context, languageTag))
         } catch (_: RuntimeException) {
-            fail(ComposerDictationPhase.RecognizerError, "Dictation stopped")
+            fail(ComposerDictationPhase.RecognizerError, null)
         }
     }
 
     private fun fail(
         phase: ComposerDictationPhase,
-        message: String?,
+        message: UiText?,
     ) {
         val current = listener
         acceptCallbacks = false
@@ -295,9 +297,10 @@ private const val LoudDb = 10f
 private fun firstHypothesis(results: Bundle): String =
     results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
 
-private fun recognizerErrorMessage(error: Int): String =
+/** Null reads the card's own "Dictation stopped". */
+private fun recognizerErrorMessage(error: Int): UiText? =
     when (error) {
-        SpeechRecognizer.ERROR_AUDIO -> "Couldn't use the microphone"
-        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Dictation is busy"
-        else -> "Dictation stopped"
+        SpeechRecognizer.ERROR_AUDIO -> UiText.resource(R.string.dictation_microphone_failed)
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> UiText.resource(R.string.dictation_busy)
+        else -> null
     }

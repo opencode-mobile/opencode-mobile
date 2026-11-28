@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.domain.message.ToolPartIdentity
+import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.thoughtDetailTarget
 
@@ -96,8 +97,11 @@ object SessionChatLiveThought {
  * The standard thought sheet. Its subline reads [thinkingLabel] ("Thinking…") while the thought
  * streams and the duration once it settles.
  */
-internal fun SessionChatThoughtSheetState.detailTarget(thinkingLabel: String): SessionChatToolDetailTarget =
+internal fun SessionChatThoughtSheetState.detailTarget(
+    thinkingLabel: String,
+    lookup: UiTextLookup,
+): SessionChatToolDetailTarget =
     thoughtDetailTarget(
         text = text,
-        durationLabel = if (isStreaming) thinkingLabel else SessionChatTimelineBlocks.thoughtDurationLabel(durationMs),
+        durationLabel = if (isStreaming) thinkingLabel else SessionChatTimelineBlocks.thoughtDurationLabel(durationMs, lookup),
     )

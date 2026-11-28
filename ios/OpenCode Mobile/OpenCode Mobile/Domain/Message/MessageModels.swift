@@ -222,8 +222,12 @@ nonisolated struct SessionFailure: Equatable, Sendable {
     /// "Try again in N s", minutes above 90 s; nil once the wait is over.
     static func retryAfterLabel(remainingMs: Int64) -> String? {
         guard remainingMs > 0 else { return nil }
-        if remainingMs <= 90_000 { return "Try again in \(ceilDiv(remainingMs, 1_000)) s" }
-        return "Try again in \(ceilDiv(remainingMs, 60_000)) min"
+        if remainingMs <= 90_000 {
+            let seconds = ceilDiv(remainingMs, 1_000)
+            return String(localized: "session_chat.failure.retry_after_seconds", defaultValue: "Try again in \(seconds) s")
+        }
+        let minutes = ceilDiv(remainingMs, 60_000)
+        return String(localized: "session_chat.failure.retry_after_minutes", defaultValue: "Try again in \(minutes) min")
     }
 
     private static func ceilDiv(_ value: Int64, _ unit: Int64) -> Int64 {
@@ -788,17 +792,17 @@ nonisolated enum MessageRole: String, Sendable {
     var displayLabel: String {
         switch self {
         case .user:
-            "You"
+            String(localized: "timeline.role.you", defaultValue: "You")
         case .assistant:
-            "Assistant"
+            String(localized: "timeline.role.assistant", defaultValue: "Assistant")
         case .command:
-            "Command"
+            String(localized: "timeline.role.command", defaultValue: "Command")
         case .tool:
-            "Tool"
+            String(localized: "timeline.role.tool", defaultValue: "Tool")
         case .notice:
-            "Notice"
+            String(localized: "timeline.role.notice", defaultValue: "Notice")
         case .unknown:
-            "Message"
+            String(localized: "timeline.role.message", defaultValue: "Message")
         }
     }
 }

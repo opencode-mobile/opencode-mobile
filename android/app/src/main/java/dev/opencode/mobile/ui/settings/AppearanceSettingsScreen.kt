@@ -186,8 +186,7 @@ fun AppearanceSettingsScreen(
                 val codeHighlightTitle = stringResource(R.string.appearance_code_highlight_title)
                 OpenCodeListItem(
                     title = codeHighlightTitle,
-                    // Syntax preset name and blurb are preset data, shown as is.
-                    subtitle = listOf(syntax.name, syntax.blurb).joinToString(" · "),
+                    subtitle = stringResource(R.string.appearance_theme_subtitle, syntax.displayName(), syntax.displayBlurb()),
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, codeHighlightTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
@@ -568,8 +567,8 @@ private fun SyntaxPreviewCard(
     modifier: Modifier = Modifier,
 ) {
     OpenCodeSelectableCard(
-        title = preset.name,
-        blurb = preset.blurb,
+        title = preset.displayName(),
+        blurb = preset.displayBlurb(),
         selected = selected,
         onClick = onClick,
         modifier = modifier,
@@ -632,19 +631,4 @@ private fun syntaxSnippet(colors: CodeColors) =
         SyntaxSnippetRuns.forEach { (text, role) ->
             withStyle(SpanStyle(color = colors.colorFor(role))) { append(text) }
         }
-    }
-
-/** A blurb from the preset file is theme data and shows as is; built-in presets use the app's own. */
-@Composable
-private fun ThemePreset.displayBlurb(): String = blurb.ifBlank { themeBlurb(id) }
-
-@Composable
-private fun themeBlurb(id: String): String =
-    when (id) {
-        "porcelain" -> stringResource(R.string.appearance_theme_blurb_porcelain)
-        "linen" -> stringResource(R.string.appearance_theme_blurb_linen)
-        "signal" -> stringResource(R.string.appearance_theme_blurb_signal)
-        "hotline" -> stringResource(R.string.appearance_theme_blurb_hotline)
-        "phosphor" -> stringResource(R.string.appearance_theme_blurb_phosphor)
-        else -> id
     }

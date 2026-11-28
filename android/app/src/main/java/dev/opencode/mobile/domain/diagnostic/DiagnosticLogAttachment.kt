@@ -3,6 +3,8 @@ package dev.opencode.mobile.domain.diagnostic
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
+import dev.opencode.mobile.domain.message.AttachmentRejectedException
+import dev.opencode.mobile.domain.message.AttachmentRejection
 import java.util.UUID
 
 object DiagnosticLogAttachment {
@@ -12,7 +14,7 @@ object DiagnosticLogAttachment {
     fun from(buffer: DiagnosticLogBuffer): Attachment {
         val bytes = buffer.exportJsonl().toByteArray(Charsets.UTF_8)
         if (bytes.size.toLong() > AttachmentLimits.MAX_DECODED_BYTES) {
-            throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
+            throw AttachmentRejectedException(AttachmentRejection.TooLarge())
         }
         val directory = java.io.File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME).apply { mkdirs() }
         val file = java.io.File(directory, "${UUID.randomUUID()}-$FILENAME").apply { writeBytes(bytes) }

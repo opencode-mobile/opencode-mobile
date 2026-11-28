@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.event
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionBusyStatus
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -1416,13 +1417,13 @@ class EventDomainAdapterTest {
     }
 
     @Test
-    fun statusLabel_mapsBusyAndRetry() {
-        val busy = adapter.statusLabel(SessionStatus(sessionId = "1", raw = mapOf("type" to "busy")))
-        val retry = adapter.statusLabel(SessionStatus(sessionId = "1", raw = mapOf("type" to "retry")))
-        val idle = adapter.statusLabel(SessionStatus(sessionId = "1", raw = mapOf("type" to "idle")))
+    fun busyStatus_mapsBusyAndRetry() {
+        val busy = adapter.busyStatus(SessionStatus(sessionId = "1", raw = mapOf("type" to "busy")))
+        val retry = adapter.busyStatus(SessionStatus(sessionId = "1", raw = mapOf("type" to "retry")))
+        val idle = adapter.busyStatus(SessionStatus(sessionId = "1", raw = mapOf("type" to "idle")))
 
-        assertEquals("Working", busy)
-        assertEquals("Retrying", retry)
+        assertEquals(SessionBusyStatus.Running, busy)
+        assertEquals(SessionBusyStatus.Retrying(attempt = null), retry)
         assertNull(idle)
     }
 
@@ -1436,7 +1437,7 @@ class EventDomainAdapterTest {
         val status = adapter.sessionStatusFromEvent(event!!)
         assertEquals("ses-1", status?.sessionId)
         assertEquals("busy", status?.raw?.get("type"))
-        assertEquals("Working", status?.let(adapter::statusLabel))
+        assertEquals(SessionBusyStatus.Running, status?.let(adapter::busyStatus))
         assertEquals(SessionActivity.Running, adapter.sessionActivityFromEvent(event)?.activity)
     }
 
@@ -1453,8 +1454,7 @@ class EventDomainAdapterTest {
             SessionActivity.Retrying(attempt = 2, nextAtMs = 1234L, message = "backoff"),
             parsed?.activity,
         )
-        assertEquals("Retrying · 2", parsed?.activity?.statusLabel())
-        assertEquals("Retrying · 2 · backoff", parsed?.activity?.chatStatusLabel())
+        assertEquals(SessionBusyStatus.Retrying(2), parsed?.activity?.busyStatus())
     }
 
     @Test

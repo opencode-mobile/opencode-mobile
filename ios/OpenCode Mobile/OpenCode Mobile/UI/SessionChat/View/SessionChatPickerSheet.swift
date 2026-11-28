@@ -203,7 +203,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         case .variant:
             ForEach(composer.variantOptions, id: \.self) { level in
                 OpenCodeBottomSheetEntry(
-                    title: .verbatim(TitleCaseIdentifier.displayName(for: level)),
+                    title: SessionChatVariantText.label(level),
                     selected: level.compare(
                         composer.selectedVariant ?? ModelSelection.defaultVariantLabel,
                         options: .caseInsensitive

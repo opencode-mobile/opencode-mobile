@@ -28,7 +28,7 @@ fun WorkingIndicatorGalleryScreen(modifier: Modifier = Modifier) {
             OpenCodeWorkingIndicator(label = "Idle", state = OpenCodeChatActivityState.Idle, fading = true)
         }
         WorkingSample("Collapsed") {
-            OpenCodeWorkingIndicator(label = "Idle", state = OpenCodeChatActivityState.Collapsed)
+            OpenCodeWorkingIndicator(label = "Idle", state = OpenCodeChatActivityState.Collapsed, turnEnded = true)
         }
         OpenCodePulsingDot()
     }

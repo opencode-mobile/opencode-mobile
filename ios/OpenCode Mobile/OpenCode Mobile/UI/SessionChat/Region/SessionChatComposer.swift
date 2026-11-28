@@ -29,7 +29,6 @@ final class SessionChatComposer {
     private var uploadTasks: [String: Task<Void, Never>] = [:]
     private var uploadFractions: [String: Double] = [:]
     private let foregroundEventStream: (any ForegroundEventStream)?
-    private let sentTimeFormatter: DateFormatter
     private var loadedCatalog: ModelSelectionCatalog?
     private var cachedSelection: SessionModelSelection?
     private var newSessionPreference: SessionModelSelection?
@@ -99,10 +98,6 @@ final class SessionChatComposer {
         self.attachmentUploadRepository = attachmentUploadRepository
         self.foregroundEventStream = foregroundEventStream
         self.catalogRetryDelaysMs = catalogRetryDelaysMs
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "h:mm a"
-        self.sentTimeFormatter = formatter
         seedFromCatalogStore()
         Task {
             await self.loadCachedSelection()
@@ -303,8 +298,8 @@ final class SessionChatComposer {
             if loadedCatalog?.options.isEmpty == false { return }
             updateComposer {
                 $0.isModelSelectionReady = false
-                $0.modelCatalogError = "Unable to load models. Tap Model to retry."
-                $0.modelNotice = "Unable to load models. Tap Model to retry."
+                $0.modelCatalogError = SessionChatModelNotice.loadFailed
+                $0.modelNotice = SessionChatModelNotice.loadFailed
             }
         }
     }
@@ -450,7 +445,7 @@ final class SessionChatComposer {
         let variant = resolvedVariant(remembered: rememberedVariant, for: option)
         let variantNotice = rememberedVariant.flatMap {
             !ModelVariants.isDefault($0, available: option.variants) && !option.variants.contains($0)
-                ? "Remembered Variant is unavailable. Using Default."
+                ? SessionChatModelNotice.variantUnavailable
                 : nil
         }
         initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
@@ -477,7 +472,7 @@ final class SessionChatComposer {
             $0.isModelSelectionReady = true
             $0.modelCatalogError = nil
             if staleCached != nil {
-                $0.modelNotice = "Selected model is unavailable. Using \(option.modelLabel)."
+                $0.modelNotice = SessionChatModelNotice.modelUnavailable(using: option.modelLabel)
             } else {
                 $0.modelNotice = variantNotice
             }
@@ -739,10 +734,10 @@ final class SessionChatComposer {
         }
         if !duplicates.isEmpty {
             discardStoredAttachments(duplicates)
-            setAttachmentError(AttachmentDuplicate.message)
+            setAttachmentError(.duplicate)
         } else if !rejected.isEmpty {
             discardStoredAttachments(rejected)
-            setAttachmentError(Self.unsupportedAttachmentMessage(for: rejected))
+            setAttachmentError(Self.unsupportedAttachmentRejection(for: rejected))
         } else if !accepted.isEmpty {
             state.errorMessage = nil
             notifyChange()
@@ -771,12 +766,12 @@ final class SessionChatComposer {
                 OpenCodeLog.sessionChat.info("attachment accepted mime=\(attachment.mime) bytes=\(data.count) count=1")
             }
         } catch {
-            setAttachmentError(error.localizedDescription)
+            setAttachmentError(error.attachmentRejection)
         }
     }
 
     func reportAttachmentReadFailure() {
-        setAttachmentError(AttachmentLoadError.unreadableFile.localizedDescription)
+        setAttachmentError(.unreadable)
     }
 
     func addAttachmentFiles(_ urls: [URL]) async {
@@ -795,7 +790,7 @@ final class SessionChatComposer {
             return error
         }
         if let failure = failures.first, state.errorMessage == nil {
-            setAttachmentError(failure.localizedDescription)
+            setAttachmentError(failure.attachmentRejection)
         }
         OpenCodeLog.sessionChat.info("attachments selected accepted=\(attachments.count) rejected=\(result.count - attachments.count)")
     }
@@ -809,9 +804,9 @@ final class SessionChatComposer {
         await addAttachmentFiles(urls)
         let quiet = state.errorMessage == nil || state.errorMessage == errorBefore
         if quiet, unreadable > 0 {
-            setAttachmentError(AttachmentLoadError.unreadableFile.localizedDescription)
+            setAttachmentError(.unreadable)
         } else if quiet, skippedFolders > 0 {
-            setAttachmentError(AttachmentDropRouting.folderMessage)
+            setAttachmentError(.folder)
         }
         return state.composer.attachments.count > before
     }
@@ -841,7 +836,7 @@ final class SessionChatComposer {
 
     private func startUpload(_ attachment: Attachment) {
         guard let repository = attachmentUploadRepository, let fileURL = attachment.fileURL else {
-            removeFailedUpload(id: attachment.id, message: AttachmentUploadError.failedMessage)
+            removeFailedUpload(id: attachment.id, rejection: .uploadFailed)
             return
         }
         let id = attachment.id
@@ -891,9 +886,9 @@ final class SessionChatComposer {
         guard let attachment = state.composer.attachments.first(where: { $0.id == id }) else { return }
         switch error {
         case .cancelled:
-            removeFailedUpload(id: id, message: nil)
+            removeFailedUpload(id: id, rejection: nil)
         case .failed:
-            removeFailedUpload(id: id, message: AttachmentUploadError.failedMessage)
+            removeFailedUpload(id: id, rejection: .uploadFailed)
         case .contractMiss:
             // The route no longer matches: send this file the old way, with its old errors.
             state.composer.streamedUploadAvailable = false
@@ -903,7 +898,7 @@ final class SessionChatComposer {
 
     private func sendInline(replacing attachment: Attachment) async {
         guard let fileURL = attachment.fileURL else {
-            removeFailedUpload(id: attachment.id, message: AttachmentLoadError.unreadableFile.localizedDescription)
+            removeFailedUpload(id: attachment.id, rejection: .unreadable)
             return
         }
         let name = attachment.filename
@@ -935,19 +930,19 @@ final class SessionChatComposer {
             } else {
                 // Refused (for example a model without image input; the error is already shown).
                 AttachmentLimits.discard(file.fileURL)
-                removeFailedUpload(id: attachment.id, message: nil)
+                removeFailedUpload(id: attachment.id, rejection: nil)
             }
         case let .failure(failure):
-            removeFailedUpload(id: attachment.id, message: failure.localizedDescription)
+            removeFailedUpload(id: attachment.id, rejection: failure.attachmentRejection)
         }
     }
 
-    private func removeFailedUpload(id: String, message: String?) {
+    private func removeFailedUpload(id: String, rejection: AttachmentRejection?) {
         let removed = state.composer.attachments.filter { $0.id == id }
         attachmentRevisions[id] = nil
         updateComposer { $0.attachments.removeAll { $0.id == id } }
         discardStoredAttachments(removed)
-        if let message { setAttachmentError(message) }
+        if let rejection { setAttachmentError(rejection) }
     }
 
     private func cancelUpload(id: String) {
@@ -962,21 +957,19 @@ final class SessionChatComposer {
         uploadFractions = [:]
     }
 
-    private func setAttachmentError(_ message: String) {
-        state.errorMessage = message
-        OpenCodeLog.sessionChat.warning("attachment rejected error=\(message)")
+    /// The composer's error snackbar carries plain strings; the rejection's keyed text is
+    /// resolved from the String Catalog here.
+    private func setAttachmentError(_ rejection: AttachmentRejection) {
+        state.errorMessage = String(localized: rejection.text)
+        OpenCodeLog.sessionChat.warning("attachment rejected error=\(rejection.logMessage)")
         notifyChange()
     }
 
-    private static func unsupportedAttachmentMessage(for rejected: [Attachment]) -> String {
+    private static func unsupportedAttachmentRejection(for rejected: [Attachment]) -> AttachmentRejection {
         let kinds = Set(rejected.map(\.kind))
-        if kinds == [.image] {
-            return "This model does not support image attachments."
-        }
-        if kinds == [.pdf] {
-            return "This model does not support PDF attachments."
-        }
-        return "This model does not support some of the selected attachments."
+        if kinds == [.image] { return .modelWithoutImages }
+        if kinds == [.pdf] { return .modelWithoutPDF }
+        return .modelWithoutSome
     }
 
     func selectModel(_ option: ModelSelectionOption) {
@@ -1203,7 +1196,10 @@ final class SessionChatComposer {
                     submittedAttachments: submittedAttachments,
                     submittedAttachmentRevisions: submittedAttachmentRevisions
                 )
-                let message = "Couldn't send. Retry when the connection is live."
+                let message = String(
+                    localized: "session_chat.send_failed_offline",
+                    defaultValue: "Couldn't send. Retry when the connection is live."
+                )
                 setSendError(message)
                 onSendFailed(optimistic.id, message)
                 return
@@ -1263,7 +1259,7 @@ final class SessionChatComposer {
                         } catch {
                             if supportsFollowUp,
                                composer.followUpDelivery != .queue,
-                               errorMessage(error) == "Session is busy"
+                               Self.isSessionBusy(error)
                             {
                                 try await send(delivery: .queue)
                             } else {
@@ -1783,8 +1779,8 @@ final class SessionChatComposer {
         guard !catalog.options.isEmpty else {
             updateComposer {
                 $0.isModelSelectionReady = false
-                $0.modelCatalogError = "No usable models are available. Tap Model to retry."
-                $0.modelNotice = "No usable models are available. Tap Model to retry."
+                $0.modelCatalogError = SessionChatModelNotice.noneUsable
+                $0.modelNotice = SessionChatModelNotice.noneUsable
             }
             return
         }
@@ -1819,7 +1815,7 @@ final class SessionChatComposer {
             $0.attachments.removeAll { !fallback.accepts($0) }
             $0.selectedModel = ModelSelection(option: fallback, selectedVariant: nil)
             $0.selectedVariant = nil
-            $0.modelNotice = "Selected model is unavailable. Using \(fallback.modelLabel)."
+            $0.modelNotice = SessionChatModelNotice.modelUnavailable(using: fallback.modelLabel)
         }
         discardStoredAttachments(dropped)
     }
@@ -1837,12 +1833,12 @@ final class SessionChatComposer {
         case failedWithFallback
     }
 
+    /// Like `SessionChatTimelineProjector.metadataLabel`: the view adds the sent time in the reader's locale.
     private func metadataLabel(mode: String, model: String?, variant: String?) -> String {
         [
             TitleCaseIdentifier.displayName(for: mode),
             model.map { TitleCaseIdentifier.displayName(for: $0) },
             variant.map { TitleCaseIdentifier.displayName(for: $0) },
-            formatSentTime(Date()),
         ].compactMap { $0 }.joined(separator: " · ")
     }
 
@@ -1863,10 +1859,6 @@ final class SessionChatComposer {
             return build.id
         }
         return catalog[0].id
-    }
-
-    private func formatSentTime(_ date: Date) -> String {
-        sentTimeFormatter.string(from: date)
     }
 
     private func updateComposer(_ update: (inout SessionChatComposerState) -> Void) {
@@ -2093,31 +2085,44 @@ final class SessionChatComposer {
         return false
     }
 
+    /// Server text stays verbatim; the app's own fallbacks are keyed.
     private func errorMessage(_ error: Error) -> String {
         if let messageError = error as? MessageError {
-            return messageError.localizedDescription
+            return messageError.displayMessage
         }
         if let commandError = error as? CommandError {
             switch commandError {
             case let .http(_, message):
-                return message ?? "Request failed"
+                return message ?? MessageError.requestFailedText
             case .transport:
-                return "Unable to reach the server"
+                return String(localized: "connection.error.unreachable", defaultValue: "Unable to reach the server")
             case .decoding:
-                return "Unable to read server response"
+                return String(localized: "home.session_error.unreadable_response", defaultValue: "Unable to read server response")
             }
         }
         if let sessionError = error as? SessionError {
             switch sessionError {
             case let .http(_, message):
-                return message ?? "Request failed"
+                return message ?? MessageError.requestFailedText
             case .transport:
-                return "Unable to reach the server"
+                return String(localized: "connection.error.unreachable", defaultValue: "Unable to reach the server")
             case .decoding:
-                return "Unable to read server response"
+                return String(localized: "home.session_error.unreadable_response", defaultValue: "Unable to read server response")
             }
         }
         return error.localizedDescription
+    }
+
+    /// The server's busy reply, matched on the server's mapped text (never on keyed app copy).
+    private static func isSessionBusy(_ error: Error) -> Bool {
+        let message: String? = switch error {
+        case let MessageError.http(_, message): message
+        case let CommandError.http(_, message): message
+        case let SessionError.http(_, message): message
+        case is MessageError, is CommandError, is SessionError: nil
+        default: error.localizedDescription
+        }
+        return message == ServerErrorMessage.sessionBusy
     }
 
     private func notifyChange() {
@@ -2163,7 +2168,9 @@ final class SessionChatComposer {
     }
 
     private static let draftPersistDebounceMs = 300
-    static let shellCannotQueueError = "Shell commands can't be queued. Switch to Steer to run it now."
+    static var shellCannotQueueError: String {
+        String(localized: "session_chat.shell_cannot_queue", defaultValue: "Shell commands can't be queued. Switch to Steer to run it now.")
+    }
 
     private enum InitialSelection {
         case cached(SessionModelSelection)

@@ -33,6 +33,29 @@ sealed interface UiText {
         val value: String,
     ) : UiText
 
+    /**
+     * A moment shown as [style] in the reader's locale and time zone. Formatted when resolved,
+     * like the other cases, so a language change does not leave an English date in UI state.
+     */
+    data class DateTime(
+        val epochMs: Long,
+        val style: DateTimeStyle,
+    ) : UiText
+
+    /**
+     * A number written in the reader's locale when resolved ("1.5" in en-US, "1,5" in de-DE),
+     * with [minFractionDigits] to [maxFractionDigits] decimals, rounded half up, grouped.
+     * With [percent], [value] is a percentage (75.0 for 75%) written with the locale's percent
+     * sign ("75.0%", "75,0 %"). A unit goes in a keyed format string that takes the number as
+     * an argument (`component_reasoning_row_duration_seconds`: "%1$ss").
+     */
+    data class Number(
+        val value: Double,
+        val minFractionDigits: Int = 0,
+        val maxFractionDigits: Int = 0,
+        val percent: Boolean = false,
+    ) : UiText
+
     companion object {
         fun resource(
             @StringRes id: Int,
@@ -52,7 +75,33 @@ sealed interface UiText {
         ): UiText = Plural(id, count, args.toList())
 
         fun verbatim(value: String): UiText = Verbatim(value)
+
+        fun dateTime(
+            epochMs: Long,
+            style: DateTimeStyle,
+        ): UiText = DateTime(epochMs, style)
+
+        fun number(
+            value: Double,
+            minFractionDigits: Int = 0,
+            maxFractionDigits: Int = 0,
+        ): UiText = Number(value, minFractionDigits, maxFractionDigits)
+
+        /** [value] is a percentage: 75.0 for 75%. */
+        fun percent(
+            value: Double,
+            fractionDigits: Int,
+        ): UiText = Number(value, fractionDigits, fractionDigits, percent = true)
     }
+}
+
+/** How a [UiText.DateTime] is written. Each style follows the locale's own pattern. */
+enum class DateTimeStyle {
+    /** Month and day without the year: "Nov 27" in en-US, "27. Nov." in de-DE. */
+    MonthDay,
+
+    /** Weekday, month and day: "Friday, Nov 27" in en-US, "Freitag, 27. Nov." in de-DE. */
+    WeekdayMonthDay,
 }
 
 /** Where resolved text comes from. Android resources in the app; a fake in unit tests. */
@@ -67,6 +116,15 @@ interface UiTextLookup {
         count: Int,
         args: Array<out Any>,
     ): String
+
+    /** [epochMs] written as [style] in this lookup's locale and time zone. */
+    fun dateTime(
+        epochMs: Long,
+        style: DateTimeStyle,
+    ): String
+
+    /** [number] written in this lookup's locale. */
+    fun number(number: UiText.Number): String
 }
 
 fun UiText.resolve(lookup: UiTextLookup): String =
@@ -74,6 +132,8 @@ fun UiText.resolve(lookup: UiTextLookup): String =
         is UiText.Verbatim -> value
         is UiText.Resource -> lookup.string(id, resolveArgs(args, lookup))
         is UiText.Plural -> lookup.plural(id, count, resolveArgs(args, lookup))
+        is UiText.DateTime -> lookup.dateTime(epochMs, style)
+        is UiText.Number -> lookup.number(this)
     }
 
 private fun resolveArgs(

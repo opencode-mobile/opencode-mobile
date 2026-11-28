@@ -60,7 +60,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
-
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
@@ -74,6 +73,7 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.featureflags.SessionComposerStyle
 import dev.opencode.mobile.domain.goal.SessionGoalAction
+import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.ui.components.OpenCodeComposerScrim
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
@@ -83,10 +83,11 @@ import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLabel
 import dev.opencode.mobile.ui.sessionchat.SessionChatGoalTimeline
 import dev.opencode.mobile.ui.sessionchat.SessionChatGoalUiState
 import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
+import dev.opencode.mobile.ui.text.currentLocale
+import dev.opencode.mobile.ui.text.rememberUiTextLookup
 import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
-
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeMediumShape
@@ -168,10 +169,11 @@ import dev.opencode.mobile.ui.sessionchat.ToolResultInspector
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
-import dev.opencode.mobile.ui.sessionchat.displayLabel
+import dev.opencode.mobile.ui.sessionchat.displayLabelRes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
+import java.util.Locale
 
 private val LocalHideLiveRetryFailures = staticCompositionLocalOf { false }
 private val LocalRetryCountdownBlockId = staticCompositionLocalOf<String?> { null }
@@ -193,7 +195,7 @@ internal data class SessionChatTimelineViewProps(
     val errorMessage: String?,
     val sessionBranchPill: SessionBranchPillUiState? = null,
     val syncingIndicatorLabel: UiText? = null,
-    val workingIndicatorLabel: String? = null,
+    val workingIndicatorLabel: UiText? = null,
     val workingIndicatorFading: Boolean = false,
     /** A thought streams at the end of the turn: the turn pill reads Thinking and opens it (#1118). */
     val isThinking: Boolean = false,
@@ -468,7 +470,7 @@ private fun SessionChatTimelineReadyView(
     isLoadingOlder: Boolean,
     sessionBranchPill: SessionBranchPillUiState?,
     syncingIndicatorLabel: String?,
-    workingIndicatorLabel: String?,
+    workingIndicatorLabel: UiText?,
     workingIndicatorFading: Boolean,
     isThinking: Boolean,
     sessionTodosVisible: Boolean,
@@ -1090,7 +1092,7 @@ private fun SessionChatMessageRowContent(
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
                 FallbackMessageBubble(
-                    roleLabel = message.role.displayLabel(),
+                    roleLabel = stringResource(message.role.displayLabelRes()),
                     text = message.text,
                 )
         }
@@ -1209,6 +1211,7 @@ private fun AssistantMessageContent(
             onChangesReviewTap = onChangesReviewTap,
             onToolDetailTap = onToolDetailTap,
             toolDetails = LocalSessionChatToolDetailResolver.current,
+            text = rememberUiTextLookup(),
         )
 
     fun toolCardAction(block: SessionChatTimelineBlock.ToolCard): (() -> Unit)? = toolTaps.toolCardAction(block)
@@ -1289,22 +1292,21 @@ private fun AssistantMessageContent(
                                     }
                                 },
                         )
-                    is SessionChatTimelineBlock.Reasoning ->
+                    is SessionChatTimelineBlock.Reasoning -> {
+                        val durationLabel = SessionChatTimelineBlocks.thoughtDurationLabel(block.durationMs, rememberUiTextLookup())
                         OpenCodeReasoningRow(
                             state = OpenCodeChatActivityState.Expanded,
-                            durationLabel = SessionChatTimelineBlocks.thoughtDurationLabel(block.durationMs),
+                            durationLabel = durationLabel,
                             onClick =
                                 block.text.takeIf { it.isNotBlank() }?.let { body ->
                                     {
                                         onToolDetailTap(
-                                            thoughtDetailTarget(
-                                                body,
-                                                SessionChatTimelineBlocks.thoughtDurationLabel(block.durationMs),
-                                            ),
+                                            thoughtDetailTarget(body, durationLabel),
                                         )
                                     }
                                 },
                         )
+                    }
                     is SessionChatTimelineBlock.StopNote ->
                         OpenCodeMessageNote(
                             variant =
@@ -1427,6 +1429,7 @@ private class ToolTapTargets(
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     val toolDetails: SessionChatToolDetailResolver,
+    val text: UiTextLookup,
 ) {
     fun toolCardAction(block: SessionChatTimelineBlock.ToolCard): (() -> Unit)? =
         when {
@@ -1453,7 +1456,7 @@ private class ToolTapTargets(
         return when {
             card != null -> toolCardAction(card)
             stepOpensDetail(step, supportsSessionMessageDiff) -> {
-                { sessionChatStepDetail(step, supportsSessionMessageDiff, toolDetails)?.let(onToolDetailTap) }
+                { sessionChatStepDetail(step, supportsSessionMessageDiff, toolDetails, text)?.let(onToolDetailTap) }
             }
             else -> null
         }
@@ -1472,11 +1475,14 @@ internal fun thoughtDetailTarget(
     )
 }
 
-private fun stepThoughtDuration(step: SessionChatStep): String? {
+private fun stepThoughtDuration(
+    step: SessionChatStep,
+    text: UiTextLookup,
+): String? {
     val start = step.startedAtMs
     val end = step.endedAtMs
     if (start == null || end == null || end < start) return null
-    return SessionChatTimelineBlocks.thoughtDurationLabel(end - start)
+    return SessionChatTimelineBlocks.thoughtDurationLabel(end - start, text)
 }
 
 /** A child session card's title is its agent name, which is server content. */
@@ -1492,13 +1498,14 @@ internal fun sessionChatStepDetail(
     step: SessionChatStep,
     supportsSessionMessageDiff: Boolean,
     toolDetails: SessionChatToolDetailResolver,
+    text: UiTextLookup,
 ): SessionChatToolDetailTarget? {
     if (!stepOpensDetail(step, supportsSessionMessageDiff)) return null
     val card = step.card
     val thoughtText = step.thoughtText
     return when {
         card != null -> toolDetails.detail(card)
-        thoughtText != null -> thoughtDetailTarget(thoughtText, stepThoughtDuration(step))
+        thoughtText != null -> thoughtDetailTarget(thoughtText, stepThoughtDuration(step, text))
         else -> null
     }
 }
@@ -1630,6 +1637,7 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
     val visible = resolved != null
     val content = resolved ?: lastContent.value
     val toolDetails = LocalSessionChatToolDetailResolver.current
+    val text = rememberUiTextLookup()
     val taps =
         content?.let {
             ToolTapTargets(
@@ -1639,6 +1647,7 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
                 onChangesReviewTap = props.onChangesReviewTap,
                 onToolDetailTap = props.onToolDetailTap,
                 toolDetails = toolDetails,
+                text = text,
             )
         }
     val stepsById = content?.let { sheet -> (sheet.steps + sheet.agents.map { it.step }).associateBy { it.id } }.orEmpty()
@@ -1661,8 +1670,8 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
     val detailStep = detailStepId?.let(stepsById::get)?.takeIf(::opensDetail)
     // Built from the tool part only for the open step, again when the timeline changes.
     val detailTarget =
-        remember(detailStep, props.messages, toolDetails) {
-            detailStep?.let { sessionChatStepDetail(it, props.supportsSessionMessageDiff, toolDetails) }
+        remember(detailStep, props.messages, toolDetails, text) {
+            detailStep?.let { sessionChatStepDetail(it, props.supportsSessionMessageDiff, toolDetails, text) }
         }
     val detail = detailTarget?.let { target -> detailStepId?.let { OpenCodeActivitySheetDetail(stepId = it, title = target.title.resolve()) } }
     OpenCodeActivitySheet(

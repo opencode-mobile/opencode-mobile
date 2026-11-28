@@ -23,10 +23,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,6 +50,7 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.text.resolve
+import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -152,6 +155,9 @@ private fun SessionContextContent(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StatGrid(stats: List<SessionContextStatItem>) {
+    // The configuration locale, so a language change re-formats numbers, costs and dates.
+    val locale = LocalConfiguration.current.locales[0]
+    val format = remember(locale) { SessionContextStatFormat(locale, ZoneId.systemDefault()) }
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
@@ -161,7 +167,7 @@ private fun StatGrid(stats: List<SessionContextStatItem>) {
         stats.forEach { stat ->
             OpenCodeKeyValueRow(
                 label = stat.label.resolve(),
-                value = stat.value,
+                value = format.format(stat.value),
                 style = OpenCodeKeyValueStyle.Stacked,
                 modifier = Modifier.weight(1f).fillMaxWidth(0.5f),
             )
@@ -210,7 +216,7 @@ private fun ContextBreakdown(items: List<SessionContextBreakdownItem>) {
                             stringResource(
                                 R.string.session_context_breakdown_legend,
                                 stringResource(labelFor(item.kind)),
-                                percentText(item.displayPercent),
+                                breakdownPercent(item.displayPercent).resolve(),
                             ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -247,4 +253,5 @@ private fun labelFor(kind: SessionContextBreakdownKind): Int =
     }
 
 /** One decimal and a percent sign, as before: `12.5%`. */
-private fun percentText(value: Double): String = "%.1f%%".format(value)
+/** A breakdown part's share with one decimal, in the reader's locale: "12.5%", "12,5 %". */
+internal fun breakdownPercent(value: Double): UiText = UiText.percent(value, fractionDigits = 1)

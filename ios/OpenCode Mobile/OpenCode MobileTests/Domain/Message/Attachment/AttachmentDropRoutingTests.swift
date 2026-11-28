@@ -102,12 +102,19 @@ struct AttachmentDropRoutingTests {
         let cases = try Self.vectors().routes
         #expect(!cases.isEmpty)
         for vector in cases {
-            let expected: AttachmentDropRoute = vector.expected.skipped.map { .skipped(reason: $0) } ?? .accepted
-            #expect(
-                AttachmentDropRouting.route(try Self.item(vector.item), context: Self.context(vector.context)) == expected,
-                "\(vector.name)"
-            )
+            let route = AttachmentDropRouting.route(try Self.item(vector.item), context: Self.context(vector.context))
+            let skipped: String? = if case let .skipped(reason) = route { String(localized: reason.text) } else { nil }
+            #expect(skipped == vector.expected.skipped, "\(vector.name)")
+            #expect((route == .accepted) == (vector.expected.skipped == nil), "\(vector.name)")
         }
+    }
+
+    /// A summary as English text, to compare with the shared vectors.
+    private struct EnglishSummary: Equatable {
+        let title: String
+        let subtitle: String
+        let previews: [AttachmentDropKind]
+        let rejected: Bool
     }
 
     @Test func sharedSummaryVectors() throws {
@@ -120,14 +127,22 @@ struct AttachmentDropRoutingTests {
                 countKnown: vector.countKnown ?? true
             )
             let expected = try vector.expected.map { fields in
-                AttachmentDropSummary(
+                EnglishSummary(
                     title: fields.title,
                     subtitle: fields.subtitle,
                     previews: try fields.previews.map { try #require(AttachmentDropKind(rawValue: $0)) },
                     rejected: fields.rejected
                 )
             }
-            #expect(summary == expected, "\(vector.name)")
+            let resolved = summary.map {
+                EnglishSummary(
+                    title: String(localized: $0.title),
+                    subtitle: String(localized: $0.subtitle),
+                    previews: $0.previews,
+                    rejected: $0.rejected
+                )
+            }
+            #expect(resolved == expected, "\(vector.name)")
         }
     }
 

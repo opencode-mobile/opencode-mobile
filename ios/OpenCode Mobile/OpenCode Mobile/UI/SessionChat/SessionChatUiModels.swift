@@ -120,6 +120,46 @@ private extension SessionChatRow {
     }
 }
 
+/// The composer's model notices (`session_chat.model_notice.*`, same keys on Android). Model
+/// names come from the server and stay arguments.
+nonisolated enum SessionChatModelNotice {
+    static var loadFailed: LocalizedStringResource {
+        LocalizedStringResource("session_chat.model_notice.load_failed", defaultValue: "Unable to load models. Tap Model to retry.")
+    }
+
+    static var noneUsable: LocalizedStringResource {
+        LocalizedStringResource(
+            "session_chat.model_notice.none_usable",
+            defaultValue: "No usable models are available. Tap Model to retry."
+        )
+    }
+
+    static var variantUnavailable: LocalizedStringResource {
+        LocalizedStringResource(
+            "session_chat.model_notice.variant_unavailable",
+            defaultValue: "Remembered Variant is unavailable. Using Default."
+        )
+    }
+
+    static func modelUnavailable(using modelLabel: String) -> LocalizedStringResource {
+        LocalizedStringResource(
+            "session_chat.model_notice.model_unavailable",
+            defaultValue: "Selected model is unavailable. Using \(modelLabel)."
+        )
+    }
+}
+
+/// A model variant as shown in the composer chip and picker: the server's variant name verbatim,
+/// or the app's own "Default" (`session_chat.variant_default`, same key on Android).
+enum SessionChatVariantText {
+    static func label(_ variant: String?) -> OpenCodeText {
+        guard let variant,
+              variant.compare(ModelSelection.defaultVariantLabel, options: .caseInsensitive) != .orderedSame
+        else { return OpenCodeText(LocalizedStringResource("session_chat.variant_default", defaultValue: "Default")) }
+        return .verbatim(TitleCaseIdentifier.displayName(for: variant))
+    }
+}
+
 struct SessionChatComposerState: Equatable {
     var text: String
     var attachments: [Attachment] = []
@@ -128,9 +168,9 @@ struct SessionChatComposerState: Equatable {
     var selectedMode: String
     var selectableAgents: [SelectableAgent] = SelectableAgent.fallback
     var selectedVariant: String?
-    var modelNotice: String?
+    var modelNotice: LocalizedStringResource?
     var isModelSelectionReady = false
-    var modelCatalogError: String?
+    var modelCatalogError: LocalizedStringResource?
     var agentMentions: [AgentMention] = []
     var fileMentions: [FileMention] = []
     var skillMentions: [SkillMention] = []
@@ -149,12 +189,19 @@ struct SessionChatComposerState: Equatable {
             ?? SelectableAgent.displayName(for: selectedMode)
     }
 
-    var selectedModelLabel: String {
-        isModelSelectionReady ? selectedModel?.modelLabel ?? "Model" : "Loading model…"
+    /// The model chip: the server's model name, or app text while none is chosen or it loads.
+    var selectedModelLabel: OpenCodeText {
+        guard isModelSelectionReady else {
+            return OpenCodeText(LocalizedStringResource("session_chat.model_chip.loading", defaultValue: "Loading model\u{2026}"))
+        }
+        guard let label = selectedModel?.modelLabel else {
+            return OpenCodeText(LocalizedStringResource("session_chat.model_chip.placeholder", defaultValue: "Model"))
+        }
+        return .verbatim(label)
     }
 
-    var selectedVariantLabel: String {
-        TitleCaseIdentifier.displayName(for: selectedVariant ?? ModelSelection.defaultVariantLabel)
+    var selectedVariantLabel: OpenCodeText {
+        SessionChatVariantText.label(selectedVariant)
     }
 
     var variantOptions: [String] {
@@ -229,7 +276,7 @@ struct SessionRenameUiState: Equatable {
     var isDialogVisible = false
     var draftTitle = ""
     var isSubmitting = false
-    var errorMessage: String?
+    var errorMessage: OpenCodeText?
 }
 
 enum SessionChatSnackbarTone: Equatable {
@@ -313,9 +360,9 @@ struct SessionChatUiState: Equatable {
     var hasOlder: Bool = false
     var isLoadingOlder: Bool = false
     var isAborting: Bool = false
-    var sessionStatusLabel: String?
-    /// The turn pill's Working/Retrying/Compacting label; the Done marker after the turn ends.
-    var workingIndicatorLabel: String? = nil
+    var sessionStatusLabel: SessionTurnLabel?
+    /// The turn pill's Working/Retrying/Compacting label; `.idle` (shown as Done) after the turn ends.
+    var workingIndicatorLabel: SessionTurnLabel? = nil
     /// Live rate-limit countdown. Hidden for content-filter retries.
     var retryCard: SessionRetryCard? = nil
     /// The session is in `retry` status: the composer owns the countdown, failure marks show none.
@@ -636,7 +683,9 @@ struct ReviewChangesSummary: Equatable {
 
 /// Copy for a last-turn diff the server will not build because the turn moved folders.
 enum TurnDiffUnavailable {
-    static let message = "This turn moved folders, so its changes can't be shown together."
+    static var message: String {
+        String(localized: "changes.error.turn_moved_folders", defaultValue: "This turn moved folders, so its changes can't be shown together.")
+    }
     private static let serverMarker = "Turn range spans a location change"
 
     static func userFacing(_ error: Error) -> String? {
@@ -932,7 +981,7 @@ extension ProjectEntry {
 struct SessionInfoRegionState: Equatable {
     var sessionID: String = ""
     var sessionTitle: String = ""
-    var sessionStatusLabel: String?
+    var sessionStatusLabel: SessionTurnLabel?
     var retryCard: SessionRetryCard?
     var isRetrying = false
     var hasResolvedSessionStatus = false
@@ -950,7 +999,7 @@ struct SessionInfoRegionState: Equatable {
     var archivedAtEpochMs: Int64?
 
     mutating func applyStatus(
-        authoritative: String?,
+        authoritative: SessionTurnLabel?,
         hasResolved: Bool = true,
         retryCard: SessionRetryCard? = nil,
         isRetrying: Bool = false

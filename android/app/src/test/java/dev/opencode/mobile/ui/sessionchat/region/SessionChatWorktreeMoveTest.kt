@@ -5,6 +5,8 @@ import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeWorktree
 import dev.opencode.mobile.domain.session.SessionError
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -45,16 +47,12 @@ class SessionChatWorktreeMoveTest {
             canCreate: Boolean = false,
         ) = SessionChatWorktreeMoveAvailability.resolve(v2, on, created, count, canCreate)
 
-        assertEquals(
-            SessionChatWorktreeMoveAvailability(false, "Needs an opencode v2 server"),
-            resolve(v2 = false, on = false, count = 1, canCreate = true),
-        )
-        assertEquals(
-            SessionChatWorktreeMoveAvailability(false, "Turn on Worktrees in Settings"),
-            resolve(on = false, count = 1, canCreate = true),
-        )
+        fun SessionChatWorktreeMoveAvailability.english() = enabled to subtitle?.english()
+
+        assertEquals(false to "Needs an opencode v2 server", resolve(v2 = false, on = false, count = 1, canCreate = true).english())
+        assertEquals(false to "Turn on Worktrees in Settings", resolve(on = false, count = 1, canCreate = true).english())
         assertEquals(SessionChatWorktreeMoveAvailability(false, null), resolve(created = false, count = 1, canCreate = true))
-        assertEquals(SessionChatWorktreeMoveAvailability(false, "This project has no other worktrees"), resolve(count = 1))
+        assertEquals(false to "This project has no other worktrees", resolve(count = 1).english())
         assertEquals(SessionChatWorktreeMoveAvailability(true, null), resolve())
     }
 
@@ -64,10 +62,9 @@ class SessionChatWorktreeMoveTest {
             SessionChatWorktreeMoveAvailability(true, null),
             SessionChatWorktreeMoveAvailability.resolve(true, true, true, worktreeCount = 1, canCreateWorktree = true),
         )
-        assertEquals(
-            SessionChatWorktreeMoveAvailability(false, "This project has no other worktrees"),
-            SessionChatWorktreeMoveAvailability.resolve(true, true, true, worktreeCount = 1, canCreateWorktree = false),
-        )
+        val noOther = SessionChatWorktreeMoveAvailability.resolve(true, true, true, worktreeCount = 1, canCreateWorktree = false)
+        assertFalse(noOther.enabled)
+        assertEquals("This project has no other worktrees", noOther.subtitle?.english())
         assertEquals(
             SessionChatWorktreeMoveAvailability(true, null),
             SessionChatWorktreeMoveAvailability.resolve(true, true, true, worktreeCount = 3, canCreateWorktree = false),
@@ -78,7 +75,7 @@ class SessionChatWorktreeMoveTest {
     fun aCreatedCheckoutRowIsTitledAsGivenWithItsFolder() {
         val row = SessionChatWorktreeMoveRow.created("/wt/ab12cd/brave-otter", "brave-otter")
 
-        assertEquals(SessionChatWorktreeMoveRow("/wt/ab12cd/brave-otter", "brave-otter", "brave-otter", isCurrent = false), row)
+        assertEquals(SessionChatWorktreeMoveRow("/wt/ab12cd/brave-otter", "brave-otter", UiText.verbatim("brave-otter"), isCurrent = false), row)
     }
 
     @Test
@@ -86,7 +83,7 @@ class SessionChatWorktreeMoveTest {
         val rows = SessionChatWorktreeMoveRow.rows(project, "/repo-feature/")
 
         assertEquals(listOf("dev", "feature/x", "repo-detached"), rows.map { it.title })
-        assertEquals(listOf("main checkout", "repo-feature", "repo-detached"), rows.map { it.subtitle })
+        assertEquals(listOf("main checkout", "repo-feature", "repo-detached"), rows.map { it.subtitle.english() })
         assertEquals(listOf(false, true, false), rows.map { it.isCurrent })
         assertEquals(emptyList<SessionChatWorktreeMoveRow>(), SessionChatWorktreeMoveRow.rows(null, "/repo"))
     }
@@ -115,7 +112,7 @@ class SessionChatWorktreeMoveTest {
             move.move("ses-1", row("/repo-feature", "feature/x"), isBusy = true)
             advanceUntilIdle()
 
-            assertEquals("Moves to feature/x after this turn.", move.state.value.notice)
+            assertEquals("Moves to feature/x after this turn.", move.state.value.notice?.english())
         }
 
     @Test
@@ -134,7 +131,7 @@ class SessionChatWorktreeMoveTest {
             move.move("ses-1", row("/repo-feature", "feature/x"), isBusy = false)
             advanceUntilIdle()
 
-            assertEquals("Couldn't move the session: Destination is not a directory", move.state.value.errorMessage)
+            assertEquals("Couldn't move the session: Destination is not a directory", move.state.value.errorMessage?.english())
             assertFalse(move.state.value.sheetVisible)
             move.clearMessages()
             assertNull(move.state.value.errorMessage)
@@ -208,7 +205,7 @@ class SessionChatWorktreeMoveTest {
         directory: String,
         title: String,
         isCurrent: Boolean = false,
-    ) = SessionChatWorktreeMoveRow(directory = directory, title = title, subtitle = "", isCurrent = isCurrent)
+    ) = SessionChatWorktreeMoveRow(directory = directory, title = title, subtitle = UiText.verbatim(""), isCurrent = isCurrent)
 
     private fun region(
         scope: TestScope,

@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProjectGrouping.GLOBAL_PROJECT_ID
 import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.session.ServerErrorMessage
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,7 +105,7 @@ class DefaultWorktreeRepository(
         }
 
     private suspend fun createV2(request: CreateWorktreeRequest): CreatedWorktree {
-        val projectId = request.projectId?.trim()?.takeIf { it.isNotEmpty() } ?: throw WorktreeCreateError(WorktreeCreateCopy.NOT_GIT)
+        val projectId = request.projectId?.trim()?.takeIf { it.isNotEmpty() } ?: throw WorktreeCreateError.notGit()
         val directory =
             createCall(notFoundMeansUnsupported = false) {
                 remote.createV2(
@@ -128,7 +129,7 @@ class DefaultWorktreeRepository(
                 createCall(notFoundMeansUnsupported = true) { remote.createV1(request.sourceDirectory, request.name) }
             } catch (_: V1CreateNotFound) {
                 _canCreate.value = false
-                throw WorktreeCreateError(WorktreeCreateCopy.UNSUPPORTED)
+                throw WorktreeCreateError.unsupported()
             }
         val canonical = ServerPathPolicy.canonical(created.directory.trim())
         return CreatedWorktree(
@@ -151,9 +152,10 @@ class DefaultWorktreeRepository(
             throw error
         } catch (error: WorktreeHttpException) {
             if (error.statusCode == 404 && notFoundMeansUnsupported) throw V1CreateNotFound()
-            throw WorktreeCreateError(httpErrorMessage(error.statusCode, error.body))
+            val failure = httpFailure(error.statusCode, error.body)
+            throw WorktreeCreateError(failure.message, failure.text)
         } catch (error: Exception) {
-            throw WorktreeCreateError(error.message?.trim()?.takeIf { it.isNotEmpty() } ?: "Unknown error")
+            throw error.message?.trim()?.takeIf { it.isNotEmpty() }?.let(::WorktreeCreateError) ?: WorktreeCreateError.unknown()
         }
 
     private class V1CreateNotFound : Exception()
@@ -184,9 +186,9 @@ class DefaultWorktreeRepository(
             throw cancellation
         } catch (error: WorktreeHttpException) {
             if (error.statusCode == 404 && notFoundMeansUnsupported) throw WorktreeRemoveError.Unsupported()
-            val message = httpErrorMessage(error.statusCode, error.body)
-            if (WorktreeErrorBody.forceRequired(error.body)) throw WorktreeRemoveError.ForceRequired(message)
-            throw WorktreeRemoveError.Failed(message)
+            val failure = httpFailure(error.statusCode, error.body)
+            if (WorktreeErrorBody.forceRequired(error.body)) throw WorktreeRemoveError.ForceRequired(failure.message)
+            throw WorktreeRemoveError.Failed(failure.message, failure.text)
         } catch (error: Exception) {
             // No HTTP answer: the transport failed. Its text names the server address, so it is
             // for logs, not for the snackbar.
@@ -239,14 +241,28 @@ class DefaultWorktreeRepository(
         }
 }
 
-/** The server's own message, else the trimmed raw body, else the HTTP status. */
-internal fun httpErrorMessage(
+/** A failed worktree call: [message] for logs, [text] for the user. */
+internal data class WorktreeHttpFailure(
+    val message: String,
+    val text: UiText,
+)
+
+/** The server's own message, else the trimmed raw body (both verbatim), else the keyed HTTP status. */
+internal fun httpFailure(
     statusCode: Int,
     body: String,
-): String =
-    ServerErrorMessage.userFacing(body)
-        ?: body.trim().takeIf { it.isNotEmpty() && !it.startsWith("{") && !it.startsWith("[") && it.length <= 200 && !it.contains('\n') }
-        ?: WorktreeCreateCopy.requestFailed(statusCode)
+): WorktreeHttpFailure {
+    ServerErrorMessage.reason(body)?.let { reason ->
+        return WorktreeHttpFailure(reason.serverText ?: "HTTP $statusCode", reason.text)
+    }
+    val serverText =
+        body.trim().takeIf { it.isNotEmpty() && !it.startsWith("{") && !it.startsWith("[") && it.length <= 200 && !it.contains('\n') }
+    return if (serverText != null) {
+        WorktreeHttpFailure(serverText, UiText.verbatim(serverText))
+    } else {
+        WorktreeHttpFailure("HTTP $statusCode", WorktreeCreateCopy.requestFailed(statusCode))
+    }
+}
 
 /** V2 `WorktreeError` body: `{"name":"WorktreeError","data":{"message","forceRequired"}}`. */
 internal object WorktreeErrorBody {

@@ -6,6 +6,7 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -54,21 +55,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 
 internal val FloatingPillShape = RoundedCornerShape(percent = 50)
 private val FloatingPillPaddingHorizontal = 14.dp
@@ -131,22 +139,22 @@ sealed interface OpenCodeFloatingPillLayout {
 /** Where the thing a floating pill stands for is. */
 enum class OpenCodeFloatingPillState(
     /** Spoken after the label. */
-    val spokenName: String,
+    @param:StringRes val spokenName: Int,
 ) {
     /** Work is running. */
-    Live("In progress"),
+    Live(R.string.component_floating_pill_state_live),
 
     /** Something is ready to open. */
-    Ready("Ready"),
+    Ready(R.string.component_floating_pill_state_ready),
 
     /** Waiting on the user: amber text and a thin amber ring. */
-    NeedsAttention("Needs attention"),
+    NeedsAttention(R.string.component_floating_pill_state_needs_attention),
 
     /** Something failed. */
-    Error("Error"),
+    Error(R.string.component_floating_pill_state_error),
 
     /** Finished: a check in the content color. */
-    Done("Done"),
+    Done(R.string.component_floating_pill_state_done),
 }
 
 /** Leading mark of a floating pill, resolved from layout and state. */
@@ -226,13 +234,22 @@ internal fun floatingPillHasRing(state: OpenCodeFloatingPillState): Boolean = st
 internal fun floatingPillDescription(
     layout: OpenCodeFloatingPillLayout,
     state: OpenCodeFloatingPillState,
+    lookup: UiTextLookup,
     override: String? = null,
-): String = override ?: "${layout.label}, ${state.spokenName}"
+): String =
+    override
+        ?: UiText
+            .resource(
+                R.string.component_floating_pill_accessibility_label,
+                UiText.verbatim(layout.label),
+                UiText.resource(state.spokenName),
+            ).resolve(lookup)
 
 internal fun floatingPillCloseDescription(
     layout: OpenCodeFloatingPillLayout,
+    lookup: UiTextLookup,
     override: String? = null,
-): String = "Dismiss ${override ?: layout.label}"
+): String = UiText.resource(R.string.component_floating_pill_dismiss, UiText.verbatim(override ?: layout.label)).resolve(lookup)
 
 /** Width of a compact (round) floating pill. */
 internal val FloatingPillCompactWidth = FloatingPillIconSize + FloatingPillCompactPaddingHorizontal * 2
@@ -284,7 +301,9 @@ fun OpenCodeFloatingPill(
         }
     val border =
         if (floatingPillHasRing(state)) BorderStroke(1.dp, openCodeColor("warning")) else OpenCodeFloatingPillStyle.border()
-    val description = floatingPillDescription(layout, state, accessibilityLabel)
+    val lookup = ResourcesUiTextLookup(LocalResources.current)
+    val description = floatingPillDescription(layout, state, lookup, accessibilityLabel)
+    val closeDescription = floatingPillCloseDescription(layout, lookup, accessibilityLabel)
     val announcesUpdates = floatingPillAnnouncesUpdates(layout, state)
     val iconOnly = layout is OpenCodeFloatingPillLayout.IconOnly
     val hasFullMark = floatingPillLeading(layout, state) != OpenCodeFloatingPillLeading.None
@@ -351,7 +370,8 @@ fun OpenCodeFloatingPill(
                     AnimatedVisibility(visible = labelShown, enter = foldIn, exit = foldOut) {
                         Text(
                             text = layout.label,
-                            style = MaterialTheme.typography.labelLarge,
+                            // Direction follows the label, so "+12 −5" stays left to right in RTL.
+                            style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.ContentOrLtr),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(start = if (hasFullMark) FloatingPillIconSpacing else 0.dp),
@@ -367,7 +387,7 @@ fun OpenCodeFloatingPill(
                         exit = shrinkHorizontally(widthSpec, shrinkTowards = Alignment.Start, clip = false) + fadeOut(tween(FloatingPillMorphMs / 2)),
                     ) {
                         FloatingPillClose(
-                            description = floatingPillCloseDescription(layout, accessibilityLabel),
+                            description = closeDescription,
                             onClose = onClose,
                         )
                     }

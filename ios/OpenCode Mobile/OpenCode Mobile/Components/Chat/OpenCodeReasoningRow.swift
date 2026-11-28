@@ -35,7 +35,7 @@ struct OpenCodeReasoningRow: View {
         .accessibilityHidden(state == .collapsed)
         .accessibilityAddTraits(action == nil ? [] : .isButton)
         .accessibilityLabel(label)
-        .accessibilityHint(action == nil ? "" : "Shows the full thought")
+        .accessibilityHint(action == nil ? Text(verbatim: "") : Text("component.reasoning_row.shows_thought_hint"))
         .openCodeKeyboardFocusable(
             .insetRoundedRectangle(cornerRadius: OpenCodeRadius.small),
             enabled: action != nil && state != .collapsed,
@@ -44,17 +44,21 @@ struct OpenCodeReasoningRow: View {
     }
 
     private var label: String {
+        Self.label(state: state, durationLabel: durationLabel)
+    }
+
+    static func label(state: OpenCodeChatActivityState, durationLabel: String?) -> String {
+        let thought = String(localized: "tool.title.thought", defaultValue: "Thought")
         switch state {
         case .working:
-            "Thinking"
+            return String(localized: "component.thinking", defaultValue: "Thinking")
         case .idle, .collapsed:
-            "Thought"
+            return thought
         case .expanded:
             if let durationLabel, !durationLabel.isEmpty {
-                "Thought · \(durationLabel)"
-            } else {
-                "Thought"
+                return String(localized: "component.reasoning_row.thought_duration", defaultValue: "Thought · \(durationLabel)")
             }
+            return thought
         }
     }
 }

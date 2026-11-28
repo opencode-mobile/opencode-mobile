@@ -220,10 +220,12 @@ struct AppearanceSettingsView: View {
         return OpenCodeText(LocalizedStringResource("appearance.theme.subtitle", defaultValue: "\(name) · \(blurb)"))
     }
 
-    /// Syntax preset name and blurb are preset data, shown as is.
+    /// Match theme and the built-in presets' descriptions are keyed; other preset names are data.
     private var syntaxSubtitle: OpenCodeText {
         let preset = themeManager.currentSyntaxPreset
-        return .verbatim([preset.name, preset.blurb].joined(separator: " · "))
+        let name = preset.displayName
+        let blurb = preset.displayBlurb
+        return OpenCodeText(LocalizedStringResource("appearance.theme.subtitle", defaultValue: "\(name) · \(blurb)"))
     }
 }
 
@@ -505,7 +507,7 @@ private struct ThemePreviewCard: View {
 
     var body: some View {
         // Preset names are theme data; the blurb is localized when it is the app's own.
-        OpenCodeSelectableCard(title: .verbatim(name), blurb: .verbatim(blurb), selected: selected, action: action) {
+        OpenCodeSelectableCard(title: .verbatim(name), blurb: .localized(blurb), selected: selected, action: action) {
             HStack(spacing: 8) {
                 MiniThemePane(label: "appearance.preview.light", tokens: light)
                 MiniThemePane(label: "appearance.preview.dark", tokens: dark)
@@ -559,8 +561,13 @@ private struct SyntaxPreviewCard: View {
     let action: () -> Void
 
     var body: some View {
-        // Syntax preset name and blurb are preset data, shown as is.
-        OpenCodeSelectableCard(title: .verbatim(preset.name), blurb: .verbatim(preset.blurb), selected: selected, action: action) {
+        // Match theme and built-in descriptions are keyed (resolved strings); other names are preset data.
+        OpenCodeSelectableCard(
+            title: .localized(preset.displayName),
+            blurb: .localized(preset.displayBlurb),
+            selected: selected,
+            action: action
+        ) {
             OpenCodeCodeSnippet(syntaxSnippet(tokens), surface: .syntaxPreset(tokens))
         }
     }
@@ -612,21 +619,49 @@ private func syntaxSnippet(_ tokens: [String: String]) -> AttributedString {
     return result
 }
 
-private extension ThemePreset {
+// Preset names such as Porcelain or Nocturne are proper names from the preset files and show
+// as is. Match theme and the built-in presets' descriptions are app text, keyed by preset id;
+// a preset the app does not know keeps the text from its file.
+
+extension ThemePreset {
+    /// The theme's description, keyed for the built-in presets.
     var displayBlurb: String {
-        blurb.isEmpty ? themeBlurb(id) : blurb
+        builtInThemeBlurb(id) ?? (blurb.isEmpty ? id : blurb)
     }
 }
 
-/// Built-in presets' own blurb, resolved in the current locale; an unknown id shows as is.
+extension SyntaxHighlightPreset {
+    /// "Match theme" is keyed; other names are preset data.
+    var displayName: String {
+        isMatch ? String(localized: "appearance.syntax_name.match", defaultValue: "Match theme") : name
+    }
+
+    /// The syntax preset's description, keyed for the built-in presets.
+    var displayBlurb: String {
+        switch id {
+        case Self.matchID: String(localized: "appearance.syntax_blurb.match", defaultValue: "Use the UI theme’s own tokens")
+        case "nocturne": String(localized: "appearance.syntax_blurb.nocturne", defaultValue: "One Dark family")
+        case "citrus": String(localized: "appearance.syntax_blurb.citrus", defaultValue: "Solarized family")
+        case "paper": String(localized: "appearance.syntax_blurb.paper", defaultValue: "GitHub family")
+        case "neon": String(localized: "appearance.syntax_blurb.neon", defaultValue: "Dracula family")
+        default: blurb
+        }
+    }
+}
+
+/// A built-in theme's description by id, or the id itself for a theme the app does not know.
 private func themeBlurb(_ id: String) -> String {
+    builtInThemeBlurb(id) ?? id
+}
+
+private func builtInThemeBlurb(_ id: String) -> String? {
     switch id {
     case "porcelain": String(localized: "appearance.theme_blurb.porcelain", defaultValue: "Near-white / near-black")
     case "linen": String(localized: "appearance.theme_blurb.linen", defaultValue: "Warm paper / espresso")
     case "signal": String(localized: "appearance.theme_blurb.signal", defaultValue: "True white / true black")
     case "hotline": String(localized: "appearance.theme_blurb.hotline", defaultValue: "Neutral chrome, loud pink")
     case "phosphor": String(localized: "appearance.theme_blurb.phosphor", defaultValue: "Neutral chrome, CRT green")
-    default: id
+    default: nil
     }
 }
 

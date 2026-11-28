@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionBusyStatus
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
@@ -20,7 +21,7 @@ class SessionListStatusMappingTest {
             SessionSummary(
                 id = "ses-1",
                 title = "Chat",
-                statusLabel = "Working",
+                busyStatus = SessionBusyStatus.Running,
                 isReady = true,
             )
         assertEquals(SessionListStatus.Running, summary.toSessionListStatusForTest())
@@ -32,7 +33,7 @@ class SessionListStatusMappingTest {
             SessionSummary(
                 id = "ses-1",
                 title = "Chat",
-                statusLabel = null,
+                busyStatus = null,
                 isReady = true,
             )
         assertEquals(SessionListStatus.Ready, summary.toSessionListStatusForTest())
@@ -44,7 +45,7 @@ class SessionListStatusMappingTest {
             SessionSummary(
                 id = "ses-1",
                 title = "Chat",
-                statusLabel = null,
+                busyStatus = null,
                 isReady = false,
             )
         assertEquals(SessionListStatus.Idle, summary.toSessionListStatusForTest())
@@ -56,7 +57,7 @@ class SessionListStatusMappingTest {
             SessionSummary(
                 id = "ses-1",
                 title = "Chat",
-                statusLabel = "Retrying · 2",
+                busyStatus = SessionBusyStatus.Retrying(2),
                 isReady = true,
             )
         assertEquals(SessionListStatus.Retrying, summary.toSessionListStatusForTest())
@@ -105,9 +106,9 @@ class SessionListStatusMappingTest {
     @Test
     fun runningAndRetryingOutrankServerUnread() {
         val running =
-            SessionSummary(id = "ses-1", title = "Chat", statusLabel = "Working", unreadOutcome = SessionIdleOutcome.Failed)
+            SessionSummary(id = "ses-1", title = "Chat", busyStatus = SessionBusyStatus.Running, unreadOutcome = SessionIdleOutcome.Failed)
         val retrying =
-            SessionSummary(id = "ses-1", title = "Chat", statusLabel = "Retrying · 1", unreadOutcome = SessionIdleOutcome.Failed)
+            SessionSummary(id = "ses-1", title = "Chat", busyStatus = SessionBusyStatus.Retrying(1), unreadOutcome = SessionIdleOutcome.Failed)
 
         assertEquals(SessionListStatus.Running, running.toSessionListStatusForTest())
         assertEquals(SessionListStatus.Retrying, retrying.toSessionListStatusForTest())
