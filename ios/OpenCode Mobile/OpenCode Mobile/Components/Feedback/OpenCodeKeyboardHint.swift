@@ -7,8 +7,9 @@ enum OpenCodeKeyboardHintTone {
     case warning
 }
 
-/// One line of caption text about a hardware-keyboard key, shown only while it
-/// applies. Same component and tones on Android (`OpenCodeKeyboardHint`).
+/// Caption text about a hardware-keyboard key, shown only while it applies. It wraps
+/// rather than truncates, since translations run longer than English. Same component
+/// and tones on Android (`OpenCodeKeyboardHint`).
 struct OpenCodeKeyboardHint: View {
     let text: String
     var tone: OpenCodeKeyboardHintTone = .neutral
@@ -23,7 +24,7 @@ struct OpenCodeKeyboardHint: View {
         Text(text)
             .font(OpenCodeTypography.caption)
             .foregroundStyle(foreground)
-            .lineLimit(1)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, Self.horizontalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
