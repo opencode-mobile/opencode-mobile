@@ -22,7 +22,8 @@ Keys match across platforms: iOS `area.name` is Android `area_name`
    comment, say what the text is when the key doesn't make it obvious: a button or a title,
    what `%1$s` holds, a width limit. The translator reads these notes.
 2. Run `node scripts/translate.mjs all`. It translates only what's missing, writes both
-   platforms, and takes a minute or two for a few strings.
+   platforms, and takes a minute or two for a few strings. Add `--review` to have a second
+   model check what it just translated.
 3. Run `node scripts/check-translations.mjs`. CI runs it in String Checks.
 
 When the English of an existing key changes, the next `translate.mjs all` translates it again:
@@ -37,17 +38,29 @@ the script.
 
 - Each key is translated once and written to both apps when their English matches. The few keys
   that use each platform's own words (Face ID vs fingerprint) are translated per platform.
-- A request carries about 60 strings from the same screens, each with its key, its notes, the
-  code lines that use it, the language's existing translations from the same area, the
-  glossary (`l10n/glossary.json`) and the OpenCode desktop app's words for shared terms
-  (`l10n/desktop-terms.json`, imported with `scripts/l10n/import-desktop-terms.mjs`).
+- A request lists each string once with its key, its notes and one code line that uses it,
+  then a short section per language: its plural forms, its form of address and its words for
+  the terms those strings use. The words come from `l10n/terms.json` (the consistency pass's
+  choices), then the OpenCode desktop app's words (`l10n/desktop-terms.json`, imported with
+  `scripts/l10n/import-desktop-terms.mjs`). The glossary (`l10n/glossary.json`) gives the
+  product terms' meanings.
+- A few changed strings (up to 20) go out for many languages in one request, so their context
+  is sent once: one changed string is one request of a few thousand tokens for all 56
+  languages. A bigger run sends one language per request, about 60 strings from the same
+  screens, with some of that language's translations from those screens.
+- `--dry-run` prints the first request and how much the whole run would send.
 - Placeholders reach the model as `{1}`, `{2}`, and go back as each platform's `%1$s` or
   `%1$@`. Plurals get the CLDR forms each language needs.
 - Every answer is checked with the same rules as `check-translations.mjs`
   (`scripts/l10n/rules.mjs`). A string that fails three times stays in English and the check
   lists it.
-- `--review` has a second model read every translation with its context and fix only wrong
-  ones. `l10n/review-status.json` records the last review of each language.
+- `--review` has a second model check the strings this run translated and fix only wrong ones;
+  `--review --keys a,b` checks those keys. `--review-all` checks every translation in every
+  language, a run of millions of tokens, and records it in `l10n/review-status.json`. Keep it
+  for a new language or a large rewrite.
+- `scripts/l10n/consistency.mjs` and `scripts/l10n/term-sweep.mjs` are one-off passes after a
+  full translation: they pick one word per term and apply it everywhere. They aren't needed
+  for later changes, which get the chosen words from `l10n/terms.json`.
 
 Models: `--model` (default `claude-agent/sonnet`) and `--review-model` (default
 `claude-agent/opus`) take any `provider/model` that `opencode run -m` accepts. `claude-agent`
@@ -56,6 +69,13 @@ keeps a local `claude` process alive per call, so the script sends its calls to 
 pauses new requests while free memory is under 30% or more than 12 local agent processes run;
 `--jobs` (default 3) sets how many requests run at once. Keep emulators, simulators and Gradle
 builds closed during a full run.
+
+### Handing requests to other agents
+
+`--handoff <dir>` writes the requests as prompt files instead of calling a model, and
+`--answers <dir>` checks and applies the answers. Give each agent one prompt file. An agent
+keeps every file it reads in its context and sends all of it again on each turn, so one agent
+working through a list of files costs many times what the files themselves do.
 
 ## Fixing a translation by hand
 

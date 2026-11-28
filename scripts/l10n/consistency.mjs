@@ -2,6 +2,11 @@
 // Writes a term-consistency review request per language, for another agent to answer.
 //
 // Usage: node scripts/l10n/consistency.mjs <dir> [codes… | all]
+//        node scripts/l10n/consistency.mjs --save <dir>
+//
+// A one-off pass after translating a language in full; each request is large (every string that
+// uses a term). Later changes don't need it: --save writes the words each answer chose
+// ("terms") to l10n/terms.json, and translate.mjs sends those words with every request.
 //
 // For each product term (TERMS below and the glossary), it lists the English strings that use it
 // with their current translation, so a reviewer can pick one word per term and fix the strings
@@ -9,7 +14,7 @@
 // it as consistency-001.answer.json ({"fixes": {...}, "reasons": {...}}) and is applied with
 // `node scripts/translate.mjs <codes> --review --answers <dir>`.
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveLanguages } from "./languages.mjs";
 import { ROOT, loadUnits, textsOf, readCatalog, readAndroidNeutral, readIosNeutral } from "./strings.mjs";
@@ -25,6 +30,28 @@ const TERMS = [
   "folder", "file", "path", "directory", "log", "line", "step", "dictation",
 ];
 const PER_TERM = 30;
+
+if (process.argv[2] === "--save") {
+  saveTerms(process.argv[3]);
+  process.exit(0);
+}
+
+// Merges the chosen words from <dir>/<code>/consistency-001.answer.json into l10n/terms.json.
+function saveTerms(answers) {
+  const path = join(ROOT, "l10n/terms.json");
+  const doc = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : { languages: {} };
+  for (const code of readdirSync(answers)) {
+    const file = join(answers, code, "consistency-001.answer.json");
+    if (!existsSync(file)) continue;
+    const text = readFileSync(file, "utf8");
+    const terms = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)).terms ?? {};
+    const words = Object.entries(terms).filter(([, word]) => typeof word === "string" && word.trim());
+    doc.languages[code] = Object.fromEntries(words.sort(([a], [b]) => a.localeCompare(b)));
+    console.log(`${code}: ${words.length} terms`);
+  }
+  doc.languages = Object.fromEntries(Object.entries(doc.languages).sort(([a], [b]) => a.localeCompare(b)));
+  writeFileSync(path, `${JSON.stringify(doc, null, 2)}\n`);
+}
 
 const [dir, ...codes] = process.argv.slice(2);
 if (!dir) {
