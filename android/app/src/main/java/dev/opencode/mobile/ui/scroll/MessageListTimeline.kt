@@ -63,6 +63,8 @@ internal fun rememberMessageListTimeline(
     messageIdsChronological: List<String> = emptyList(),
     structureAffectingRevision: Long = layoutAffectingRevision,
     growBottomRevision: Long = 0L,
+    // List keys of rows this device just sent; a new one scrolls to the end from anywhere.
+    localSendIds: Set<String> = emptySet(),
     listState: LazyListState = rememberLazyListState(),
     userScroll: MessageListUserScroll? = null,
 ): MessageListTimelineHandle {
@@ -204,6 +206,7 @@ internal fun rememberMessageListTimeline(
     MessageListAutoFollowAppendEffect(
         messageCount = messageCount,
         newestMessageId = resolvedMessageIds.lastOrNull(),
+        localSendIds = localSendIds,
         autoFollowEnabled = autoFollowEnabled,
         autoFollowTolerancePx = autoFollowTolerancePx,
         bottomAnchorHeightPx = bottomAnchorHeightPx,

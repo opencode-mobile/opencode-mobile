@@ -9,6 +9,7 @@ internal class MessageListAutoFollowState(
 ) {
     private var observedMessageCount = initialMessageCount
     private var observedNewestMessageId: String? = null
+    private var observedLocalSendIds: Set<String> = emptySet()
     private var shouldFollowNextAppend by mutableStateOf(false)
 
     fun updatePinnedState(
@@ -35,24 +36,30 @@ internal class MessageListAutoFollowState(
      * Follows a count increase only when it appended at the newest edge. Older
      * pages prepend above the visible rows and keep the newest ID, so they never
      * scroll to the end. Callers without IDs pass `null` (count-only follow).
+     *
+     * [localSendIds] are rows this device just sent. A new one follows and re-arms
+     * even when the reader is scrolled away: sending always brings them to the end.
      */
     fun onMessageCountChanged(
         messageCount: Int,
         autoFollowEnabled: Boolean,
         newestMessageId: String? = null,
+        localSendIds: Set<String> = emptySet(),
     ): Boolean {
         val isPrepend =
             newestMessageId != null &&
                 observedNewestMessageId != null &&
                 newestMessageId == observedNewestMessageId
-        val shouldFollow =
-            autoFollowEnabled &&
-                messageCount > observedMessageCount &&
-                !isPrepend &&
-                shouldFollowNextAppend
+        val appended = autoFollowEnabled && messageCount > observedMessageCount && !isPrepend
+        val appendedLocalSend = appended && localSendIds.any { it !in observedLocalSendIds }
+        val shouldFollow = appended && (shouldFollowNextAppend || appendedLocalSend)
+        if (appendedLocalSend) {
+            shouldFollowNextAppend = true
+        }
 
         observedMessageCount = messageCount
         observedNewestMessageId = newestMessageId
+        observedLocalSendIds = localSendIds
         return shouldFollow
     }
 }

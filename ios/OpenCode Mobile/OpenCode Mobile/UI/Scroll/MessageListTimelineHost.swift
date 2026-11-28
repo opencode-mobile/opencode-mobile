@@ -31,6 +31,9 @@ where Item.ID == String {
     /// below the overlay while content can still scroll under it.
     var topOverlayInset: CGFloat = 0
     var interItemSpacing: CGFloat = MessageListTimelineDefaults.messageSpacing
+    /// A newly inserted item this device just sent. Its arrival scrolls to the end
+    /// even when the reader is scrolled away.
+    var isLocalSend: ((Item) -> Bool)? = nil
     @ViewBuilder var itemContent: (Item) -> ItemContent
 
     func makeUIViewController(context: Context) -> MessageListTimelineViewController<Item, ItemContent> {
@@ -48,6 +51,7 @@ where Item.ID == String {
         viewController.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         viewController.canLoadOlder = canLoadOlder
         viewController.onNearOldestVisible = onNearOldestVisible
+        viewController.isLocalSend = isLocalSend
         viewController.updateTextScale(context.environment.openCodeTextScale)
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
@@ -69,6 +73,7 @@ where Item.ID == String {
         viewController.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         viewController.canLoadOlder = canLoadOlder
         viewController.onNearOldestVisible = onNearOldestVisible
+        viewController.isLocalSend = isLocalSend
         viewController.itemContent = itemContent
         viewController.updateBottomOverlayInset(bottomOverlayInset, animation: bottomOverlayAnimation)
         viewController.updateTopOverlayInset(topOverlayInset)
@@ -97,6 +102,7 @@ where Item.ID == String {
     var onUserScrollDismissKeyboard: (() -> Void)?
     var canLoadOlder = false
     var onNearOldestVisible: (() -> Void)?
+    var isLocalSend: ((Item) -> Bool)?
     var itemContent: (Item) -> ItemContent
     /// One keyboard focus group across every row: the timeline is a single Tab
     /// stop and the arrow keys move between its controls.
@@ -649,6 +655,10 @@ where Item.ID == String {
         // Difference animations are off for now — initial load and short-thread
         // bottom alignment still fight estimated heights when inserts animate.
         _ = animatingDifferences
+        let appendedLocalSend: Bool = {
+            guard let isLocalSend, !isOlderPrepend, newOrderedIDs.count > previousCount else { return false }
+            return uniqueItems.contains { !previousIDSet.contains($0.id) && isLocalSend($0) }
+        }()
         let applySnapshot = { [weak self] in
             guard let self else { return }
             self.dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
@@ -717,7 +727,10 @@ where Item.ID == String {
                     self.scrollController?.noteObservedMessageCount(self.orderedIDs.count)
                     self.isRestoringOlderPrepend = false
                 } else if self.orderedIDs.count != previousCount {
-                    self.scrollController?.updateMessageCount(self.orderedIDs.count)
+                    self.scrollController?.updateMessageCount(
+                        self.orderedIDs.count,
+                        appendedLocalSend: appendedLocalSend
+                    )
                 } else if !structureAffecting.isEmpty {
                     // Declared structure growth with stable count — not decorate-only.
                     self.scrollController?.notifyContentGrew()

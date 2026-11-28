@@ -96,13 +96,20 @@ final class TimelineScrollController {
         }
     }
 
-    func updateMessageCount(_ messageCount: Int) {
+    /// `appendedLocalSend`: the new rows include a message this device just sent.
+    /// Sending always brings the reader to the end, even from a held place.
+    func updateMessageCount(_ messageCount: Int, appendedLocalSend: Bool = false) {
+        let grew = messageCount > self.messageCount
         let shouldFollow = autoFollowState.onMessageCountChanged(
             messageCount: messageCount,
             autoFollowEnabled: autoFollowEnabled
         )
         self.messageCount = messageCount
         refreshDerivedState()
+        if appendedLocalSend, grew, autoFollowEnabled {
+            scrollToEndAnimated()
+            return
+        }
         guard shouldFollow else { return }
         requestScrollToEnd(animated: false)
     }

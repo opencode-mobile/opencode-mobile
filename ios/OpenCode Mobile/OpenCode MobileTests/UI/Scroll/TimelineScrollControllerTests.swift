@@ -335,6 +335,42 @@ struct TimelineScrollControllerTests {
         #expect(controller.userUnpinnedContentOffsetY == 640)
     }
 
+    @Test func localSendAfterUserScrollAwayScrollsToEnd() {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 8)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 400,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.beginUserScrolling()
+        controller.endUserScrolling(contentOffsetY: 640)
+
+        controller.updateMessageCount(9, appendedLocalSend: true)
+
+        #expect(performer.calls == [.init(animated: true)])
+        #expect(controller.userUnpinnedContentOffsetY == nil)
+    }
+
+    @Test func otherAppendAfterUserScrollAwayHoldsPlace() {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 8)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 400,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.beginUserScrolling()
+        controller.endUserScrolling(contentOffsetY: 640)
+
+        controller.updateMessageCount(9, appendedLocalSend: false)
+
+        #expect(performer.calls.isEmpty)
+        #expect(controller.userUnpinnedContentOffsetY == 640)
+    }
+
     @Test func flingLandingAtEndRearmsFollowAfterScrollAway() {
         let performer = FakeTimelineScrollPerformer()
         let controller = TimelineScrollController(initialMessageCount: 8)

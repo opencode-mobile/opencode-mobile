@@ -597,12 +597,20 @@ private fun SessionChatTimelineReadyView(
         remember(committedMessages, committedFrame) {
             committedMessages.map { committedFrame?.listKey(it.id) ?: it.id }
         }
+    // Optimistic rows of a send from this device: their arrival scrolls to the end.
+    val localSendIds =
+        remember(committedMessages, committedFrame) {
+            committedMessages
+                .filter { it.role == MessageRole.User && it.isPending }
+                .mapTo(mutableSetOf()) { committedFrame?.listKey(it.id) ?: it.id }
+        }
     val timeline =
         rememberMessageListTimeline(
             messageCount = committedMessages.size,
             layoutAffectingRevision = layoutAffectingRevision,
             structureAffectingRevision = structureAffectingRevision,
             growBottomRevision = growBottomRevision,
+            localSendIds = localSendIds,
             autoFollowEnabled = true,
             messageIdsChronological = messageIds,
             listState = listState,
