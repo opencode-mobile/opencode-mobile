@@ -166,9 +166,14 @@ public nonisolated struct SessionsAPIClient: Sendable {
         return try decoder.decode(APIDataEnvelope<V2InterruptResultDTO>.self, from: data).data.interrupted ?? false
     }
 
-    /// `POST /api/session/{id}/interrupt`: stops the session's run.
+    /// `POST /api/session/{id}/interrupt?resume=true`: stops the session's run. `resume=true`
+    /// starts input steered in during the run once the stop settles, as the desktop app and the
+    /// TUI do; without it that input stays parked. Queued next-turn prompts stay parked either way.
     private func interruptV2(id: String) async throws -> Data {
-        try await data(for: try requireConnection().authorizedRequest(path: "api/session/\(id)/interrupt", method: "POST"))
+        let request = try requireConnection()
+            .authorizedRequest(path: "api/session/\(id)/interrupt", method: "POST")
+            .appendingQueryItems([URLQueryItem(name: "resume", value: "true")])
+        return try await data(for: request)
     }
 
     /// `POST /api/session/{id}/view` → 204. Moves the server-wide viewed watermark to `idle`.

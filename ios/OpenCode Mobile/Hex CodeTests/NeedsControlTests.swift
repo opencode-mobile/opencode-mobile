@@ -889,6 +889,7 @@ struct ControlRequestTests {
         #expect(try await service.interrupt(sessionID: "ses_a"))
         #expect(try await service.interrupt(sessionID: "ses_a") == false)
         #expect(ControlURLProtocol.requests[0].request.url?.path == "/api/session/ses_a/interrupt")
+        #expect(ControlURLProtocol.requests[0].request.url?.query == "resume=true")
         #expect(ControlURLProtocol.requests[0].request.httpMethod == "POST")
     }
 

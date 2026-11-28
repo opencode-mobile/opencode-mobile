@@ -810,6 +810,35 @@ class SessionProtocolRepositoryTest {
                     .url.encodedPath
                     .contains("/api/session/ses_1/interrupt"),
             )
+            assertEquals("true", requests.single().url.parameters["resume"])
+        }
+
+    @Test
+    fun v1AbortSession_postsAbortWithoutResume() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("true", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            assertTrue(repository.abortSession("ses_1", "/repo"))
+
+            assertEquals(HttpMethod.Post, requests.single().method)
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/session/ses_1/abort"),
+            )
+            assertNull(requests.single().url.parameters["resume"])
         }
 
     @Test
