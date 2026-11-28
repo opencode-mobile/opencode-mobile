@@ -1,0 +1,562 @@
+{
+  "am": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 140,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 223
+    }
+  },
+  "az": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 111,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 81
+    }
+  },
+  "bg": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 185,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 47
+    }
+  },
+  "bn": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 112,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 64
+    }
+  },
+  "bs": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 159,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 74
+    }
+  },
+  "ca": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 62,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 33
+    }
+  },
+  "cs": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 103,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 43
+    }
+  },
+  "da": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 104,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 46
+    }
+  },
+  "de": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 144,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 52
+    }
+  },
+  "dz": {
+    "model": "claude-agent/sonnet",
+    "reviewed": 1520,
+    "fixed": 380,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 121
+    }
+  },
+  "el": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 123,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 33
+    }
+  },
+  "es": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 73,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 29
+    }
+  },
+  "et": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 147,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 38
+    }
+  },
+  "fi": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 156,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 30
+    }
+  },
+  "fo": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 267,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 150
+    }
+  },
+  "fr": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 127,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 13
+    }
+  },
+  "hi": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 139,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 69
+    }
+  },
+  "hr": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 169,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 57
+    }
+  },
+  "hu": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 160,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 34
+    }
+  },
+  "hy": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 134,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 56
+    }
+  },
+  "id": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 83,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 36
+    }
+  },
+  "is": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 147,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 72
+    }
+  },
+  "it": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 63,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 27
+    }
+  },
+  "ja": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 102,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 35
+    }
+  },
+  "ka": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 135,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 75
+    }
+  },
+  "km": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 120,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 71
+    }
+  },
+  "ko": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 139,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 68
+    }
+  },
+  "lo": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 125,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 80
+    }
+  },
+  "lt": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 141,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 60
+    }
+  },
+  "lv": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 196,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 62
+    }
+  },
+  "mk": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 165,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 94
+    }
+  },
+  "mn": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 140,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 84
+    }
+  },
+  "ms": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 108,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 69
+    }
+  },
+  "my": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 137,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 104
+    }
+  },
+  "nb": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 104,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 41
+    }
+  },
+  "ne": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 108,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 70
+    }
+  },
+  "nl": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 97,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 15
+    }
+  },
+  "pl": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 59,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 44
+    }
+  },
+  "pt-BR": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 27,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 27
+    }
+  },
+  "ro": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 144,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 17
+    }
+  },
+  "ru": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 94,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 44
+    }
+  },
+  "si": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 165,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 48
+    }
+  },
+  "sk": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 64,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 30
+    }
+  },
+  "sl": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 145,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 62
+    }
+  },
+  "sq": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 113,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 42
+    }
+  },
+  "sr": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 91,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 61
+    }
+  },
+  "sv": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 85,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 13
+    }
+  },
+  "tg": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 124,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 90
+    }
+  },
+  "th": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 61,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 59
+    }
+  },
+  "tk": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 86,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 110
+    }
+  },
+  "tr": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 70,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 45
+    }
+  },
+  "uk": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 123,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 23
+    }
+  },
+  "uz": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 163,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 52
+    }
+  },
+  "vi": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 55,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 18
+    }
+  },
+  "zh-Hans": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 43,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 19
+    }
+  },
+  "zh-Hant": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 42,
+    "date": "2026-11-28",
+    "consistency": {
+      "model": "claude-agent/sonnet",
+      "fixed": 36
+    }
+  }
+}

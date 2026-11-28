@@ -53,6 +53,14 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
+## Desktop terminology from opencode
+
+`l10n/desktop-terms.json` holds the OpenCode desktop app's translations of shared
+terms (session, agent, model, …), read from the i18n files of
+[opencode](https://github.com/anomalyco/opencode) (MIT License, Copyright (c)
+2025 opencode) by `scripts/l10n/import-desktop-terms.mjs`. The MIT License text
+is below, under the file-type icons.
+
 ## File-type icons from opencode and the Material Icon Theme
 
 Vendored in `icons/file-types/` and generated into the Android and iOS

@@ -167,6 +167,15 @@ areas, status column, fold, system bars, simulator pose control) lives in
   inside SwiftUI `List`. They carry their own padding, background, and tap
   handling. Use `ScrollView` + `VStack` with manual section headers.
 
+## Translations
+
+- OpenCode Mobile ships in the 56 languages of `scripts/l10n/languages.mjs` on both
+  platforms ([docs/translating.md](docs/translating.md)). After adding or changing English
+  text, run `node scripts/translate.mjs all`, then `node scripts/check-translations.mjs`;
+  String Checks fails on missing, stale or broken translations.
+- Give short or ambiguous strings and every placeholder a context note (a comment above the
+  Android string, the catalog comment on iOS): the translator reads it.
+
 ## API Assumptions
 
 - Support **both** server protocols on every Connection Profile: classic
