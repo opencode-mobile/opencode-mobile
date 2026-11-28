@@ -7,48 +7,51 @@ description: "Translations: use after adding or changing app copy, or to fix, re
 
 OpenCode Mobile ships in English and 56 languages on iOS and Android. Whoever changes the copy
 keeps the translations current in the same change. `scripts/translate.mjs` finds the work,
-writes it as small task files and applies the answers; you do the translating. Run commands
-from the repository root.
+writes it as small tasks and applies the answers; you do the translating. Run commands from the
+repository root.
+
+Run the whole translation step in one fresh subagent (Sonnet is enough) rather than in a long
+feature session: every turn re-sends the agent's context, and translating needs nothing from
+the feature session beyond the string notes. Tell it: "Load the translate skill and translate
+the app's missing strings. Reply with what you applied and any string you were unsure about."
 
 ## Steps
 
-1. **Status.** `node scripts/translate.mjs status`. Done when it says every language is up to
-   date. A key whose English changed shows as stale and is translated again; for a typo fix
-   that keeps the meaning, keep the translations instead with
-   `node scripts/translate.mjs accept <key>`.
-2. **Tasks.** `node scripts/translate.mjs tasks`. It prints the task files and the folder they
-   are in. A task covers a few strings for up to 10 languages.
-3. **Work every task.** Up to 3 tasks: work them yourself, one after another. More: one
-   subagent per task, at most 8 at a time, each told: "Load the translate skill and work the
-   task in `<task file>`. Reply with one line: done, and any string you were unsure about."
-   One task per subagent keeps each context small. For each task:
-   - Read the task file. Translate by the rules below, using the task's notes, words and form
-     of address.
-   - Look up a string only when it's unclear: a single word that could be a verb or a noun, a
-     placeholder whose value you can't tell, a term you don't know how this app says. Ask for
-     every string and language you need in one call:
-     `node scripts/l10n/lookup.mjs <id>,<id> <code>,<code>` (code usage, nearby strings and
-     their translations, each language's words) or
-     `node scripts/l10n/lookup.mjs --find "<English words>" <code>,<code>` (how the app already
-     says a word or phrase).
-   - Write the answer to the task's answer file, then run its check command. The task is done
-     when the check reports 0 errors and you have weighed every hint: change a string only
-     where the hint points at a real problem.
-4. **Apply.** `node scripts/translate.mjs apply <folder>`. Done when it reports no failed or
-   unanswered strings; otherwise fix those answers and apply again.
-5. **Confirm.** `node scripts/check-translations.mjs` passes. Commit the changed
-   `values-*/strings.xml`, `Localizable.xcstrings`, `InfoPlist.xcstrings` and
-   `l10n/source-hashes.json` with the feature.
+1. **Tasks.** `node scripts/translate.mjs tasks`. It prints the tasks in full when they are
+   small, or lists the task files. "Nothing to translate" ends the job. Add
+   `--redo <key>` for a key whose English changed meaning without its text changing much; a
+   changed English text is picked up on its own. For a typo fix that keeps the meaning, keep
+   the translations instead: `node scripts/translate.mjs accept <key>`.
+2. **Answer every task.** Translate by the rules below, using each task's notes, words and form
+   of address. Write all the answer files in one turn. Look a string up only when it is unclear
+   (a single word that could be a verb or a noun, a placeholder whose value you can't tell, a
+   term you don't know how this app says), with every string and language you need in one
+   call: `node scripts/l10n/lookup.mjs <id>,<id> <code>,<code>` (code usage, nearby strings
+   and their translations, each language's words) or
+   `node scripts/l10n/lookup.mjs --find "<English words>" <code>,<code>`.
+   More than about 6 task files: give each one to its own subagent (at most 8 at a time) with
+   "Load the translate skill and answer the task in `<task file>`; check it with
+   check-answer.mjs. Reply with one line."
+3. **Check.** `node scripts/l10n/check-answer.mjs <task folder>` checks every answer. Done when
+   it reports 0 errors and you have weighed every hint. A hint is a question, not a rule:
+   dismiss it when the string means something else there (the other string it names may be a
+   different role).
+4. **Apply.** `node scripts/translate.mjs apply <task folder>` checks again, writes both apps,
+   updates `l10n/source-hashes.json` and runs `scripts/check-translations.mjs`. Done when it
+   reports no failed strings and the check passes. Commit the changed `values-*/strings.xml`,
+   `Localizable.xcstrings`, `InfoPlist.xcstrings` and `l10n/source-hashes.json` with the
+   feature. (`tasks` may already have written strings that one platform had and the other
+   lacked; they belong in the same commit.)
 
-Edit the string files only through `apply`, so every translation passes the same checks as CI.
+`node scripts/translate.mjs status` shows what is missing or stale without writing anything,
+and lists keys translated everywhere but not recorded in `l10n/source-hashes.json`.
 
-## Reviewing translations
+## Reviewing or fixing translations
 
 `node scripts/translate.mjs tasks --review --keys a,b [codes]` writes review tasks for those
-keys' current translations; then work and apply them as above. `--review --all` reviews every
-string in every language, millions of tokens: keep it for a new language or a large rewrite.
-To fix one known-bad translation, edit `values-<code>/strings.xml` and the catalog entry by hand
-and run the check.
+keys' current translations; answer, check and apply them as above. Fix one known-bad
+translation the same way, with its key and language. `--review --all` reviews every string in
+every language, millions of tokens: keep it for a new language or a large rewrite.
 
 ## Translation rules
 

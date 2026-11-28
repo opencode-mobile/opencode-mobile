@@ -25,9 +25,9 @@ placeholder holds: `<!-- Button on the archive dialog. %1$s is the session title
 translator reads these notes. A short comment without a full stop is a heading for the strings
 under it that share its first keys' prefix.
 
-Then follow the translate skill: `scripts/translate.mjs status` lists what's missing, `tasks`
-writes it as small task files, the agent working on the change translates them, and `apply`
-checks the answers and writes both apps. Without an agent, push the English alone and say so in
+Then follow the translate skill: `scripts/translate.mjs tasks` writes what's missing as small
+tasks, an agent translates them, and `apply` checks the answers and writes both apps.
+`status` shows what's missing without writing anything. Without an agent, push the English alone and say so in
 the pull request; a maintainer translates before merge.
 
 When the English of a key changes, `l10n/source-hashes.json` (the English each key was
@@ -52,7 +52,12 @@ keeps the meaning, keep the translations with `node scripts/translate.mjs accept
   translated with another word than the language's, a different translation of the same English
   elsewhere in the app, stray spaces, a dropped … or ·.
 - `apply` checks every answer again with the rules of `scripts/check-translations.mjs`
-  (`scripts/l10n/rules.mjs`), writes the ones that pass and updates `l10n/source-hashes.json`.
+  (`scripts/l10n/rules.mjs`), writes the ones that pass, records the keys its tasks covered in
+  `l10n/source-hashes.json` (a stale key only once every language has it again) and runs
+  `check-translations.mjs`.
+- The translation step runs best in one fresh subagent: every agent turn re-sends its context,
+  so a long feature session pays for each one. A small change takes about four turns: `tasks`
+  (it prints small tasks in full), the answers, `check-answer.mjs <task folder>`, `apply`.
 - `scripts/l10n/consistency.mjs` and `scripts/l10n/term-sweep.mjs` are one-off passes after a
   full translation of a language: they pick one word per term and apply it everywhere, and
   `consistency.mjs --save` records the choices in `l10n/terms.json`.

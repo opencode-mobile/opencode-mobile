@@ -22,6 +22,7 @@
 // each key was translated from, so a key whose English changed shows up as stale until it is
 // translated again, and scripts/check-translations.mjs fails CI until then.
 
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -49,31 +50,17 @@ import { usageIndex } from "./l10n/usage.mjs";
 import { englishText, formOfAddress, glossary, glossaryFor, termsFor } from "./l10n/terms.mjs";
 import { answerFor, normalizeAnswer, parseAnswerText } from "./l10n/answers.mjs";
 
-const REVIEW_LOG = join(ROOT, "l10n/review-status.json");
 const INFOPLIST_NOTE = "iOS permission prompt: the system shows it when the app first asks for this access.";
 
 function area(key) {
   return key.split(/[._]/)[0];
 }
 
-function readJsonOr(path, fallback) {
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch (e) {
-    if (e.code === "ENOENT") return fallback;
-    throw e;
-  }
-}
-
-function sortKeys(object) {
-  return Object.fromEntries(Object.keys(object).sort().map((k) => [k, object[k]]));
-}
-
 // ---------------------------------------------------------------------------------------------
 // Task text
-// lean (agent tasks): a code line only for a bare short string with no note ("Open",
-// "{1} queued"), the kind an agent would otherwise have to look up or guess.
-function itemFor(unit, text, usage, lean = false) {
+// A code line only for a bare short string with no note ("Open", "{1} queued"), the kind an
+// agent would otherwise have to look up or guess.
+function itemFor(unit, text, usage) {
   const item = { id: text.id, english: text.english };
   const english = englishText(text.english);
   if (unit.plural) item.plural = true;
@@ -83,7 +70,7 @@ function itemFor(unit, text, usage, lean = false) {
   if (notes.length) item.note = notes.join(" / ");
   const use = usage?.get(unit.key)?.[0];
   const words = (typeof text.english === "string" ? text.english : text.english.other ?? english).split(/\s+/).length;
-  if (use && (!lean || (!item.note && words <= 3))) item.used_in = use;
+  if (use && !item.note && words <= 3) item.used_in = use;
   return item;
 }
 
@@ -203,9 +190,9 @@ function planRequests(workByLanguage, batch = 60) {
 }
 
 // The strings of a request, each once.
-function itemsOf(sections, usage, lean = true) {
+function itemsOf(sections, usage) {
   const items = new Map();
-  for (const s of sections) for (const w of s.work) if (!items.has(w.text.id)) items.set(w.text.id, itemFor(w.unit, w.text, usage, lean));
+  for (const s of sections) for (const w of s.work) if (!items.has(w.text.id)) items.set(w.text.id, itemFor(w.unit, w.text, usage));
   return [...items.values()];
 }
 
@@ -215,6 +202,11 @@ function idsOf(section, items) {
 
 // ---------------------------------------------------------------------------------------------
 // Finding the work
+//
+// l10n/source-hashes.json records the English each key was translated from. A key is stale when
+// its English changed since (or --redo names it): every language translates it again. A key with
+// no entry is new: only the languages that lack it translate it. A key that is translated
+// everywhere but has no entry (a hand translation) is unrecorded; `accept` records it.
 
 function findUnit(units, key) {
   const unit = units.find((u) => u.key === key || u.android?.name === key);
@@ -222,12 +214,19 @@ function findUnit(units, key) {
   return unit;
 }
 
-// Strings each language needs translated: missing on a platform, or stale (English changed since
-// they were translated, or --redo). A string one platform already has is copied to the other
-// when it passes the checks, rather than translated again.
+// --redo keys split into string keys and iOS permission prompt keys.
+function splitRedo(units, redo) {
+  const plist = readInfoPlistCatalog().english;
+  const plistKeys = new Set([...redo].filter((key) => key in plist));
+  const unitKeys = new Set([...redo].filter((key) => !plistKeys.has(key)).map((key) => findUnit(units, key).key));
+  return { unitKeys, plistKeys };
+}
+
+// Strings each language needs translated. A string one platform already has is copied to the
+// other when it passes the checks, rather than translated again.
 function translateWork(units, catalog, languages, lock, { keys, redo }) {
   const stale = new Set(units.filter((u) => lock[u.key] && lock[u.key] !== u.hash).map((u) => u.key));
-  for (const key of redo) stale.add(findUnit(units, key).key);
+  for (const key of redo) stale.add(key);
   const states = new Map(languages.map((l) => [l.ios, new LanguageState(l, units, catalog)]));
   const work = new Map();
   let copied = 0;
@@ -256,14 +255,24 @@ function translateWork(units, catalog, languages, lock, { keys, redo }) {
 
 function infoPlistWork(languages, lock, redo) {
   const { catalog, english } = readInfoPlistCatalog();
+  const stale = new Set(Object.entries(english).filter(([key, value]) => (lock[`InfoPlist:${key}`] && lock[`InfoPlist:${key}`] !== infoPlistHash(value)) || redo.has(key)).map(([key]) => key));
   const work = [];
   for (const language of languages) {
-    const ids = Object.entries(english)
-      .filter(([key, value]) => !catalog.strings[key].localizations[language.ios]?.stringUnit?.value || lock[`InfoPlist:${key}`] !== infoPlistHash(value) || redo.has(key))
-      .map(([key]) => key);
+    const ids = Object.keys(english).filter((key) => stale.has(key) || !catalog.strings[key].localizations[language.ios]?.stringUnit?.value);
     if (ids.length) work.push({ language, ids });
   }
-  return { english, work };
+  return { english, work, stale };
+}
+
+// Keys translated everywhere that source-hashes.json doesn't record: CI fails them until `accept`.
+function unrecorded(units, catalog, lock) {
+  const states = LANGUAGES.map((l) => new LanguageState(l, units, catalog));
+  const keys = units.filter((u) => !lock[u.key] && states.every((s) => textsOf(u).every((t) => Object.values(s.current(u, t)).every((v) => v !== null)))).map((u) => u.key);
+  const plist = readInfoPlistCatalog();
+  for (const key of Object.keys(plist.english)) {
+    if (!lock[`InfoPlist:${key}`] && LANGUAGES.every((l) => plist.catalog.strings[key].localizations[l.ios]?.stringUnit?.value)) keys.push(key);
+  }
+  return keys;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -283,11 +292,12 @@ function status(languages) {
     total += n;
     for (const w of list) keys.add(w.unit.key);
   }
-  if (!total) return console.log("Every language is up to date.");
-  console.log(`\n${total} strings to translate${stale.size ? `, ${stale.size} key(s) stale because their English changed` : ""}.`);
+  const loose = unrecorded(units, catalog, lock);
+  if (loose.length) console.log(`Translated everywhere but not recorded in l10n/source-hashes.json (CI fails them): ${loose.join(", ")}. If their translations match the current English, run: node scripts/translate.mjs accept ${loose.join(" ")}`);
+  if (!total) return console.log("Nothing to translate: every language is up to date.");
+  console.log(`\n${total} strings to translate${stale.size ? `; ${stale.size} key(s) are stale because their English changed` : ""}.`);
   console.log(`Keys: ${[...keys].slice(0, 30).join(", ")}${keys.size > 30 ? ` and ${keys.size - 30} more` : ""}`);
   if (plist.work.length) console.log("Plus iOS permission prompts (InfoPlist.xcstrings).");
-  console.log("Run `node scripts/translate.mjs tasks` to write them as tasks.");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -296,7 +306,10 @@ function status(languages) {
 // A task holds what most strings need: each string once with its notes (and one code line when
 // it is a bare short string with no note), then per language its form of address and its words
 // for the terms the strings use. The agent pulls more with scripts/l10n/lookup.mjs where a string
-// needs it, and checks its answer with scripts/l10n/check-answer.mjs.
+// needs it, and checks its answers with scripts/l10n/check-answer.mjs.
+
+// Small enough to print in full, so the agent reads the tasks without opening each file.
+const PRINT_LIMIT = 16000;
 
 function writeTask(out, counts, kind, { items, specs }) {
   const folderName = specs.length === 1 ? specs[0].language.ios : "multi";
@@ -320,17 +333,18 @@ function tasks(languages, args) {
   markUntranslatable(catalog);
   const lock = readLock();
   const usage = usageIndex(units);
+  const redo = splitRedo(units, args.redo);
   const out = args.out ?? mkdtempSync(join(tmpdir(), "opencode-mobile-l10n-"));
   mkdirSync(out, { recursive: true });
   if (readdirSync(out).length) throw new Error(`${out} isn't empty; give tasks a new folder`);
   const counts = new Map();
   const files = [];
-  const plan = { kind: args.review ? "review" : "translate", languages: languages.map((l) => l.ios), full: false, stale: [] };
-  const full = !args.keys;
+  // What apply needs to update source-hashes.json: the keys these tasks cover, and which of them
+  // were stale, so a key whose tasks didn't reach every language stays stale.
+  const plan = { kind: args.review ? "review" : "translate", languages: languages.map((l) => l.ios), keys: [], stale: [], infoplist: [], infoplistStale: [] };
 
   if (args.review) {
     if (!args.keys && !args.all) throw new Error("tasks --review needs --keys a,b, or --all to review every string (a large run)");
-    plan.full = full && languages.length === LANGUAGES.length;
     const work = new Map();
     for (const language of languages) {
       const state = new LanguageState(language, units, catalog);
@@ -351,12 +365,14 @@ function tasks(languages, args) {
       files.push(writeTask(out, counts, "review", { items, specs }));
     }
   } else {
-    const { work, states, stale, copied } = translateWork(units, catalog, languages, lock, args);
-    plan.stale = [...stale];
+    const { work, states, stale, copied } = translateWork(units, catalog, languages, lock, { keys: args.keys, redo: redo.unitKeys });
+    const covered = new Set([...work.values()].flatMap((list) => list.map((w) => w.unit.key)));
+    plan.keys = [...covered];
+    plan.stale = [...covered].filter((key) => stale.has(key));
     for (const state of states.values()) state.flush();
     if (copied) {
       writeCatalog(catalog);
-      console.log(`Copied ${copied} strings that one platform already had to the other.`);
+      console.log(`Copied ${copied} strings that one platform already had to the other (written to the string files).`);
     }
     for (const sections of planRequests(work)) {
       const items = itemsOf(sections, usage);
@@ -364,22 +380,29 @@ function tasks(languages, args) {
     }
   }
 
-  if (full) {
-    const { english, work } = args.review ? infoPlistReviewWork(languages) : infoPlistWork(languages, lock, args.redo);
-    const items = Object.entries(english).map(([id, value]) => ({ id, english: value, note: INFOPLIST_NOTE }));
+  // iOS permission prompts: with every string (no --keys), or when --redo names one.
+  if (!args.keys || redo.plistKeys.size) {
+    const plist = args.review ? infoPlistReviewWork(languages) : infoPlistWork(languages, lock, redo.plistKeys);
+    if (!args.review) {
+      plan.infoplist = [...new Set(plist.work.flatMap((w) => w.ids))];
+      plan.infoplistStale = plan.infoplist.filter((key) => plist.stale.has(key));
+    }
+    const items = Object.entries(plist.english).map(([id, value]) => ({ id, english: value, note: INFOPLIST_NOTE }));
     const per = Math.max(1, Math.min(MAX_LANGUAGES, Math.floor(MAX_STRINGS / items.length)));
-    for (let i = 0; i < work.length; i += per) {
-      const specs = work.slice(i, i + per).map((w) => ({ language: w.language, ids: w.ids.length === items.length ? null : w.ids, ...(w.current ? { current: w.current } : {}) }));
+    for (let i = 0; i < plist.work.length; i += per) {
+      const specs = plist.work.slice(i, i + per).map((w) => ({ language: w.language, ids: w.ids.length === items.length ? null : w.ids, ...(w.current ? { current: w.current } : {}) }));
       files.push(writeTask(out, counts, args.review ? "infoplist-review" : "infoplist", { items, specs }));
     }
   }
 
   writeFileSync(join(out, "plan.json"), `${JSON.stringify(plan, null, 2)}\n`);
   if (!files.length) return console.log(args.review ? "Nothing to review." : "Nothing to translate: every language is up to date.");
-  const size = files.reduce((n, f) => n + readFileSync(f, "utf8").length, 0);
-  console.log(`${files.length} task(s), ${Math.round(size / 1000)}k characters in all, in ${out}:`);
-  for (const f of files) console.log(`  ${f}`);
-  console.log(`Work them with the translate skill, then run: node scripts/translate.mjs apply ${out}`);
+  const texts = files.map((f) => readFileSync(f, "utf8"));
+  const size = texts.reduce((n, t) => n + t.length, 0);
+  console.log(`${files.length} task(s), ${Math.round(size / 1000)}k characters, in ${out}`);
+  if (size <= PRINT_LIMIT) for (const text of texts) console.log(`\n${text}`);
+  else for (const f of files) console.log(`  ${f}`);
+  console.log(`\nWhen every answer is written: node scripts/translate.mjs apply ${out}`);
 }
 
 function infoPlistReviewWork(languages) {
@@ -410,8 +433,15 @@ function taskFiles(dir) {
   return found;
 }
 
+function runScript(script, ...scriptArgs) {
+  return spawnSync(process.execPath, [join(ROOT, script), ...scriptArgs], { cwd: ROOT, stdio: "inherit" }).status;
+}
+
+// Checks the answers (check-answer.mjs: errors and hints), writes the ones that pass, updates
+// source-hashes.json, then runs check-translations.mjs.
 function apply(dir) {
   const plan = JSON.parse(readFileSync(join(dir, "plan.json"), "utf8"));
+  runScript("scripts/l10n/check-answer.mjs", dir);
   const units = loadUnits();
   const catalog = readCatalog();
   markUntranslatable(catalog);
@@ -426,7 +456,6 @@ function apply(dir) {
   const failures = [];
   const unanswered = [];
   const failedKeys = new Set();
-  const doneLanguages = new Map(); // language -> strings reviewed, for a full review
   let written = 0;
 
   for (const base of taskFiles(dir)) {
@@ -472,7 +501,6 @@ function apply(dir) {
         }
         written++;
       }
-      if (reviewing && !infoplist) doneLanguages.set(code, (doneLanguages.get(code) ?? 0) + task.languages[code].length);
     }
   }
 
@@ -481,38 +509,32 @@ function apply(dir) {
   writeCatalog(plist.catalog, IOS_INFOPLIST_CATALOG);
 
   if (plan.kind === "translate") {
-    // A key is current once every language has it from this English. A stale key needed every
-    // language in the tasks; a new key only the ones that lacked it.
-    const all = plan.languages.length === LANGUAGES.length;
+    // Record a key these tasks covered once every language has it. A stale key also needs these
+    // tasks to have covered every language, or its other languages still hold the old English.
+    const everyLanguage = plan.languages.length === LANGUAGES.length;
     const allStates = LANGUAGES.map(stateOf);
-    for (const unit of units) {
-      if (lock[unit.key] === unit.hash || failedKeys.has(unit.key)) continue;
-      // A stale key that these tasks didn't translate everywhere stays stale.
-      if (lock[unit.key] && !(plan.stale.includes(unit.key) && all)) continue;
-      const complete = allStates.every((s) => textsOf(unit).every((t) => Object.values(s.current(unit, t)).every((v) => v !== null)));
-      if (complete) lock[unit.key] = unit.hash;
+    for (const key of plan.keys) {
+      const unit = units.find((u) => u.key === key);
+      if (!unit || failedKeys.has(key) || (plan.stale.includes(key) && !everyLanguage)) continue;
+      if (allStates.every((s) => textsOf(unit).every((t) => Object.values(s.current(unit, t)).every((v) => v !== null)))) lock[key] = unit.hash;
     }
-    for (const [key, value] of Object.entries(plist.english)) {
-      const complete = LANGUAGES.every((l) => plist.catalog.strings[key].localizations[l.ios]?.stringUnit?.value);
-      if (complete && !failedKeys.has(key)) lock[`InfoPlist:${key}`] = infoPlistHash(value);
+    for (const key of plan.infoplist) {
+      if (failedKeys.has(key) || (plan.infoplistStale.includes(key) && !everyLanguage)) continue;
+      if (LANGUAGES.every((l) => plist.catalog.strings[key].localizations[l.ios]?.stringUnit?.value)) lock[`InfoPlist:${key}`] = infoPlistHash(plist.english[key]);
     }
     writeLock(lock);
   }
-  if (plan.kind === "review" && plan.full && !unanswered.length) {
-    const status = readJsonOr(REVIEW_LOG, {});
-    const date = new Date().toISOString().slice(0, 10);
-    for (const [code, reviewed] of doneLanguages) status[code] = { reviewed, date };
-    writeFileSync(REVIEW_LOG, `${JSON.stringify(sortKeys(status), null, 2)}\n`);
-  }
 
-  console.log(`${plan.kind === "review" ? "Applied" : "Wrote"} ${written} strings.`);
+  console.log(`\n${plan.kind === "review" ? "Applied" : "Wrote"} ${written} strings.`);
   for (const line of unanswered) console.log(`  no answer: ${line}`);
   for (const line of failures.slice(0, 40)) console.log(`  failed: ${line}`);
   if (failures.length > 40) console.log(`  … and ${failures.length - 40} more`);
   if (unanswered.length || failures.length) {
-    console.log("Fix those answers (check-answer.mjs shows why) and apply again, or write new tasks for what's left.");
+    console.log("Fix those answers and apply again; the strings that passed are written.");
     process.exitCode = 1;
-  } else console.log("Run node scripts/check-translations.mjs to confirm.");
+    return;
+  }
+  if (runScript("scripts/check-translations.mjs") !== 0) process.exitCode = 1;
 }
 
 // ---------------------------------------------------------------------------------------------

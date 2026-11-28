@@ -1,4 +1,4 @@
-// Reading a model's or an agent's answer to a translation or review request.
+// Reading an agent's answer to a translation or review task.
 
 // The answer for one language: {"<field>": {"<ios code>": {"<id>": …}}}. An answer that covers
 // one language may leave out the language level.

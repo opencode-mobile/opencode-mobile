@@ -52,10 +52,10 @@ const configErrors = [];
 checkConfig();
 const infoPlistEnglish = readInfoPlistStrings();
 const infoPlist = existsSync(IOS_INFOPLIST_CATALOG) ? readCatalog(IOS_INFOPLIST_CATALOG) : null;
-if (!infoPlist) configErrors.push(`${rel(IOS_INFOPLIST_CATALOG)} is missing; node scripts/translate.mjs all creates it`);
+if (!infoPlist) configErrors.push(`${rel(IOS_INFOPLIST_CATALOG)} is missing; the translate skill (node scripts/translate.mjs tasks, then apply) creates it`);
 for (const [key, value] of Object.entries(infoPlistEnglish)) {
   if (infoPlist && infoPlist.strings[key]?.localizations?.en?.stringUnit?.value !== value) {
-    configErrors.push(`InfoPlist.xcstrings English for ${key} differs from the Info.plist; run node scripts/translate.mjs all`);
+    configErrors.push(`InfoPlist.xcstrings English for ${key} differs from the Info.plist; translate it with the translate skill (node scripts/translate.mjs tasks, then apply)`);
   }
 }
 
@@ -92,8 +92,8 @@ if (stale.length) {
 if (failed) {
   console.log(`
 To fix:
-  node scripts/translate.mjs all              translates missing and changed strings in every language
-  node scripts/translate.mjs --accept <key>   keeps a key's translations after an English typo fix
+  the translate skill (.agents/skills/translate) translates missing and changed strings
+  node scripts/translate.mjs accept <key>     keeps a key's translations after an English typo fix
 Without model access, leave the strings for a maintainer and say so in the pull request.`);
   process.exit(1);
 }
@@ -114,7 +114,7 @@ function checkLanguage(language) {
   const androidEntries = readAndroid(path);
   for (const name of androidEntries.keys()) {
     if (untranslatable.has(name)) errors.push(`${name}: marked translatable="false" in English; remove it`);
-    else if (!englishNames.has(name)) errors.push(`${name}: gone from English; remove it (translate.mjs does)`);
+    else if (!englishNames.has(name)) errors.push(`${name}: gone from English; remove it`);
   }
   for (const unit of units) {
     for (const text of textsOf(unit)) {
