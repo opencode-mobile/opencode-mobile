@@ -98,6 +98,16 @@ ktlint {
     }
 }
 
+// The languages the app is translated into, as res/values-<code> qualifiers. Keep in sync with
+// scripts/l10n/languages.mjs; scripts/check-translations.mjs fails when they differ.
+val appLanguages =
+    listOf(
+        "en", "am", "az", "bg", "bn", "bs", "ca", "cs", "da", "de", "dz", "el", "es", "et", "fi",
+        "fo", "fr", "hi", "hr", "hu", "hy", "in", "is", "it", "ja", "ka", "km", "ko", "lo", "lt",
+        "lv", "mk", "mn", "ms", "my", "nb", "ne", "nl", "pl", "pt-rBR", "ro", "ru", "si", "sk",
+        "sl", "sq", "sr", "sv", "tg", "th", "tk", "tr", "uk", "uz", "vi", "zh-rCN", "zh-rTW",
+    )
+
 android {
     namespace = "dev.opencode.mobile"
     // Compose BOM 2026.09 and hilt-navigation-compose 1.4 require compile SDK 37.
@@ -111,6 +121,12 @@ android {
         targetSdk = 36
         versionCode = releaseVersionCode ?: 1
         versionName = releaseVersionName ?: defaultVersionName
+    }
+
+    lint {
+        // A language missing a string, or keeping one gone from English, fails lint too
+        // (scripts/check-translations.mjs is the CI gate).
+        error += listOf("MissingTranslation", "ExtraTranslation", "MissingQuantity")
     }
 
     signingConfigs {
@@ -128,6 +144,10 @@ android {
         // Lists the app in the system per-app language setting. Needs
         // res/resources.properties for the default (unqualified) locale.
         generateLocaleConfig = true
+        // Library (Material, AndroidX) translations are kept only for the app's languages, so a
+        // label such as a sheet's drag handle never reads in a language the app isn't in. The
+        // debug pseudo-locales stay available for layout checks.
+        localeFilters += appLanguages + listOf("en-rXA", "ar-rXB")
     }
 
     buildTypes {

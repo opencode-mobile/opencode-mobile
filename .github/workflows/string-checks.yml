@@ -46,6 +46,12 @@ jobs:
             ios/OpenCode Mobile/Hex Code/**
             scripts/check-string-keys.mjs
             scripts/check-hardcoded-text.mjs
+            scripts/check-translations.mjs
+            scripts/translate.mjs
+            scripts/l10n/**
+            l10n/**
+            android/app/build.gradle.kts
+            ios/OpenCode Mobile/OpenCode Mobile.xcodeproj/project.pbxproj
             scripts/check-theme-presets.mjs
             scripts/check-icons.mjs
             scripts/lib/**
@@ -72,6 +78,14 @@ jobs:
       # Fails when a key exists on one platform but not the other (#886).
       - name: String key parity
         run: node scripts/check-string-keys.mjs
+
+      # Fails when a language is missing a string, keeps one gone from English, has broken
+      # placeholders, plurals or escaping, or was translated from older English (#1130).
+      - name: Translations
+        run: node scripts/check-translations.mjs
+
+      - name: Translation tooling tests
+        run: node --test scripts/l10n/*.test.mjs
 
       # The in-app What's new sheet reads this file on both platforms.
       - name: Release notes
