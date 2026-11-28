@@ -224,6 +224,7 @@ internal fun MessageListAutoFollowArmingEffect(
 internal fun MessageListAutoFollowAppendEffect(
     messageCount: Int,
     newestMessageId: String?,
+    localSendIds: Set<String>,
     autoFollowEnabled: Boolean,
     autoFollowTolerancePx: Int,
     bottomAnchorHeightPx: Int,
@@ -231,12 +232,14 @@ internal fun MessageListAutoFollowAppendEffect(
     scrollController: MessageListTimelineScrollController,
 ) {
     val currentNewestMessageId by rememberUpdatedState(newestMessageId)
+    val currentLocalSendIds by rememberUpdatedState(localSendIds)
     LaunchedEffect(messageCount, autoFollowEnabled) {
         if (
             autoFollowState.onMessageCountChanged(
                 messageCount = messageCount,
                 autoFollowEnabled = autoFollowEnabled,
                 newestMessageId = currentNewestMessageId,
+                localSendIds = currentLocalSendIds,
             )
         ) {
             withFrameNanos { }

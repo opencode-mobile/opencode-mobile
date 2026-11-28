@@ -481,7 +481,8 @@ private struct SessionChatTimelineReadyView: View {
                 bottomContentPadding: 0,
                 bottomOverlayInset: listBottomInset,
                 bottomOverlayAnimation: props.bottomOverlayAnimation,
-                topOverlayInset: topOverlayInset
+                topOverlayInset: topOverlayInset,
+                isLocalSend: { $0.row.role == .user && $0.row.isPending }
             ) { item in
                 SessionChatTimelineHostRow(
                     message: item.row,

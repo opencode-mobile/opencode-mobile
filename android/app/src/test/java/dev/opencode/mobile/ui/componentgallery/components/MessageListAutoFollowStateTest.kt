@@ -107,6 +107,45 @@ class MessageListAutoFollowStateTest {
     }
 
     @Test
+    fun localSendWhileAwayFromEnd_followsAndArms() {
+        val state = MessageListAutoFollowState(initialMessageCount = 8)
+        state.onMessageCountChanged(messageCount = 8, autoFollowEnabled = true, newestMessageId = "m7")
+        state.updatePinnedState(isPinnedToEnd = false, messageCount = 8)
+
+        assertTrue(
+            state.onMessageCountChanged(
+                messageCount = 9,
+                autoFollowEnabled = true,
+                newestMessageId = "local",
+                localSendIds = setOf("local"),
+            ),
+        )
+        // The reply that follows keeps following.
+        assertTrue(state.shouldEnsureLayoutEnd(autoFollowEnabled = true))
+    }
+
+    @Test
+    fun appendWhileAwayWithOnlyAnOlderLocalSend_doesNotFollow() {
+        val state = MessageListAutoFollowState(initialMessageCount = 8)
+        state.onMessageCountChanged(
+            messageCount = 8,
+            autoFollowEnabled = true,
+            newestMessageId = "local",
+            localSendIds = setOf("local"),
+        )
+        state.updatePinnedState(isPinnedToEnd = false, messageCount = 8)
+
+        assertFalse(
+            state.onMessageCountChanged(
+                messageCount = 9,
+                autoFollowEnabled = true,
+                newestMessageId = "m8",
+                localSendIds = setOf("local"),
+            ),
+        )
+    }
+
+    @Test
     fun appendWhilePinnedWithIds_follows() {
         val state = MessageListAutoFollowState(initialMessageCount = 8)
         state.onMessageCountChanged(messageCount = 8, autoFollowEnabled = true, newestMessageId = "m7")
