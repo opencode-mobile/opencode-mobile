@@ -56,7 +56,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile verwendet die Kamera, um einen OpenCode-2-Kopplungs-QR-Code von deinem Computer zu scannen."
+            "value" : "OpenCode Mobile verwendet die Kamera, um den Kopplungs-QR-Code von OpenCode 2 auf deinem Computer zu scannen."
           }
         },
         "dz" : {
@@ -92,7 +92,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile käyttää kameraa tietokoneesi OpenCode 2 -parinmuodostus-QR-koodin skannaamiseen."
+            "value" : "OpenCode Mobile käyttää kameraa, jotta voit skannata tietokoneeltasi OpenCode 2 -laiteparin QR-koodin."
           }
         },
         "fo" : {
@@ -152,7 +152,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobileは、お使いのコンピューターに表示されるOpenCode 2のペアリングQRをスキャンするためにカメラを使用します。"
+            "value" : "OpenCode Mobileは、お使いのコンピューターに表示されるOpenCode 2のペアリング用QRコードをスキャンするためにカメラを使用します。"
           }
         },
         "ka" : {
@@ -254,7 +254,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile использует камеру, чтобы сканировать QR сопряжения OpenCode 2 с вашего компьютера."
+            "value" : "OpenCode Mobile использует камеру, чтобы сканировать QR-код для сопряжения с OpenCode 2 на вашем компьютере."
           }
         },
         "si" : {
@@ -320,7 +320,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile використовує камеру, щоб сканувати QR сполучення OpenCode 2 з вашого комп'ютера."
+            "value" : "OpenCode Mobile використовує камеру, щоб сканувати QR-код сполучення OpenCode 2 з вашого комп’ютера."
           }
         },
         "uz" : {
@@ -440,7 +440,7 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile käyttää Face ID:tä sovelluksen avaamiseen, kun sovelluslukitus on päällä."
+            "value" : "OpenCode Mobile käyttää Face ID:tä sovelluksen avaamiseen, kun sovelluslukko on päällä."
           }
         },
         "fo" : {
@@ -908,7 +908,7 @@
         "my" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "စက်ထဲတွင်ပင် စာရိုက်ဝင်ရာတွင် အသံဖြင့်ရိုက်ရန် OpenCode Mobile က မိုက်ခရိုဖုန်းကို သုံးသည်။ အသံသည် ဤစက်ထဲတွင်သာ ရှိနေမည်။"
+            "value" : "စက်ထဲတွင်ပင် စာရိုက်ကွက်အတွက် အသံဖြင့်ရိုက်ရန် OpenCode Mobile က မိုက်ခရိုဖုန်းကို သုံးသည်။ အသံသည် ဤစက်ထဲတွင်သာ ရှိနေမည်။"
           }
         },
         "nb" : {
@@ -1016,7 +1016,7 @@
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile використовує мікрофон для диктування в полі повідомлення на пристрої. Звук залишається на цьому пристрої."
+            "value" : "OpenCode Mobile використовує мікрофон для диктування в поле повідомлення безпосередньо на пристрої. Звук залишається на цьому пристрої."
           }
         },
         "uz" : {
@@ -1256,7 +1256,7 @@
         "my" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ပုံသိမ်းရန်ကို သင်ရွေးသောအခါ ဆက်ရှင်မှ ပုံများကို သင့်ဓာတ်ပုံစာကြည့်တိုက်တွင် OpenCode Mobile က သိမ်းသည်။"
+            "value" : "“ပုံ သိမ်းရန်” ကို သင်ရွေးသောအခါ အပိုင်းမှ ပုံများကို သင့်ဓာတ်ပုံစာကြည့်တိုက်တွင် OpenCode Mobile က သိမ်းသည်။"
           }
         },
         "nb" : {
@@ -1346,7 +1346,7 @@
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenCode Mobile จะบันทึกรูปภาพจากเซสชันลงในคลังรูปภาพของคุณเมื่อคุณเลือกบันทึกรูปภาพ"
+            "value" : "OpenCode Mobile จะบันทึกรูปภาพจากเซสชันลงในคลังรูปภาพของคุณเมื่อคุณเลือก “บันทึกรูปภาพ”"
           }
         },
         "tk" : {
@@ -1604,7 +1604,7 @@
         "my" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "စာရိုက်ဝင်ရာတွင် စာသားထည့်ရန် OpenCode Mobile က စက်ထဲရှိ စကားသံမှတ်သားမှုကို သုံးသည်။ အသံသည် ဤစက်ထဲတွင်သာ ရှိနေမည်။"
+            "value" : "စာရိုက်ကွက်ထဲသို့ စာသားထည့်ရန် OpenCode Mobile က စက်ထဲရှိ စကားသံမှတ်သားမှုကို သုံးသည်။ အသံသည် ဤစက်ထဲတွင်သာ ရှိနေမည်။"
           }
         },
         "nb" : {

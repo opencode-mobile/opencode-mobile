@@ -53,9 +53,9 @@
     <string name="connection_setup_pair_again_unreachable">Не удаётся подключиться по сохранённому адресу. Выполните сопряжение заново.</string>
     <string name="connection_setup_pair_again_unauthorized">Сервер отклонил сохранённый вход. Выполните сопряжение заново. Новый пароль выводит из системы все устройства.</string>
     <string name="connection_cleartext_title">Соединение не зашифровано</string>
-    <string name="connection_cleartext_message_one_host">%1$s использует обычный http вне вашей локальной сети и Tailscale. Пароль сервера и всё содержимое сессий передавалось бы без шифрования. Лучше использовать https, VPN или туннель.</string>
-    <string name="connection_cleartext_message_hosts">%1$s используют обычный http вне вашей локальной сети и Tailscale. Пароль сервера и всё содержимое сессий передавалось бы без шифрования. Лучше использовать https, VPN или туннель.</string>
-    <string name="connection_cleartext_message_this_address">Этот адрес использует обычный http вне вашей локальной сети и Tailscale. Пароль сервера и всё содержимое сессий передавалось бы без шифрования. Лучше использовать https, VPN или туннель.</string>
+    <string name="connection_cleartext_message_one_host">%1$s использует обычный http вне вашей локальной сети и Tailscale. Пароль сервера и всё содержимое сессий передавались бы без шифрования. Лучше использовать https, VPN или туннель.</string>
+    <string name="connection_cleartext_message_hosts">%1$s используют обычный http вне вашей локальной сети и Tailscale. Пароль сервера и всё содержимое сессий передавались бы без шифрования. Лучше использовать https, VPN или туннель.</string>
+    <string name="connection_cleartext_message_this_address">Этот адрес использует обычный http вне вашей локальной сети и Tailscale. Пароль сервера и всё содержимое сессий передавались бы без шифрования. Лучше использовать https, VPN или туннель.</string>
     <string name="connection_cleartext_connect_anyway">Всё равно подключить</string>
     <string name="connection_error_invalid_qr">Это не QR сопряжения OpenCode 2</string>
     <string name="connection_error_localhost_qr">В этом QR только адрес localhost</string>
@@ -65,9 +65,9 @@
     <string name="connection_error_enter_pairing_code">Введите код сопряжения</string>
     <string name="connection_error_pairing_link_expired">Ссылка для сопряжения устарела или уже использована</string>
     <string name="connection_error_duplicate_profile">Сервер с таким хостом и именем пользователя уже сохранён</string>
-    <string name="connection_error_qr_scan_failed">QR не подключился. API сопряжения OpenCode 2 ещё меняется, поэтому сканирование может не сработать, хотя приложение исправно. Введите хост и подключитесь. Пароль необязателен. Код сопряжения тоже подойдёт.</string>
+    <string name="connection_error_qr_scan_failed">Не удалось подключиться по QR. API сопряжения OpenCode 2 ещё меняется, поэтому сканирование может не сработать, даже если приложение исправно. Введите хост и подключитесь. Пароль необязателен. Подойдёт и код сопряжения.</string>
     <string name="connection_error_unreachable">Не удаётся связаться с сервером</string>
-    <string name="server_error_pairing_expired">Сопряжение истекло, выполните его заново</string>
+    <string name="server_error_pairing_expired">Срок сопряжения истёк, выполните его заново</string>
     <string name="server_error_not_found">Папка или файл не найдены</string>
     <string name="server_error_not_found_path">Папка или файл не найдены · %1$s</string>
     <string name="server_error_session_busy">Сессия занята</string>
@@ -91,14 +91,14 @@
     <string name="onboarding_connect_page_setup_link">Ещё нет сервера?</string>
     <string name="onboarding_features_title">Что можно\nделать отсюда</string>
     <string name="onboarding_features_sessions_title">Сессии</string>
-    <string name="onboarding_features_sessions_detail">Список, открытие, создание, переименование, ответвление, архив, удаление</string>
+    <string name="onboarding_features_sessions_detail">Список, открытие, создание, переименование, ответвление, архивирование, удаление</string>
     <string name="onboarding_features_chat_title">Чат и остановка</string>
     <string name="onboarding_features_chat_detail">Отправляйте запросы и останавливайте работу на ходу</string>
     <string name="onboarding_features_permissions_title">Разрешения</string>
     <string name="onboarding_features_permissions_detail">Разрешайте или запрещайте запросы (без постоянного запоминания)</string>
     <string name="onboarding_features_changes_title">Изменения</string>
     <string name="onboarding_features_changes_detail">Просмотр диффов сессии</string>
-    <string name="onboarding_features_live_title">Онлайн, пока открыто</string>
+    <string name="onboarding_features_live_title">В реальном времени, пока открыто</string>
     <string name="onboarding_features_live_detail">Поток событий на переднем плане; обновление после переподключения</string>
     <string name="onboarding_setup_title">Настройка opencode serve</string>
     <string name="onboarding_setup_intro">Приложение работает с сервером opencode, который запускаете вы. Ниже короткий путь, подробности — в официальной документации.</string>
@@ -107,7 +107,7 @@
     <string name="onboarding_setup_step1_body">В своём проекте запустите сервер opencode (headless). Не закрывайте его, пока пользуетесь телефоном.</string>
     <string name="onboarding_setup_step2_title">Включите пароль</string>
     <string name="onboarding_setup_step2_body">Задайте OPENCODE_SERVER_PASSWORD. Имя пользователя по умолчанию — opencode, если не задан OPENCODE_SERVER_USERNAME.</string>
-    <string name="onboarding_setup_step3_title">Откройте доступ с телефона</string>
+    <string name="onboarding_setup_step3_title">Настройте доступ с телефона</string>
     <string name="onboarding_setup_step3_body">Рекомендуем Tailscale: установите его на компьютер и телефон, затем используйте Tailscale IP компьютера или имя MagicDNS как URL сервера.\n\nПодойдут и общая локальная сеть, VPN, HTTPS или другой туннель, который вы настроили сами. Приложение не создаёт ретранслятор за вас.</string>
     <string name="onboarding_setup_step4_title">Подключитесь в приложении</string>
     <string name="onboarding_setup_step4_body">Введите базовый URL и пароль. Приложение проверит GET /global/health и сохранит подключение к серверу на этом устройстве.</string>
@@ -124,7 +124,7 @@
     </plurals>
     <string name="servers_saved">Сохранённые</string>
     <string name="server_health_title">Состояние сервера</string>
-    <string name="server_health_ms_ping">мс пинг</string>
+    <string name="server_health_ms_ping">пинг, мс</string>
     <string name="server_health_last_30_min">Последние 30 мин</string>
     <string name="server_health_30_min_ago">30 мин назад</string>
     <string name="server_health_now">сейчас</string>
@@ -133,9 +133,9 @@
     <string name="server_health_range_day">24 ч</string>
     <string name="server_health_range_week">7 д</string>
     <string name="server_health_uptime">Аптайм</string>
-    <string name="server_health_uptime_detail">из %1$s измеренных</string>
+    <string name="server_health_uptime_detail">от измеренных %1$s</string>
     <string name="server_health_reconnects">Переподключения</string>
-    <string name="server_health_reconnects_detail">восстановление в среднем за %1$s</string>
+    <string name="server_health_reconnects_detail">медиана восстановления: %1$s</string>
     <string name="server_health_no_drops">без обрывов</string>
     <string name="server_health_error_rate">Доля ошибок</string>
     <string name="server_health_error_rate_detail">не прошло проверок: %1$d из %2$d</string>
@@ -163,7 +163,7 @@
     <string name="server_health_errors_empty">В этом диапазоне ошибок нет.</string>
     <string name="server_health_error_log">Журнал ошибок</string>
     <string name="server_health_error_log_check">Проверка состояния</string>
-    <string name="server_health_error_log_stream">Живое соединение</string>
+    <string name="server_health_error_log_stream">Соединение в реальном времени</string>
     <string name="server_health_error_log_repeated">%1$d подряд за %2$s</string>
     <string name="server_health_error_log_show_all">Показать все (%1$d)</string>
     <string name="server_health_error_log_show_less">Показать меньше</string>
@@ -181,7 +181,7 @@
     <string name="server_health_protocol_v2">API v2</string>
     <string name="server_health_last_restart">Последний перезапуск</string>
     <string name="server_health_last_restart_ago">%1$s назад</string>
-    <string name="server_health_last_restart_none">Не замечено</string>
+    <string name="server_health_last_restart_none">Не замечен</string>
     <string name="server_health_restarts_seen">Замеченные перезапуски</string>
     <string name="server_health_restarts_seen_value">%1$d</string>
     <string name="server_health_event_streams">Потоки событий</string>
@@ -288,7 +288,7 @@
     <string name="home_fork_title">Ответвить сессию</string>
     <string name="home_fork_confirm">Ответвить</string>
     <string name="home_fork_result_title">Сессия ответвлена</string>
-    <string name="home_fork_result_message">«%1$s» готова.</string>
+    <string name="home_fork_result_message">Сессия «%1$s» готова.</string>
     <string name="home_fork_result_stay">Остаться здесь</string>
     <string name="home_delete_title">Удалить сессию</string>
     <string name="home_delete_message">Удалить сессию «%1$s»?</string>
@@ -305,9 +305,9 @@
     <string name="archived_sessions_section_earlier">Ранее</string>
     <string name="archived_sessions_unarchive">Вернуть из архива</string>
     <string name="archived_sessions_delete">Удалить…</string>
-    <string name="archived_sessions_delete_dialog_message">«%1$s» будет удалена с сервера. Это действие нельзя отменить.</string>
-    <string name="archived_sessions_archived_at">В архиве с %1$s</string>
-    <string name="archived_sessions_unarchived">«%1$s» возвращена из архива</string>
+    <string name="archived_sessions_delete_dialog_message">Сессия «%1$s» будет удалена с сервера. Это действие нельзя отменить.</string>
+    <string name="archived_sessions_archived_at">Архивирована %1$s</string>
+    <string name="archived_sessions_unarchived">Сессия «%1$s» возвращена из архива</string>
     <string name="archived_sessions_undo">Отменить</string>
     <string name="archived_sessions_empty_title">Архивных сессий нет</string>
     <string name="archived_sessions_empty_message">Сессии, которые вы архивируете в «%1$s», появятся здесь.</string>
@@ -315,7 +315,7 @@
     <string name="archived_sessions_footer">Нажмите на сессию, чтобы увидеть больше. «Вернуть из архива» вернёт её на главный экран.</string>
     <string name="archived_sessions_load_failed">Не удалось загрузить архивные сессии.</string>
     <string name="archived_sessions_unarchive_failed">Не удалось вернуть сессию из архива.</string>
-    <string name="session_chat_archived_banner">В архиве с %1$s</string>
+    <string name="session_chat_archived_banner">Архивирована %1$s</string>
     <string name="add_project_title">Добавить проект</string>
     <string name="add_project_browse_folders">Обзор папок</string>
     <string name="add_project_browse_folders_subtitle">Любая папка на этом сервере</string>
@@ -353,7 +353,7 @@
         <item quantity="other">Показано папок: %1$d. Введите больше букв названия, чтобы сузить список.</item>
     </plurals>
     <string name="add_project_in_folder">В «%1$s»</string>
-    <string name="add_project_root_home">Домашняя</string>
+    <string name="add_project_root_home">Домашняя папка</string>
     <string name="add_project_error_add_failed">Не удалось добавить эту папку</string>
     <string name="worktree_new_row">Новый worktree…</string>
     <string name="worktree_run_in_subtitle">Создать копию и начать работу в ней</string>
@@ -430,7 +430,7 @@
     <string name="file_viewer_binary_title">Двоичный файл</string>
     <string name="file_viewer_binary_message">Для этого типа файлов нет предпросмотра.</string>
     <string name="file_viewer_binary_message_type">%1$s\nДля этого типа файлов нет предпросмотра.</string>
-    <string name="file_viewer_too_large_title">Слишком велик для предпросмотра</string>
+    <string name="file_viewer_too_large_title">Файл слишком велик для предпросмотра</string>
     <string name="file_viewer_too_large_message">Этот файл больше, чем приложение может показать.</string>
     <string name="file_viewer_too_large_message_size">Этот файл больше, чем приложение может показать.\n%1$s</string>
     <plurals name="file_viewer_line_count">
@@ -500,7 +500,7 @@
     <string name="session_chat_fork_dialog_error_empty_title">Введите название сессии</string>
     <string name="session_chat_fork_dialog_error_failed">Не удалось ответвить сессию.</string>
     <string name="session_chat_fork_result_title">Сессия ответвлена</string>
-    <string name="session_chat_fork_result_message_ready">«%1$s» готова.</string>
+    <string name="session_chat_fork_result_message_ready">Сессия «%1$s» готова.</string>
     <string name="session_chat_fork_result_open">Открыть</string>
     <string name="session_chat_fork_result_stay_here">Остаться здесь</string>
     <string name="session_chat_attachment_source_title">Добавить вложение</string>
@@ -538,7 +538,7 @@
     <string name="session_chat_move_worktree_menu_title">Перенести в worktree…</string>
     <string name="session_chat_move_worktree_sheet_title">Перенести в worktree</string>
     <string name="session_chat_move_worktree_no_other">В этом проекте нет других worktree</string>
-    <string name="session_chat_move_worktree_moves_after_turn">После этого хода сессия перейдёт в %1$s.</string>
+    <string name="session_chat_move_worktree_moves_after_turn">После текущего ответа сессия перейдёт в %1$s.</string>
     <string name="session_chat_move_worktree_failed">Не удалось перенести сессию: %1$s</string>
     <string name="session_chat_variant_default">По умолчанию</string>
     <string name="session_chat_model_chip_placeholder">Модель</string>
@@ -547,10 +547,10 @@
     <string name="session_chat_model_notice_none_usable">Нет доступных моделей. Нажмите «Модель», чтобы повторить.</string>
     <string name="session_chat_model_notice_variant_unavailable">Запомненный вариант недоступен. Используется «По умолчанию».</string>
     <string name="session_chat_model_notice_model_unavailable">Выбранная модель недоступна. Используется %1$s.</string>
-    <string name="session_chat_side_question_unsupported">/btw требует сервера opencode v2, который отвечает на попутные вопросы. Этот сервер не может ответить, не дополнив разговор.</string>
-    <string name="session_chat_side_question_unavailable">/btw требует более нового сервера opencode.</string>
+    <string name="session_chat_side_question_unsupported">Для /btw нужен сервер opencode v2, который отвечает на попутные вопросы. Этот сервер не может ответить, не дополнив разговор.</string>
+    <string name="session_chat_side_question_unavailable">Для /btw нужен более новый сервер opencode.</string>
     <string name="session_chat_side_question_copied">Ответ скопирован</string>
-    <string name="session_chat_side_question_failed">/btw не удалось: «%1$s»</string>
+    <string name="session_chat_side_question_failed">Ошибка /btw: «%1$s»</string>
     <string name="attachment_error_folder">Папки нельзя прикреплять.</string>
     <string name="attachment_error_duplicate">Этот файл уже загружен</string>
     <string name="attachment_error_too_large">Этот файл больше %1$d MB.</string>
@@ -578,10 +578,10 @@
     <string name="attachment_drop_attach_files">Отпустите, чтобы прикрепить файлы</string>
     <string name="attachment_drop_adds_to_draft">Они добавятся в сообщение, которое вы пишете</string>
     <plurals name="attachment_drop_skipped_count">
-        <item quantity="one">%1$d будет пропущен</item>
-        <item quantity="few">%1$d будут пропущены</item>
-        <item quantity="many">%1$d будут пропущены</item>
-        <item quantity="other">%1$d будут пропущены</item>
+        <item quantity="one">Будет пропущено: %1$d</item>
+        <item quantity="few">Будет пропущено: %1$d</item>
+        <item quantity="many">Будет пропущено: %1$d</item>
+        <item quantity="other">Будет пропущено: %1$d</item>
     </plurals>
     <string name="attachment_drop_some_skipped">Часть будет пропущена</string>
     <string name="attachment_drop_skipped_detail">%1$s · %2$s</string>
@@ -589,8 +589,8 @@
     <string name="session_chat_activity_review_permission_request">Проверить запрос разрешения</string>
     <string name="session_chat_activity_answer_question">Ответить на вопрос</string>
     <string name="session_chat_activity_request_failed">Запрос не выполнен</string>
-    <string name="session_chat_activity_btw_failed">/btw не удалось · Повторить</string>
-    <string name="session_chat_activity_btw_failed_count">/btw не удалось ×%1$d · Повторить</string>
+    <string name="session_chat_activity_btw_failed">Ошибка /btw · Повторить</string>
+    <string name="session_chat_activity_btw_failed_count">Ошибка /btw ×%1$d · Повторить</string>
     <string name="session_chat_activity_btw_ready">Ответ на /btw готов</string>
     <string name="session_chat_activity_btw_ready_count">Ответ на /btw готов ×%1$d</string>
     <plurals name="session_chat_activity_queued">
@@ -605,16 +605,16 @@
         <item quantity="many">%1$d промптов в очереди</item>
         <item quantity="other">%1$d промпта в очереди</item>
     </plurals>
-    <string name="session_chat_activity_side_question_failed">Попутный вопрос не удался</string>
+    <string name="session_chat_activity_side_question_failed">Ошибка попутного вопроса</string>
     <plurals name="session_chat_activity_side_questions_failed">
-        <item quantity="one">%1$d попутный вопрос не удался</item>
-        <item quantity="few">%1$d попутных вопроса не удались</item>
-        <item quantity="many">%1$d попутных вопросов не удались</item>
-        <item quantity="other">%1$d попутных вопроса не удались</item>
+        <item quantity="one">Ошибка попутных вопросов: %1$d</item>
+        <item quantity="few">Ошибка попутных вопросов: %1$d</item>
+        <item quantity="many">Ошибка попутных вопросов: %1$d</item>
+        <item quantity="other">Ошибка попутных вопросов: %1$d</item>
     </plurals>
     <string name="session_chat_activity_side_question_ready">Ответ на попутный вопрос готов</string>
     <plurals name="session_chat_activity_side_questions_ready">
-        <item quantity="one">Готов ответ на %1$d попутный вопрос</item>
+        <item quantity="one">Готовы ответы на %1$d попутный вопрос</item>
         <item quantity="few">Готовы ответы на %1$d попутных вопроса</item>
         <item quantity="many">Готовы ответы на %1$d попутных вопросов</item>
         <item quantity="other">Готовы ответы на %1$d попутных вопроса</item>
@@ -670,7 +670,7 @@
     <string name="new_session_run_in_caption">Запустить сессию в</string>
     <string name="new_session_project">Проект</string>
     <string name="new_session_worktree">Worktree</string>
-    <string name="new_session_starts_from">Начать с</string>
+    <string name="new_session_starts_from">Начинается с</string>
     <string name="new_session_local">Локально</string>
     <string name="new_session_new_worktree">Новый worktree</string>
     <string name="new_session_not_git">Нет · не репозиторий Git</string>
@@ -710,7 +710,7 @@
     </plurals>
     <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
     <string name="timeline_background_work_subagents_and_shells_spoken">%1$s и %2$s</string>
-    <string name="timeline_background_work_running_spoken">%1$s работает</string>
+    <string name="timeline_background_work_running_spoken">Работает: %1$s</string>
     <string name="timeline_background_work_agent_needs_input">%1$s ждёт ответа</string>
     <plurals name="timeline_background_work_subagents_need_input">
         <item quantity="one">%1$d субагент ждёт ответа</item>
@@ -888,7 +888,7 @@
     <string name="tool_status_declined">Отклонено</string>
     <string name="tool_user_note">Ваша заметка: %1$s</string>
     <string name="tool_status_stopped">Остановлено</string>
-    <string name="tool_placeholder_writing_command">Запись команды…</string>
+    <string name="tool_placeholder_writing_command">Составление команды…</string>
     <string name="tool_placeholder_preparing_read">Подготовка чтения…</string>
     <string name="tool_placeholder_preparing_edit">Подготовка правки…</string>
     <string name="tool_placeholder_preparing_write">Подготовка записи…</string>
@@ -919,7 +919,7 @@
     <string name="timeline_step_fetching_named">Загрузка %1$s</string>
     <string name="timeline_step_running">Выполнение…</string>
     <string name="timeline_step_running_named">Выполнение %1$s</string>
-    <string name="timeline_step_ran_named">Выполнено %1$s</string>
+    <string name="timeline_step_ran_named">Выполнено: %1$s</string>
     <string name="timeline_step_ran_command">Команда выполнена</string>
     <string name="timeline_step_loading_skill">Загрузка навыка…</string>
     <string name="timeline_step_loading_skill_named">Загрузка навыка %1$s</string>
@@ -1015,11 +1015,11 @@
     <string name="session_chat_copy_too_long">Слишком длинный текст для копирования. Выделите его часть.</string>
     <string name="session_chat_sheet_message_actions_clip_label_code">Код</string>
     <string name="session_chat_sheet_mcp_loading_title">Проверка серверов MCP</string>
-    <string name="session_chat_sheet_mcp_loading_subtitle">Чтение статуса с сервера opencode</string>
+    <string name="session_chat_sheet_mcp_loading_subtitle">Получение статуса с сервера opencode</string>
     <string name="session_chat_sheet_mcp_error_title">Не удалось загрузить серверы MCP</string>
     <string name="session_chat_sheet_mcp_error_message">Список серверов MCP не загрузился.</string>
     <string name="session_chat_sheet_mcp_empty_title">Нет серверов MCP</string>
-    <string name="session_chat_sheet_mcp_empty_message">На этом сервере opencode ничего не настроено.</string>
+    <string name="session_chat_sheet_mcp_empty_message">На этом сервере opencode не настроено ни одного сервера MCP.</string>
     <plurals name="session_chat_sheet_mcp_headline">
         <item quantity="one">Подключено %1$d из %2$d</item>
         <item quantity="few">Подключено %1$d из %2$d</item>
@@ -1082,21 +1082,21 @@
     <string name="session_chat_goal_evidence">Подтверждение</string>
     <string name="session_chat_goal_reconnecting">Переподключение. Показана последняя известная цель.</string>
     <string name="session_chat_goal_pause">Пауза</string>
-    <string name="session_chat_goal_pausing">Пауза…</string>
-    <string name="session_chat_goal_resume">Продолжить</string>
-    <string name="session_chat_goal_resuming">Продолжение…</string>
+    <string name="session_chat_goal_pausing">Приостановка…</string>
+    <string name="session_chat_goal_resume">Возобновить</string>
+    <string name="session_chat_goal_resuming">Возобновление…</string>
     <string name="session_chat_goal_clear">Сбросить</string>
     <string name="session_chat_goal_clearing">Сброс…</string>
     <string name="session_chat_goal_new">Новая цель…</string>
-    <string name="session_chat_goal_footnote_active">После каждого хода проверяющий сверяет работу с целью. Агент продолжает, пока цель не достигнута, ему не понадобитесь вы или не пройдёт %1$d раундов.</string>
-    <string name="session_chat_goal_footnote_paused">После возобновления снова будет доступно %1$d раундов.</string>
+    <string name="session_chat_goal_footnote_active">После каждого хода проверяющий сверяет работу с целью. Агент продолжает, пока цель не достигнута, ему не понадобитесь вы или не исчерпан лимит раундов (%1$d).</string>
+    <string name="session_chat_goal_footnote_paused">После возобновления лимит раундов (%1$d) начнётся заново.</string>
     <string name="session_chat_goal_footnote_met">Новая цель заменит эту.</string>
     <string name="session_chat_goal_paused">Цель на паузе</string>
     <string name="session_chat_goal_paused_by_user">Вы поставили цель на паузу</string>
     <string name="session_chat_goal_paused_stopped">Вы остановили ход, поэтому цель на паузе</string>
     <string name="session_chat_goal_paused_failed">Цель на паузе после ошибки</string>
-    <string name="session_chat_goal_paused_no_progress">Цель на паузе: нет прогресса %1$d раунда(ов)</string>
-    <string name="session_chat_goal_paused_round_limit">Цель на паузе после %1$d раундов</string>
+    <string name="session_chat_goal_paused_no_progress">Цель на паузе: раундов без прогресса — %1$d</string>
+    <string name="session_chat_goal_paused_round_limit">Цель на паузе: исчерпан лимит раундов (%1$d)</string>
     <string name="session_chat_goal_paused_restart">Цель на паузе: сервер перезапущен</string>
     <string name="session_chat_goal_paused_reviewer">Цель на паузе: проверяющий не смог решить</string>
     <string name="session_chat_goal_paused_quiet">Цель на паузе: фоновая работа затихла</string>
@@ -1106,7 +1106,7 @@
     <string name="session_chat_goal_set_earlier">Прежняя цель. Она сброшена или заменена.</string>
     <string name="session_chat_goal_bubble_label">Цель</string>
     <string name="session_chat_goal_objective_hint">Опишите, что значит «готово»…</string>
-    <string name="session_chat_goal_resume_placeholder">Ответьте и продолжите цель…</string>
+    <string name="session_chat_goal_resume_placeholder">Ответьте и возобновите цель…</string>
     <string name="session_chat_goal_count">%1$s / %2$s символов</string>
     <string name="session_chat_goal_count_over">%1$s / %2$s символов · сократите цель, чтобы отправить</string>
     <string name="session_chat_goal_command_replaces">Заменит текущую цель</string>
@@ -1114,8 +1114,8 @@
     <string name="session_chat_goal_command_replaces_met">Заменит текущую цель (достигнута)</string>
     <string name="session_chat_goal_pause_failed">Не удалось поставить цель на паузу</string>
     <string name="session_chat_goal_pause_failed_reason">Не удалось поставить цель на паузу: %1$s</string>
-    <string name="session_chat_goal_resume_failed">Не удалось продолжить цель</string>
-    <string name="session_chat_goal_resume_failed_reason">Не удалось продолжить цель: %1$s</string>
+    <string name="session_chat_goal_resume_failed">Не удалось возобновить цель</string>
+    <string name="session_chat_goal_resume_failed_reason">Не удалось возобновить цель: %1$s</string>
     <string name="session_chat_goal_clear_failed">Не удалось сбросить цель</string>
     <string name="session_chat_goal_clear_failed_reason">Не удалось сбросить цель: %1$s</string>
     <string name="session_chat_timeline_style_notice">Лента: %1$s. Изменить можно в любой момент в Настройках.</string>
@@ -1124,9 +1124,9 @@
     <string name="session_chat_follow_up_switched_queue">Переключено на «В очередь»</string>
     <string name="session_chat_failure_retry_after_seconds">Повторите через %1$d с</string>
     <string name="session_chat_failure_retry_after_minutes">Повторите через %1$d мин</string>
-    <string name="component_outgoing_message_pending_caption">Ожидает · уйдёт на следующем шаге</string>
+    <string name="component_outgoing_message_pending_caption">Ожидает · отправится на следующем шаге</string>
     <string name="component_keyboard_hint_prompt">Нажмите Tab, чтобы ответить с клавиатуры</string>
-    <string name="component_session_status_bar_context_usage">Использование контекста: %1$d процентов</string>
+    <string name="component_session_status_bar_context_usage">Использование контекста: %1$d %%</string>
     <string name="component_session_status_bar_context_usage_unavailable">Использование контекста недоступно</string>
     <string name="app_lock_prompt_title">Разблокировать OpenCode Mobile</string>
     <plurals name="component_branch_pill_files">
@@ -1152,7 +1152,7 @@
     <string name="session_chat_mcp_load_failed">Не удалось загрузить серверы MCP. Проверьте подключение и повторите попытку.</string>
     <string name="session_chat_create_failed">Не удалось создать сессию</string>
     <string name="session_chat_send_timed_out">Не удалось отправить. Повторите попытку.</string>
-    <string name="session_chat_shell_cannot_queue">Команды оболочки нельзя поставить в очередь. Переключитесь на «Направить», чтобы выполнить сейчас.</string>
+    <string name="session_chat_shell_cannot_queue">Команды оболочки нельзя поставить в очередь. Переключитесь на «Направить», чтобы выполнить команду сейчас.</string>
     <string name="session_chat_reply_error_permission">Не удалось отправить ответ. Повторите попытку.</string>
     <string name="session_chat_reply_error_permission_reason">Не удалось отправить ответ. %1$s.</string>
     <string name="session_chat_reply_error_question">Не удалось отправить ответ. Повторите попытку.</string>
@@ -1167,14 +1167,14 @@
     <string name="session_chat_sheet_timeline_style_picker_explainer">В этом обновлении появились новые способы следить за работой агента.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">Изменить можно в любой момент: Настройки → Стиль ленты.</string>
     <string name="session_chat_sheet_timeline_style_picker_use">Выбрать: %1$s</string>
-    <string name="session_chat_sheet_timeline_style_picker_recommended">Рекомендуем</string>
+    <string name="session_chat_sheet_timeline_style_picker_recommended">Рекомендуется</string>
     <string name="session_chat_sheet_timeline_style_picker_current">Текущий</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_title">Стандартный</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">Карточки и группы инструментов между сообщениями агента</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Шкала шагов</string>
-    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Одна строка на шаг на шкале, обновляется в реальном времени</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">Каждый шаг — строка на шкале, обновляется по ходу работы агента</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Карточка активности</string>
-    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Выполняемые шаги на одной живой карточке, которая сворачивается в сводку</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Текущие шаги на одной карточке, которая затем сворачивается в сводку</string>
     <string name="session_chat_sheet_picker_model">Модель</string>
     <string name="session_chat_sheet_picker_agent_mode">Режим агента</string>
     <string name="session_chat_sheet_picker_variant">Вариант</string>
@@ -1183,7 +1183,7 @@
     <string name="session_chat_sheet_picker_filter_models_hint">Фильтр моделей...</string>
     <string name="session_chat_sheet_tool_detail_provider_response">Ответ провайдера</string>
     <string name="session_chat_sheet_tool_detail_tool">Инструмент</string>
-    <string name="session_chat_sheet_tool_result_exit_code">код %1$d</string>
+    <string name="session_chat_sheet_tool_result_exit_code">код выхода %1$d</string>
     <plurals name="session_chat_sheet_tool_result_matches">
         <item quantity="one">%1$d совпадение</item>
         <item quantity="few">%1$d совпадения</item>
@@ -1305,8 +1305,8 @@
     <string name="settings_send_feedback_subtitle">Сообщить об ошибке или поделиться идеей</string>
     <string name="settings_hide_user_directory_title">Скрывать домашнюю папку</string>
     <string name="settings_hide_user_directory_subtitle">Показывать ~/Projects/… вместо /Users/you/Projects/…</string>
-    <string name="settings_recent_window_title">Окно «Недавние»</string>
-    <string name="settings_recent_window_message">Сессии остаются в «Недавних», пока они выполняются или готовы, а также если обновлялись в этом окне.</string>
+    <string name="settings_recent_window_title">Период «Недавних»</string>
+    <string name="settings_recent_window_message">Сессии остаются в «Недавних», пока они выполняются или готовы, а также если обновлялись за этот период.</string>
     <plurals name="settings_recent_window_hours">
         <item quantity="one">%1$d час</item>
         <item quantity="few">%1$d часа</item>
@@ -1319,9 +1319,9 @@
     <string name="settings_timeline_style_standard_title">Стандартный</string>
     <string name="settings_timeline_style_standard_subtitle">Карточки и группы инструментов между сообщениями агента</string>
     <string name="settings_timeline_style_step_rail_title">Шкала шагов</string>
-    <string name="settings_timeline_style_step_rail_subtitle">Одна строка на шаг на шкале, обновляется в реальном времени</string>
+    <string name="settings_timeline_style_step_rail_subtitle">Каждый шаг — строка на шкале, обновляется по ходу работы агента</string>
     <string name="settings_timeline_style_activity_card_title">Карточка активности</string>
-    <string name="settings_timeline_style_activity_card_subtitle">Выполняемые шаги на одной живой карточке, которая сворачивается в сводку</string>
+    <string name="settings_timeline_style_activity_card_subtitle">Текущие шаги на одной карточке, которая затем сворачивается в сводку</string>
     <string name="settings_follow_up_title">Отправка дополнений</string>
     <string name="settings_follow_up_steer">Направить</string>
     <string name="settings_follow_up_queue">В очередь</string>
@@ -1345,14 +1345,14 @@
     <string name="settings_clear_session_cache_dialog_message">Кэшированные сессии и сообщения будут удалены. Подключение и учётные данные сохранятся.</string>
     <string name="settings_clear">Очистить</string>
     <string name="settings_app_lock_title">Блокировка приложения</string>
-    <string name="settings_app_lock_subtitle_available">Требовать отпечаток пальца, лицо или блокировку экрана при возврате в приложение из фона</string>
+    <string name="settings_app_lock_subtitle_available">Требовать отпечаток пальца, распознавание лица или блокировку экрана при возврате в приложение из фона</string>
     <string name="settings_app_lock_subtitle_unavailable">Установите блокировку экрана на устройстве, чтобы использовать блокировку приложения</string>
     <string name="settings_privacy_policy_title">Политика конфиденциальности</string>
     <string name="settings_privacy_policy_subtitle">Как приложения обрабатывают данные</string>
     <string name="settings_analytics_title">Аналитика и отчёты о сбоях</string>
     <string name="settings_analytics_subtitle">Разрешить необязательные события использования и отчёты о сбоях. Если выключено, в Firebase ничего не отправляется.</string>
     <string name="settings_analytics_label">Аналитика продукта</string>
-    <string name="settings_diagnostic_logs_subtitle">Поделиться журналом работы за последнее время с удалёнными данными</string>
+    <string name="settings_diagnostic_logs_subtitle">Поделиться журналом работы за последнее время со скрытыми личными данными</string>
     <string name="settings_clear_all_data_title">Удалить все данные</string>
     <string name="settings_clear_all_data_subtitle">Удалить подключение и кэш</string>
     <string name="settings_clear_all_data_dialog_title">Удалить все данные?</string>
@@ -1369,12 +1369,12 @@
     <string name="diagnostics_loading">Загрузка журналов диагностики</string>
     <string name="diagnostics_entries_title">Записи</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d скрытая строка в сохранённом окне</item>
-        <item quantity="few">%1$d скрытые строки в сохранённом окне</item>
-        <item quantity="many">%1$d скрытых строк в сохранённом окне</item>
-        <item quantity="other">%1$d скрытой строки в сохранённом окне</item>
+        <item quantity="one">%1$d обезличенная строка за хранимый период</item>
+        <item quantity="few">%1$d обезличенные строки за хранимый период</item>
+        <item quantity="many">%1$d обезличенных строк за хранимый период</item>
+        <item quantity="other">%1$d обезличенной строки за хранимый период</item>
     </plurals>
-    <string name="diagnostics_entries_empty">В сохранённом окне пока нет записей</string>
+    <string name="diagnostics_entries_empty">За хранимый период пока нет записей</string>
     <string name="diagnostics_kept_title">Хранится</string>
     <plurals name="diagnostics_last_minutes">
         <item quantity="one">Последняя %1$d минута</item>
@@ -1398,10 +1398,10 @@
     <string name="diagnostics_areas_title">Области</string>
     <string name="diagnostics_clear">Очистить</string>
     <string name="diagnostics_share">Поделиться</string>
-    <string name="diagnostics_export_window_title">Окно экспорта</string>
+    <string name="diagnostics_export_window_title">Период экспорта</string>
     <string name="diagnostics_export_sheet_title">Экспорт журналов диагностики</string>
     <string name="diagnostics_share_via_apps">Поделиться через приложения</string>
-    <string name="diagnostics_save_to_files">Сохранить в файлы</string>
+    <string name="diagnostics_save_to_files">Сохранить в файл</string>
     <string name="diagnostics_clear_dialog_title">Очистить журналы диагностики?</string>
     <string name="diagnostics_clear_dialog_message">Сохранённый журнал диагностики будет удалён.</string>
     <string name="diagnostics_error_share">Не удалось подготовить журнал диагностики к отправке.</string>
@@ -1415,7 +1415,7 @@
     <string name="appearance_theme_blurb_linen">Тёплая бумага / эспрессо</string>
     <string name="appearance_theme_blurb_signal">Чисто белая / чисто чёрная</string>
     <string name="appearance_theme_blurb_hotline">Нейтральный интерфейс, яркий розовый</string>
-    <string name="appearance_theme_blurb_phosphor">Нейтральный интерфейс, зелёный ЭЛТ</string>
+    <string name="appearance_theme_blurb_phosphor">Нейтральный интерфейс, зелёный как на ЭЛТ</string>
     <string name="appearance_syntax_name_match">Как в теме</string>
     <string name="appearance_syntax_blurb_match">Использовать собственные цвета темы</string>
     <string name="appearance_syntax_blurb_nocturne">Семейство One Dark</string>
@@ -1428,12 +1428,12 @@
     <string name="appearance_preview_sample_reply">Обновить один раз, затем повторить.</string>
     <string name="appearance_more_options">Ещё</string>
     <string name="appearance_reset_text_sizes">Сбросить размеры текста</string>
-    <string name="appearance_reset_all">Сбросить весь внешний вид</string>
+    <string name="appearance_reset_all">Сбросить все настройки внешнего вида</string>
     <string name="appearance_mode_title">Режим</string>
     <string name="appearance_mode_system">Системный</string>
     <string name="appearance_mode_light">Светлый</string>
     <string name="appearance_mode_dark">Тёмный</string>
-    <string name="appearance_mode_note_system">Следует светлой или тёмной теме телефона.</string>
+    <string name="appearance_mode_note_system">Повторяет светлое или тёмное оформление телефона.</string>
     <string name="appearance_mode_note_light">Всегда светлый, независимо от настроек телефона.</string>
     <string name="appearance_mode_note_dark">Всегда тёмный, независимо от настроек телефона.</string>
     <string name="appearance_text_home_title">Текст списка на главной</string>
@@ -1448,7 +1448,7 @@
     <string name="appearance_text_size_large">Большой</string>
     <string name="appearance_text_size_extra_large">Очень большой</string>
     <string name="appearance_text_code_note">Терминал, изменения, просмотр файлов и вывод инструментов.</string>
-    <string name="appearance_text_session_chat_note">Блоки кода в сообщениях и поле ввода следуют размеру чата сессии.</string>
+    <string name="appearance_text_session_chat_note">Блоки кода в сообщениях и поле ввода используют размер текста чата сессии.</string>
     <string name="appearance_sample_session_one">Исправить нестабильный тест редиректа после входа</string>
     <string name="appearance_sample_session_two">Перенести настройки в новое хранилище</string>
     <string name="appearance_sample_time_now">сейчас</string>
@@ -1462,14 +1462,14 @@
     <string name="feature_flags_intro">Переключение флага задаёт переопределение на устройстве, которое приоритетнее удалённого значения. Удалённые значения загружаются при запуске и применяются при следующем запуске.</string>
     <string name="feature_flags_section_flags">Флаги</string>
     <string name="feedback_title_report">Сообщить о проблеме</string>
-    <string name="feedback_title_hide_parts">Скрыть части</string>
+    <string name="feedback_title_hide_parts">Скрыть области</string>
     <string name="feedback_title_log_preview">Журнал диагностики</string>
     <string name="feedback_title_listening">Слушаю</string>
     <string name="feedback_kind_bug">Ошибка</string>
     <string name="feedback_kind_idea">Идея</string>
-    <string name="feedback_placeholder_bug">Что произошло? Что вы ожидали?</string>
-    <string name="feedback_placeholder_idea">Что сделало бы OpenCode лучше для вас?</string>
-    <string name="feedback_privacy_note">Уходит только команде OpenCode Mobile. Никогда не содержит адрес сервера, имя пользователя или пароль. Журналы очищаются на этом телефоне.</string>
+    <string name="feedback_placeholder_bug">Что произошло? Чего вы ожидали?</string>
+    <string name="feedback_placeholder_idea">Что сделало бы OpenCode удобнее для вас?</string>
+    <string name="feedback_privacy_note">Отправляется только команде OpenCode Mobile. Адрес сервера, имя пользователя и пароль никогда не передаются. Журналы обезличиваются прямо на этом телефоне.</string>
     <string name="feedback_error_offline">Нет сети. Отчёт сохранён здесь — повторите, когда появится подключение.</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="one">Вы только что отправили отчёт. Повторите через %1$d с.</item>
@@ -1500,7 +1500,7 @@
         <item quantity="many">скрыто: %1$d</item>
         <item quantity="other">скрыто: %1$d</item>
     </plurals>
-    <string name="feedback_attachment_tap_to_hide">Нажмите, чтобы скрыть части</string>
+    <string name="feedback_attachment_tap_to_hide">Нажмите, чтобы скрыть области</string>
     <string name="feedback_attachment_tap_to_preview">Нажмите для просмотра</string>
     <string name="feedback_attachment_logs">Журналы</string>
     <plurals name="feedback_attachment_logs_minutes">
@@ -1523,10 +1523,10 @@
         <item quantity="other">Скриншот, скрыто %1$d области</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">Последняя %1$d минута · сжимается gzip при отправке. Данные скрыты на этом телефоне.</item>
-        <item quantity="few">Последние %1$d минуты · сжимаются gzip при отправке. Данные скрыты на этом телефоне.</item>
-        <item quantity="many">Последние %1$d минут · сжимаются gzip при отправке. Данные скрыты на этом телефоне.</item>
-        <item quantity="other">Последние %1$d минуты · сжимаются gzip при отправке. Данные скрыты на этом телефоне.</item>
+        <item quantity="one">Последняя %1$d минута · сжатие gzip при отправке. Личные данные скрыты прямо на телефоне.</item>
+        <item quantity="few">Последние %1$d минуты · сжатие gzip при отправке. Личные данные скрыты прямо на телефоне.</item>
+        <item quantity="many">Последние %1$d минут · сжатие gzip при отправке. Личные данные скрыты прямо на телефоне.</item>
+        <item quantity="other">Последние %1$d минуты · сжатие gzip при отправке. Личные данные скрыты прямо на телефоне.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Загрузка…</string>
     <string name="feedback_log_preview_empty_title">Нет строк журнала</string>
@@ -1730,7 +1730,7 @@
     <string name="component_activity_card_opens_activity">%1$s, открывает активность</string>
     <string name="component_image_loading_label">%1$s, загрузка</string>
     <string name="session_list_dock_new_session">Новая сессия</string>
-    <string name="component_composer_always_allows">Всегда разрешает: %1$s</string>
+    <string name="component_composer_always_allows">Будет разрешено всегда: %1$s</string>
     <string name="component_composer_leave_side_question_mode">Выйти из режима побочного вопроса</string>
     <string name="session_list_worktree_empty_other_projects">Сбросьте фильтр, чтобы увидеть сессии из других проектов.</string>
     <string name="component_attachment_uploading">Загрузка…</string>
@@ -1748,7 +1748,7 @@
     </plurals>
     <string name="dictation_stopped">Диктовка остановлена</string>
     <string name="dictation_microphone_failed">Не удалось использовать микрофон</string>
-    <string name="dictation_busy">Диктовка занята</string>
+    <string name="dictation_busy">Распознавание речи занято</string>
     <string name="component_composer_question_position">%1$d из %2$d</string>
     <string name="session_list_status_ready">Готово</string>
     <string name="session_list_dock_hint_swipe">Открывает фильтр проектов. Смахните, чтобы переключить проект.</string>
@@ -1770,7 +1770,7 @@
     <string name="component_page_indicator_label">Страница %1$d из %2$d</string>
     <string name="component_composer_next">Далее</string>
     <string name="component_message_image_label">Изображение %1$s</string>
-    <string name="component_composer_leave_shell_mode">Выйти из режима оболочки</string>
+    <string name="component_composer_leave_shell_mode">Выйти из режима shell</string>
     <string name="dictation_action_downloading">Загрузка…</string>
     <string name="component_image_viewer_share">Поделиться</string>
     <string name="session_list_status_failed">Сбой</string>
@@ -1780,7 +1780,7 @@
     <string name="component_composer_select_exactly">Выберите: %1$d</string>
     <string name="dictation_action_open_settings">Открыть настройки</string>
     <string name="component_composer_open_commands">Открыть команды</string>
-    <string name="component_thinking_ellipsis">Думаю…</string>
+    <string name="component_thinking_ellipsis">Думает…</string>
     <plurals name="relative_time_days_ago">
         <item quantity="one">%1$d дн. назад</item>
         <item quantity="few">%1$d дн. назад</item>
@@ -1800,7 +1800,7 @@
     <string name="component_attachment_kind_text">Текст</string>
     <string name="component_composer_next_question">Следующий вопрос</string>
     <string name="component_split_pane_show_sidebar">Показать боковую панель</string>
-    <string name="component_composer_placeholder">Спросите что угодно...</string>
+    <string name="component_composer_placeholder">Спросите что угодно…</string>
     <string name="component_server_address_host">Хост</string>
     <plurals name="relative_time_hours_ago">
         <item quantity="one">%1$d ч назад</item>
@@ -1819,9 +1819,9 @@
     <string name="session_list_status_running">Выполняется</string>
     <string name="component_step_rail_expands">%1$s, разворачивается</string>
     <string name="session_list_status_done">Готово</string>
-    <string name="session_list_status_idle">Простой</string>
+    <string name="session_list_status_idle">Бездействует</string>
     <string name="component_attachment_kind_file">Файл</string>
-    <string name="component_composer_run_shell_command">Выполнить команду оболочки</string>
+    <string name="component_composer_run_shell_command">Выполнить команду в shell</string>
     <string name="component_image_could_not_load">Не удалось загрузить</string>
     <string name="component_outgoing_message_show_actions">Показать действия с сообщением</string>
     <string name="live_updates_accessibility_label">Живые обновления: %1$s</string>
@@ -1883,13 +1883,13 @@
     <string name="session_list_worktree_empty_action">Сбросить фильтр</string>
     <string name="dictation_model_download_failed_detail">Проверьте подключение и свободное место на устройстве и попробуйте снова.</string>
     <string name="component_composer_send_queue">Отправить в очередь</string>
-    <string name="session_list_dock_new_session_hint">Чтобы начать в другом месте, выберите «Выбрать проект или worktree».</string>
+    <string name="session_list_dock_new_session_hint">Чтобы начать в другом месте, используйте действие «Выбрать проект или worktree».</string>
     <string name="session_list_section_yesterday">Вчера</string>
     <string name="component_code_file_line_label">Строка %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">Идея для OpenCode Mobile</string>
     <string name="component_hunk_navigation_previous">Предыдущий блок</string>
     <string name="session_list_section_week_of">Неделя %1$s – %2$s</string>
-    <string name="dictation_model_download_failed_title">%1$s не удалось скачать %2$s</string>
+    <string name="dictation_model_download_failed_title">%1$s: не удалось скачать %2$s</string>
     <string name="component_activity_status_pending">ожидает</string>
     <string name="component_composer_revert_tag">Откат</string>
     <string name="component_composer_model">Модель %1$s</string>
@@ -1910,14 +1910,14 @@
     <string name="session_list_status_stopped">Остановлено</string>
     <string name="component_attachment_cancel_upload">Отменить загрузку %1$s</string>
     <string name="dictation_cancel_description">Отменить диктовку</string>
-    <string name="component_composer_shell_mode">Режим оболочки</string>
+    <string name="component_composer_shell_mode">Режим shell</string>
     <string name="component_skeleton_illustration_connect">Подключить</string>
     <string name="component_composer_not_selected">Не выбрано</string>
-    <string name="component_composer_shell_mode_description">Режим оболочки. Выйти из режима оболочки</string>
+    <string name="component_composer_shell_mode_description">Режим shell. Выйти из режима shell</string>
     <string name="component_branch_pill_based_on">На основе %1$s</string>
     <string name="component_composer_add_attachment">Добавить вложение</string>
     <string name="dictation_microphone_off">Доступ к микрофону отключён</string>
-    <string name="component_composer_shell">Оболочка</string>
+    <string name="component_composer_shell">Shell</string>
     <string name="live_updates_status_auth_failed">Ошибка аутентификации</string>
     <string name="component_branch_pill_view_all_changes">Посмотреть все изменения</string>
     <string name="component_composer_send">Отправить</string>
@@ -1934,9 +1934,9 @@
     <string name="share_feedback_subject_bug">Отчёт об ошибке OpenCode Mobile</string>
     <string name="component_activity_card_opens_child_session_hint">Открывает дочернюю сессию</string>
     <string name="component_activity_status_failed">сбой</string>
-    <string name="dictation_model_not_installed_title">%1$s нужна %2$s</string>
+    <string name="dictation_model_not_installed_title">Для %1$s нужна %2$s</string>
     <string name="component_composer_back_to_main_session">Назад к основной сессии</string>
-    <string name="component_activity_sheet_working_count">Работает: %1$d</string>
+    <string name="component_activity_sheet_working_count">Работает, шагов: %1$d</string>
     <string name="session_list_status_retrying">Повтор</string>
     <string name="component_attachment_remove">Удалить %1$s</string>
     <string name="component_composer_send_steer">Отправить как «Направить»</string>
@@ -1976,13 +1976,13 @@
         <item quantity="many">%1$d worktree</item>
         <item quantity="other">%1$d worktree</item>
     </plurals>
-    <string name="worktrees_main_checkout">Основной чекаут</string>
+    <string name="worktrees_main_checkout">Основная рабочая копия</string>
     <string name="worktrees_cannot_remove">Нельзя удалить</string>
     <plurals name="worktrees_changed">
-        <item quantity="one">%1$d изменён</item>
-        <item quantity="few">%1$d изменено</item>
-        <item quantity="many">%1$d изменено</item>
-        <item quantity="other">%1$d изменено</item>
+        <item quantity="one">изменено: %1$d</item>
+        <item quantity="few">изменено: %1$d</item>
+        <item quantity="many">изменено: %1$d</item>
+        <item quantity="other">изменено: %1$d</item>
     </plurals>
     <string name="worktrees_none_in_project">Нет worktree. «Новая сессия» → «Выбрать проект или worktree» создаёт новый.</string>
     <string name="worktrees_footer">При удалении worktree его папка на сервере удаляется. Его сессии остаются, но снова запускаться в нём не смогут.</string>
@@ -1992,7 +1992,7 @@
     <string name="worktrees_actions_new_session">Новая сессия здесь</string>
     <string name="worktrees_actions_remove">Удалить worktree…</string>
     <string name="worktrees_remove_title">Удалить worktree «%1$s»?</string>
-    <string name="worktrees_remove_message">Удаляет %1$s на сервере.</string>
+    <string name="worktrees_remove_message">Папка %1$s будет удалена на сервере.</string>
     <plurals name="worktrees_remove_changes">
         <item quantity="one">%1$d незафиксированное изменение будет потеряно.</item>
         <item quantity="few">%1$d незафиксированных изменения будут потеряны.</item>
@@ -2010,15 +2010,15 @@
     <string name="worktrees_removed">Worktree «%1$s» удалён</string>
     <string name="worktrees_remove_failed">Не удалось удалить «%1$s». %2$s</string>
     <string name="worktrees_remove_failed_connection">Не удалось удалить «%1$s». Проверьте подключение и попробуйте снова.</string>
-    <string name="worktrees_menu_subtitle">%1$d в %2$s</string>
+    <string name="worktrees_menu_subtitle">%1$d · %2$s</string>
     <string name="worktrees_menu_none">Нет</string>
     <string name="session_list_worktree_removed">worktree удалён</string>
     <string name="whats_new_title">Что нового</string>
     <string name="whats_new_version">Версия %1$s</string>
     <string name="whats_new_skipped_one">Вы пропустили одно обновление, оно включено ниже.</string>
-    <string name="whats_new_skipped_many">Вы пропустили обновлений: %1$d, они включены ниже.</string>
+    <string name="whats_new_skipped_many">Пропущено обновлений: %1$d. Они включены ниже.</string>
     <string name="whats_new_in_version">В версии %1$s</string>
-    <string name="whats_new_also_since">Также нового с последнего обновления · %1$s</string>
+    <string name="whats_new_also_since">Также новое с последнего обновления · %1$s</string>
     <string name="whats_new_fixes">Исправления</string>
     <string name="whats_new_done">Готово</string>
     <string name="whats_new_find_again">Это можно снова найти в «Настройки» → «Что нового»</string>

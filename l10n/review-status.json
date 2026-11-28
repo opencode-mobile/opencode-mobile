@@ -1,0 +1,50 @@
+{
+  "de": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 144,
+    "date": "2026-11-28"
+  },
+  "fi": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 156,
+    "date": "2026-11-28"
+  },
+  "ja": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 102,
+    "date": "2026-11-28"
+  },
+  "ka": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 135,
+    "date": "2026-11-28"
+  },
+  "my": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 137,
+    "date": "2026-11-28"
+  },
+  "ru": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 94,
+    "date": "2026-11-28"
+  },
+  "th": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 61,
+    "date": "2026-11-28"
+  },
+  "uk": {
+    "model": "claude-agent/opus",
+    "reviewed": 1520,
+    "fixed": 123,
+    "date": "2026-11-28"
+  }
+}

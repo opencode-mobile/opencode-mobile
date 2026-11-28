@@ -4,7 +4,7 @@
 <resources>
     <string name="app_name">OpenCode Mobile</string>
     <string name="bottom_sheet_close">ပိတ်ရန်</string>
-    <string name="bottom_sheet_collapse">ခေါက်ရန်</string>
+    <string name="bottom_sheet_collapse">ချုံ့ရန်</string>
     <string name="bottom_sheet_expand">ချဲ့ရန်</string>
     <string name="top_bar_back">နောက်သို့</string>
     <string name="common_cancel">မလုပ်တော့</string>
@@ -22,14 +22,14 @@
     <string name="connection_setup_action_scan_new_qr">QR အသစ် စကင်ဖတ်ရန်</string>
     <string name="connection_setup_action_enter_pairing_code">တွဲချိတ်ကုဒ် ထည့်ရန်</string>
     <string name="connection_setup_action_use_host_password">ဟို့စ်နှင့် စကားဝှက် သုံးရန်</string>
-    <string name="connection_setup_action_scan_qr_instead">QR စကင်ဖတ်ရန်</string>
+    <string name="connection_setup_action_scan_qr_instead">အစား QR စကင်ဖတ်ရန်</string>
     <string name="connection_setup_scan_qr_instead_hint">opencode pair မှ</string>
     <string name="connection_setup_remove_server">ဆာဗာ ဖယ်ရှားရန်</string>
     <string name="connection_setup_remove_dialog_title_unnamed">“ဆာဗာ” ကို ဖယ်ရှားမလား။</string>
     <string name="connection_setup_instructions_run">သင့်ကွန်ပျူတာတွင် ဤအမိန့်ကို လုပ်ဆောင်ပြီး QR ကို စကင်ဖတ်ပါ။</string>
-    <string name="connection_setup_instructions_first_run">ပထမအကြိမ်တွင် တစ်မိနစ်ခန့် ကြာသည်။ OpenCode 2.0.25 သို့မဟုတ် ပိုမြင့်သည် လိုအပ်သည်။ ဝန်ဆောင်မှု မလည်ပတ်သေးပါက စတင်ပေးမည်။</string>
+    <string name="connection_setup_instructions_first_run">ပထမအကြိမ်တွင် တစ်မိနစ်ခန့် ကြာသည်။ OpenCode 2.0.25 သို့မဟုတ် ထို့ထက်မြင့်သော ဗားရှင်း လိုအပ်သည်။ ဝန်ဆောင်မှု မလည်ပတ်သေးပါက စတင်ပေးမည်။</string>
     <string name="connection_setup_instructions_same_wifi_title">Wi-Fi တူလျှင်</string>
-    <string name="connection_setup_instructions_same_wifi_body">ဆာဗာကို localhost ပြင်ပမှ ချိတ်ဆက်နိုင်မှသာ pair ကို သာမန်သုံးပါက QR ကို ပြသည်။</string>
+    <string name="connection_setup_instructions_same_wifi_body">pair ကို သာမန်အတိုင်း run လျှင် ဆာဗာကို localhost ပြင်ပမှ ချိတ်ဆက်နိုင်မှသာ QR ကို ပြသည်။</string>
     <string name="connection_setup_host_hint">macbook.local:4096</string>
     <string name="connection_setup_host_label">ဟို့စ်</string>
     <string name="connection_setup_host_help">LAN၊ Tailscale MagicDNS သို့မဟုတ် ဥမင် — ဖုန်းပေါ်ရှိ localhost မဟုတ်ပါ။</string>
@@ -51,11 +51,11 @@
     <string name="connection_setup_address_using_now">ယခု သုံးနေသည်</string>
     <string name="connection_setup_address_saved">သိမ်းထားသည်</string>
     <string name="connection_setup_pair_again_unreachable">သိမ်းထားသော လိပ်စာကို ချိတ်ဆက်၍ မရပါ။ ထပ်မံ တွဲချိတ်ပါ။</string>
-    <string name="connection_setup_pair_again_unauthorized">ဤဆာဗာက သိမ်းထားသော လက်မှတ်ထိုးဝင်မှုကို ပယ်ချလိုက်သည်။ ထပ်မံ တွဲချိတ်ပါ။ စကားဝှက်အသစ်သည် စက်အားလုံးကို ထွက်စေသည်။</string>
+    <string name="connection_setup_pair_again_unauthorized">ဤဆာဗာက သိမ်းထားသော လက်မှတ်ထိုးဝင်မှုကို ပယ်ချလိုက်သည်။ ထပ်မံ တွဲချိတ်ပါ။ စကားဝှက်အသစ်ဖြင့် စက်အားလုံး ထွက်သွားမည်။</string>
     <string name="connection_cleartext_title">ချိတ်ဆက်မှုကို ကုဒ်ဝှက်မထားပါ</string>
-    <string name="connection_cleartext_message_one_host">%1$s သည် သင့်ဒေသတွင်းကွန်ရက် သို့မဟုတ် Tailscale ပြင်ပတွင် ရိုးရိုး http ကို သုံးသည်။ သင့်ဆာဗာစကားဝှက်နှင့် ဆက်ရှင်များရှိ အရာအားလုံး ကုဒ်မဝှက်ဘဲ ပို့ဆောင်ခံရမည်။ https၊ VPN သို့မဟုတ် ဥမင်ကို ပိုကောင်းသည်။</string>
-    <string name="connection_cleartext_message_hosts">%1$s တို့သည် သင့်ဒေသတွင်းကွန်ရက် သို့မဟုတ် Tailscale ပြင်ပတွင် ရိုးရိုး http ကို သုံးသည်။ သင့်ဆာဗာစကားဝှက်နှင့် ဆက်ရှင်များရှိ အရာအားလုံး ကုဒ်မဝှက်ဘဲ ပို့ဆောင်ခံရမည်။ https၊ VPN သို့မဟုတ် ဥမင်ကို ပိုကောင်းသည်။</string>
-    <string name="connection_cleartext_message_this_address">ဤလိပ်စာသည် သင့်ဒေသတွင်းကွန်ရက် သို့မဟုတ် Tailscale ပြင်ပတွင် ရိုးရိုး http ကို သုံးသည်။ သင့်ဆာဗာစကားဝှက်နှင့် ဆက်ရှင်များရှိ အရာအားလုံး ကုဒ်မဝှက်ဘဲ ပို့ဆောင်ခံရမည်။ https၊ VPN သို့မဟုတ် ဥမင်ကို ပိုကောင်းသည်။</string>
+    <string name="connection_cleartext_message_one_host">%1$s သည် သင့်ဒေသတွင်းကွန်ရက် သို့မဟုတ် Tailscale ပြင်ပတွင် ရိုးရိုး http ကို သုံးသည်။ သင့်ဆာဗာစကားဝှက်နှင့် ဆက်ရှင်များရှိ အရာအားလုံး ကုဒ်မဝှက်ဘဲ ပို့ခံရနိုင်သည်။ https၊ VPN သို့မဟုတ် ဥမင်ကို ရွေးသင့်သည်။</string>
+    <string name="connection_cleartext_message_hosts">%1$s တို့သည် သင့်ဒေသတွင်းကွန်ရက် သို့မဟုတ် Tailscale ပြင်ပတွင် ရိုးရိုး http ကို သုံးသည်။ သင့်ဆာဗာစကားဝှက်နှင့် ဆက်ရှင်များရှိ အရာအားလုံး ကုဒ်မဝှက်ဘဲ ပို့ခံရနိုင်သည်။ https၊ VPN သို့မဟုတ် ဥမင်ကို ရွေးသင့်သည်။</string>
+    <string name="connection_cleartext_message_this_address">ဤလိပ်စာသည် သင့်ဒေသတွင်းကွန်ရက် သို့မဟုတ် Tailscale ပြင်ပတွင် ရိုးရိုး http ကို သုံးသည်။ သင့်ဆာဗာစကားဝှက်နှင့် ဆက်ရှင်များရှိ အရာအားလုံး ကုဒ်မဝှက်ဘဲ ပို့ခံရနိုင်သည်။ https၊ VPN သို့မဟုတ် ဥမင်ကို ရွေးသင့်သည်။</string>
     <string name="connection_cleartext_connect_anyway">ဘာဖြစ်ဖြစ် ချိတ်ဆက်ပါ</string>
     <string name="connection_error_invalid_qr">ဤသည်မှာ OpenCode 2 တွဲချိတ် QR မဟုတ်ပါ</string>
     <string name="connection_error_localhost_qr">ထို QR တွင် localhost လိပ်စာသာ ပါသည်</string>
@@ -65,7 +65,7 @@
     <string name="connection_error_enter_pairing_code">တွဲချိတ်ကုဒ် ထည့်ပါ</string>
     <string name="connection_error_pairing_link_expired">ဤတွဲချိတ်လင့်ခ်သည် သက်တမ်းကုန်သွားပြီ သို့မဟုတ် အသုံးပြုပြီးဖြစ်သည်</string>
     <string name="connection_error_duplicate_profile">ဤဟို့စ်နှင့် အသုံးပြုသူအမည်ပါ ဆာဗာကို သိမ်းထားပြီးဖြစ်သည်</string>
-    <string name="connection_error_qr_scan_failed">QR ဖြင့် မချိတ်ဆက်နိုင်ပါ။ OpenCode 2 ၏ တွဲချိတ် API သည် ပြောင်းလဲနေဆဲဖြစ်၍ အက်ပ်ကောင်းနေသော်လည်း စကင်ဖတ်ခြင်း မအောင်မြင်နိုင်ပါ။ ဟို့စ်ကို ထည့်၍ ချိတ်ဆက်ပါ။ စကားဝှက် ချန်လှပ်ထားနိုင်သည်။ တွဲချိတ်ကုဒ်ဖြင့်လည်း ရသည်။</string>
+    <string name="connection_error_qr_scan_failed">QR ဖြင့် မချိတ်ဆက်နိုင်ပါ။ OpenCode 2 ၏ တွဲချိတ် API သည် ပြောင်းလဲနေဆဲဖြစ်၍ အက်ပ်က ပုံမှန်အလုပ်လုပ်နေသော်လည်း စကင်ဖတ်ခြင်း မအောင်မြင်နိုင်ပါ။ ဟို့စ်ကို ထည့်၍ ချိတ်ဆက်ပါ။ စကားဝှက် ချန်လှပ်ထားနိုင်သည်။ တွဲချိတ်ကုဒ်ဖြင့်လည်း ရသည်။</string>
     <string name="connection_error_unreachable">ဆာဗာကို ချိတ်ဆက်၍ မရပါ</string>
     <string name="server_error_pairing_expired">တွဲချိတ်မှု သက်တမ်းကုန်ပြီ၊ ထပ်မံ တွဲချိတ်ပါ</string>
     <string name="server_error_not_found">ဖိုလ်ဒါ သို့မဟုတ် ဖိုင် မတွေ့ပါ</string>
@@ -73,19 +73,19 @@
     <string name="server_error_session_busy">ဆက်ရှင် အလုပ်များနေသည်</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">အထောက်အထားစိစစ်မှု မအောင်မြင်ပါ</string>
-    <string name="connection_error_unhealthy">ဆာဗာက ကျန်းမာမှုမကောင်းဟု အစီရင်ခံသည်</string>
+    <string name="connection_error_unhealthy">ဆာဗာက အခြေအနေမကောင်းကြောင်း ဖော်ပြသည်</string>
     <string name="connection_scanner_title">တွဲချိတ် QR စကင်ဖတ်ရန်</string>
     <string name="connection_scanner_card_title">OpenCode တွဲချိတ် QR</string>
-    <string name="connection_scanner_card_body">opencode pair --remote မှ ရသည်။ pair ကို သာမန်သုံးပါက ဆာဗာကို localhost ပြင်ပမှ ချိတ်ဆက်နိုင်မှသာ QR ကို ပြသည်။</string>
+    <string name="connection_scanner_card_body">opencode pair --remote မှ ရသည်။ pair ကို သာမန်အတိုင်း run လျှင် ဆာဗာကို localhost ပြင်ပမှ ချိတ်ဆက်နိုင်မှသာ QR ကို ပြသည်။</string>
     <string name="connection_onboarding_title">သင့်ဆာဗာသို့ ချိတ်ဆက်ပါ</string>
     <string name="connection_onboarding_body">OpenCode Mobile သည် သင့်ဖွံ့ဖြိုးရေးစက်ပေါ်တွင် လည်ပတ်နေသော opencode ဆာဗာရှိ ဆက်ရှင်များကို ထိန်းချုပ်သည်။</string>
     <string name="connection_onboarding_connect">ဆာဗာသို့ ချိတ်ဆက်ရန်</string>
     <string name="onboarding_skip">ကျော်ရန်</string>
     <string name="onboarding_next">ရှေ့ဆက်ရန်</string>
     <string name="onboarding_connect">ဆာဗာသို့ ချိတ်ဆက်ရန်</string>
-    <string name="onboarding_unofficial_title">တရားမဝင်\nopencode client</string>
+    <string name="onboarding_unofficial_title">တရားဝင်မဟုတ်သော\nopencode client</string>
     <string name="onboarding_unofficial_body">OpenCode Mobile သည် opencode ဆက်ရှင်များအတွက် native client ဖြစ်ပြီး ဆက်လက်ဖန်တီးနေဆဲဖြစ်သည်။ OpenCode ၏ တရားဝင်ထုတ်ကုန် မဟုတ်ပါ။</string>
-    <string name="onboarding_unofficial_badge">တရားမဝင်</string>
+    <string name="onboarding_unofficial_badge">တရားဝင်မဟုတ်</string>
     <string name="onboarding_connect_page_title">သင့်ဆာဗာများသို့\nချိတ်ဆက်ပါ</string>
     <string name="onboarding_connect_page_body">အက်ပ်ကို သင့်စက်ပေါ်ရှိ opencode ဆာဗာသို့ ညွှန်ပါ။ သင့်ဖုန်းက ဘယ်နေရာမှမဆို လုံခြုံစွာ ချိတ်ဆက်နိုင်ရန် Tailscale ကို အကြံပြုသည်။</string>
     <string name="onboarding_connect_page_setup_link">ဆာဗာ အရင် လိုသလား။</string>
@@ -110,7 +110,7 @@
     <string name="onboarding_setup_step3_title">ဖုန်းမှ ချိတ်ဆက်ပါ</string>
     <string name="onboarding_setup_step3_body">အကြံပြုချက်: Tailscale — စက်နှင့် ဖုန်းနှစ်ခုလုံးတွင် Tailscale ထည့်သွင်းပြီး စက်၏ Tailscale IP သို့မဟုတ် MagicDNS အမည်ကို ဆာဗာ URL အဖြစ် သုံးပါ။\n\nLAN တူခြင်း၊ VPN၊ HTTPS သို့မဟုတ် သင်စီမံသော အခြားဥမင်လည်း ရသည်။ အက်ပ်က relay မဖန်တီးပေးပါ။</string>
     <string name="onboarding_setup_step4_title">အက်ပ်တွင် ချိတ်ဆက်ပါ</string>
-    <string name="onboarding_setup_step4_body">base URL နှင့် စကားဝှက် ထည့်ပါ။ အက်ပ်က GET /global/health ကို စစ်ပြီး ဤစက်ပေါ်တွင် သိမ်းထားသော ဆာဗာချိတ်ဆက်မှုကို သိမ်းသည်။</string>
+    <string name="onboarding_setup_step4_body">base URL နှင့် စကားဝှက် ထည့်ပါ။ အက်ပ်က GET /global/health ကို စစ်ပြီး ဤစက်ပေါ်တွင် ဆာဗာချိတ်ဆက်မှုကို သိမ်းသည်။</string>
     <string name="onboarding_setup_open_docs">ဆာဗာစာတမ်းများ ဖွင့်ရန်</string>
     <string name="privacy_cover_title">OpenCode Mobile</string>
     <string name="privacy_cover_locked_label">OpenCode Mobile ကို လော့ခ်ချထားသည်</string>
@@ -217,7 +217,7 @@
     <string name="home_servers_sheet_using_now">ယခု သုံးနေသည်</string>
     <string name="home_servers_sheet_switch_to">ပြောင်းရန်</string>
     <string name="home_servers_sheet_manage">ဆက်တင်များတွင် စီမံရန်</string>
-    <string name="home_more_options">ရွေးစရာများ ထပ်ကြည့်ရန်</string>
+    <string name="home_more_options">နောက်ထပ် ရွေးစရာများ</string>
     <string name="home_filter_sheet_title">ပရောဂျက်ဖြင့် စစ်ထုတ်ရန်</string>
     <string name="home_empty_title">ပရောဂျက် မရှိသေးပါ</string>
     <string name="home_empty_message">သင့်ဆာဗာပေါ်ရှိ ဖိုလ်ဒါကို ရွေးရန် အောက်ရှိ ပရောဂျက်ထည့်သည့် အိုင်ကွန်ကို နှိပ်ပါ။</string>
@@ -230,7 +230,7 @@
     <string name="home_error_project_load_failed">ဆက်ရှင်များ ဖွင့်၍ မရပါ</string>
     <string name="home_remove_project_title">ပင်မမှ ဖယ်ရှားမလား။</string>
     <string name="home_remove_project_message">\"%1$s\" ကို ပင်မမှ ဖယ်ရှားမလား။ ၎င်း၏ ဆက်ရှင်များ ဆာဗာပေါ်တွင် ကျန်ရှိမည်။</string>
-    <string name="home_snackbar_removed">\"%1$s\" ကို ပင်မမှ ဖယ်ရှားပြီး</string>
+    <string name="home_snackbar_removed">\"%1$s\" ကို ပင်မမှ ဖယ်ရှားလိုက်သည်</string>
     <string name="home_snackbar_already_on_home">\"%1$s\" သည် ပင်မတွင် ရှိပြီးသား</string>
     <string name="home_snackbar_joined_project">%1$s နှင့် repo တူသည်။ ထိုနေရာတွင် worktree အဖြစ် ပြထားသည်။</string>
     <string name="home_all">အားလုံး</string>
@@ -246,7 +246,7 @@
         <item quantity="other">worktree %1$d ခုလုံး</item>
     </plurals>
     <plurals name="home_running_count">
-        <item quantity="other">လည်ပတ်နေသည် %1$d</item>
+        <item quantity="other">%1$d ခု လည်ပတ်နေသည်</item>
     </plurals>
     <plurals name="home_show_all">
         <item quantity="other">%1$d ခုလုံး ပြရန်</item>
@@ -263,7 +263,7 @@
     <string name="home_session_title_hint">ခေါင်းစဉ်</string>
     <string name="home_fork_title">ဆက်ရှင် fork လုပ်ရန်</string>
     <string name="home_fork_confirm">Fork</string>
-    <string name="home_fork_result_title">ဆက်ရှင်ကို fork လုပ်ပြီး</string>
+    <string name="home_fork_result_title">ဆက်ရှင်ကို fork လုပ်ပြီးပါပြီ</string>
     <string name="home_fork_result_message">“%1$s” အဆင်သင့်ဖြစ်ပြီ။</string>
     <string name="home_fork_result_stay">ဤနေရာတွင် နေမည်</string>
     <string name="home_delete_title">ဆက်ရှင် ဖျက်ရန်</string>
@@ -281,9 +281,9 @@
     <string name="archived_sessions_section_earlier">ယခင်က</string>
     <string name="archived_sessions_unarchive">မှတ်တမ်းမှ ပြန်ထုတ်ရန်</string>
     <string name="archived_sessions_delete">ဖျက်ရန်…</string>
-    <string name="archived_sessions_delete_dialog_message">“%1$s” ကို ဆာဗာမှ ဖျက်မည်။ ပြန်ပြင်၍ မရပါ။</string>
+    <string name="archived_sessions_delete_dialog_message">“%1$s” ကို ဆာဗာမှ ဖျက်မည်။ ပြန်ရယူ၍ မရပါ။</string>
     <string name="archived_sessions_archived_at">%1$s က မှတ်တမ်းသို့ ရွှေ့ခဲ့သည်</string>
-    <string name="archived_sessions_unarchived">“%1$s” ကို မှတ်တမ်းမှ ပြန်ထုတ်ပြီး</string>
+    <string name="archived_sessions_unarchived">“%1$s” ကို မှတ်တမ်းမှ ပြန်ထုတ်လိုက်သည်</string>
     <string name="archived_sessions_undo">မလုပ်တော့ပါ</string>
     <string name="archived_sessions_empty_title">မှတ်တမ်းသို့ ရွှေ့ထားသော ဆက်ရှင် မရှိပါ</string>
     <string name="archived_sessions_empty_message">%1$s တွင် မှတ်တမ်းသို့ ရွှေ့သော ဆက်ရှင်များ ဤနေရာတွင် ပေါ်လာမည်။</string>
@@ -324,7 +324,7 @@
     </plurals>
     <string name="add_project_in_folder">%1$s ထဲတွင်</string>
     <string name="add_project_root_home">ပင်မ</string>
-    <string name="add_project_error_add_failed">ဤဒိုင်ရက်ထရီကို ထည့်၍ မရပါ</string>
+    <string name="add_project_error_add_failed">ဤဖိုလ်ဒါကို ထည့်၍ မရပါ</string>
     <string name="worktree_new_row">worktree အသစ်…</string>
     <string name="worktree_run_in_subtitle">checkout တစ်ခု ဖန်တီးပြီး ထိုနေရာတွင် စတင်ရန်</string>
     <string name="worktree_move_subtitle">checkout တစ်ခု ဖန်တီးပြီး ထိုနေရာသို့ ရွှေ့ရန်</string>
@@ -332,7 +332,7 @@
     <string name="worktree_turn_on">ဆက်တင်များတွင် Worktrees ကို ဖွင့်ပါ</string>
     <string name="worktree_not_git">git repository လိုအပ်သည်</string>
     <string name="worktree_no_commit">commit ပါသော git repository လိုအပ်သည်</string>
-    <string name="worktree_unsupported">ဤဆာဗာသည် worktree များ ဖန်တီး၍ မရပါ</string>
+    <string name="worktree_unsupported">ဤဆာဗာတွင် worktree များ ဖန်တီး၍ မရပါ</string>
     <string name="worktree_form_title">worktree အသစ်</string>
     <string name="worktree_name">အမည်</string>
     <string name="worktree_branch">Branch</string>
@@ -349,7 +349,7 @@
     <string name="worktree_name_empty">အမည် ထည့်ပါ</string>
     <string name="worktree_name_chars">အက္ခရာ၊ ဂဏန်း၊ အစက်၊ တုံးတို သို့မဟုတ် underscore များ သုံးပါ</string>
     <plurals name="worktree_name_long">
-        <item quantity="other">စာလုံး %1$d လုံးထက် မပိုပါစေနှင့်</item>
+        <item quantity="other">စာလုံး %1$d လုံးအထိသာ သုံးပါ</item>
     </plurals>
     <string name="worktree_submit_run_in">ဖန်တီးပြီး စတင်ရန်</string>
     <string name="worktree_submit_move">ဖန်တီးပြီး ရွှေ့ရန်</string>
@@ -358,7 +358,7 @@
     <string name="worktree_unknown_error">မသိသော အမှား</string>
     <string name="worktree_request_failed_http">တောင်းဆိုမှု မအောင်မြင်ပါ (HTTP %1$d)</string>
     <string name="files_title">ဖိုင်များ</string>
-    <string name="files_more_options">ရွေးစရာများ ထပ်ကြည့်ရန်</string>
+    <string name="files_more_options">နောက်ထပ် ရွေးစရာများ</string>
     <string name="files_show_hidden">ဝှက်ထားသောဖိုင်များ ပြရန်</string>
     <string name="files_show_hidden_on">ဝှက်ထားသောဖိုင်များ ပြရန်၊ ဖွင့်ထားသည်</string>
     <string name="files_show_hidden_off">ဝှက်ထားသောဖိုင်များ ပြရန်၊ ပိတ်ထားသည်</string>
@@ -381,25 +381,25 @@
     <string name="files_no_file_message">ဖွင့်ထားသောဖိုင်များ တက်ဘ်အဖြစ် ကျန်နေမည်</string>
     <string name="files_path_copied">လမ်းကြောင်း ကူးယူထားသည်</string>
     <string name="file_viewer_copy_path">လမ်းကြောင်း မိတ္တူကူးရန်</string>
-    <string name="file_viewer_wrap_lines">စာကြောင်းများ ခေါက်ပြရန်</string>
-    <string name="file_viewer_wrap_lines_on">စာကြောင်းများ ခေါက်ပြရန်၊ ဖွင့်ထားသည်</string>
-    <string name="file_viewer_wrap_lines_off">စာကြောင်းများ ခေါက်ပြရန်၊ ပိတ်ထားသည်</string>
+    <string name="file_viewer_wrap_lines">စာကြောင်းများ ခွဲပြရန်</string>
+    <string name="file_viewer_wrap_lines_on">စာကြောင်းများ ခွဲပြရန်၊ ဖွင့်ထားသည်</string>
+    <string name="file_viewer_wrap_lines_off">စာကြောင်းများ ခွဲပြရန်၊ ပိတ်ထားသည်</string>
     <string name="file_viewer_loading">ဖိုင် ဖွင့်နေသည်</string>
     <string name="file_viewer_loading_image">ပုံ ဖွင့်နေသည်</string>
-    <string name="file_viewer_rendering_preview">နမူနာကြည့်ရှုမှု ပြုလုပ်နေသည်</string>
-    <string name="file_viewer_image_preview">ပုံ နမူနာကြည့်ရှုမှု</string>
+    <string name="file_viewer_rendering_preview">ကြိုတင်ကြည့်ရှုမှု ပြင်ဆင်နေသည်</string>
+    <string name="file_viewer_image_preview">ပုံ ကြိုတင်ကြည့်ရှုမှု</string>
     <string name="file_viewer_error_title">ဖိုင်ကို ဖွင့်၍ မရပါ</string>
     <string name="file_viewer_empty_title">ဗလာဖိုင်</string>
     <string name="file_viewer_empty_message">ဤဖိုင်တွင် အကြောင်းအရာ မရှိပါ။</string>
     <string name="file_viewer_truncated">ဤဖိုင်၏ ပထမ 1 MB ကို ပြထားသည်။</string>
-    <string name="file_viewer_tab_preview">နမူနာကြည့်ရန်</string>
-    <string name="file_viewer_tab_source">ရင်းမြစ်</string>
+    <string name="file_viewer_tab_preview">ကြိုတင်ကြည့်ရန်</string>
+    <string name="file_viewer_tab_source">မူရင်း</string>
     <string name="file_viewer_binary_title">Binary ဖိုင်</string>
-    <string name="file_viewer_binary_message">ဤဖိုင်အမျိုးအစားအတွက် နမူနာကြည့်ရှုမှု မရှိပါ။</string>
-    <string name="file_viewer_binary_message_type">%1$s\nဤဖိုင်အမျိုးအစားအတွက် နမူနာကြည့်ရှုမှု မရှိပါ။</string>
-    <string name="file_viewer_too_large_title">နမူနာကြည့်ရန် ကြီးလွန်းသည်</string>
-    <string name="file_viewer_too_large_message">ဤဖိုင်သည် အက်ပ်က နမူနာပြနိုင်သည်ထက် ကြီးသည်။</string>
-    <string name="file_viewer_too_large_message_size">ဤဖိုင်သည် အက်ပ်က နမူနာပြနိုင်သည်ထက် ကြီးသည်။\n%1$s</string>
+    <string name="file_viewer_binary_message">ဤဖိုင်အမျိုးအစားအတွက် ကြိုတင်ကြည့်ရှုမှု မရှိပါ။</string>
+    <string name="file_viewer_binary_message_type">%1$s\nဤဖိုင်အမျိုးအစားအတွက် ကြိုတင်ကြည့်ရှုမှု မရှိပါ။</string>
+    <string name="file_viewer_too_large_title">ကြိုတင်ကြည့်ရန် ကြီးလွန်းသည်</string>
+    <string name="file_viewer_too_large_message">ဤဖိုင်သည် အက်ပ်က ကြိုတင်ကြည့်ပေးနိုင်သည်ထက် ကြီးသည်။</string>
+    <string name="file_viewer_too_large_message_size">ဤဖိုင်သည် အက်ပ်က ကြိုတင်ကြည့်ပေးနိုင်သည်ထက် ကြီးသည်။\n%1$s</string>
     <plurals name="file_viewer_line_count">
         <item quantity="other">စာကြောင်း %1$d ကြောင်း</item>
     </plurals>
@@ -440,7 +440,7 @@
     <string name="terminal_key_left">ဘယ်</string>
     <string name="terminal_key_right">ညာ</string>
     <string name="session_chat_loading">ဆက်ရှင် ဖွင့်နေသည်</string>
-    <string name="session_chat_more_options">ရွေးစရာများ ထပ်ကြည့်ရန်</string>
+    <string name="session_chat_more_options">နောက်ထပ် ရွေးစရာများ</string>
     <string name="session_chat_menu_rename">ဆက်ရှင် အမည်ပြောင်းရန်</string>
     <string name="session_chat_menu_review_changes">အပြောင်းအလဲများ ပြန်စစ်ရန်</string>
     <string name="session_chat_menu_fork">ဆက်ရှင် fork လုပ်ရန်</string>
@@ -460,11 +460,11 @@
     <string name="session_chat_fork_dialog_confirm">Fork</string>
     <string name="session_chat_fork_dialog_error_empty_title">ဆက်ရှင်ခေါင်းစဉ် ထည့်ပါ</string>
     <string name="session_chat_fork_dialog_error_failed">ဆက်ရှင်ကို fork လုပ်၍ မရပါ။</string>
-    <string name="session_chat_fork_result_title">ဆက်ရှင်ကို fork လုပ်ပြီး</string>
+    <string name="session_chat_fork_result_title">ဆက်ရှင်ကို fork လုပ်ပြီးပါပြီ</string>
     <string name="session_chat_fork_result_message_ready">“%1$s” အဆင်သင့်ဖြစ်ပြီ။</string>
     <string name="session_chat_fork_result_open">ဖွင့်ရန်</string>
     <string name="session_chat_fork_result_stay_here">ဤနေရာတွင် နေမည်</string>
-    <string name="session_chat_attachment_source_title">ဖိုင်တွဲ ထည့်ရန်</string>
+    <string name="session_chat_attachment_source_title">ပူးတွဲဖိုင် ထည့်ရန်</string>
     <string name="session_chat_attachment_source_photos">ဓာတ်ပုံများ</string>
     <string name="session_chat_attachment_source_media">မီဒီယာ</string>
     <string name="session_chat_attachment_source_files">ဖိုင်များ</string>
@@ -509,7 +509,7 @@
     <string name="session_chat_model_notice_variant_unavailable">မှတ်ထားသော Variant မရနိုင်ပါ။ မူလကို သုံးနေသည်။</string>
     <string name="session_chat_model_notice_model_unavailable">ရွေးထားသော မော်ဒယ် မရနိုင်ပါ။ %1$s ကို သုံးနေသည်။</string>
     <string name="session_chat_side_question_unsupported">/btw သည် ဘေးထွက်မေးခွန်းများကို ဖြေနိုင်သော opencode v2 ဆာဗာ လိုအပ်သည်။ ဤဆာဗာသည် စကားဝိုင်းထဲ မထည့်ဘဲ မဖြေနိုင်ပါ။</string>
-    <string name="session_chat_side_question_unavailable">/btw သည် opencode ဆာဗာ ပိုသစ်သော ဗားရှင်း လိုအပ်သည်။</string>
+    <string name="session_chat_side_question_unavailable">/btw သည် ပိုသစ်သော opencode ဆာဗာ ဗားရှင်း လိုအပ်သည်။</string>
     <string name="session_chat_side_question_copied">အဖြေ ကူးယူထားသည်</string>
     <string name="session_chat_side_question_failed">/btw မအောင်မြင်ပါ - “%1$s”</string>
     <string name="attachment_error_folder">ဖိုလ်ဒါများကို ပူးတွဲ၍ မရပါ။</string>
@@ -520,14 +520,14 @@
     <string name="attachment_error_model_no_pdf">ဤမော်ဒယ်သည် PDF ပူးတွဲမှုကို မပံ့ပိုးပါ။</string>
     <string name="attachment_error_model_some">ဤမော်ဒယ်သည် ရွေးထားသော ပူးတွဲဖိုင်အချို့ကို မပံ့ပိုးပါ။</string>
     <string name="attachment_error_unreadable">ပူးတွဲဖိုင်ကို ဖတ်၍ မရပါ။</string>
-    <string name="attachment_error_upload_failed">တင်၍ မအောင်မြင်ပါ</string>
+    <string name="attachment_error_upload_failed">အပ်လုဒ် မအောင်မြင်ပါ</string>
     <string name="attachment_drop_reject_one">ဤအရာကို ပူးတွဲ၍ မရပါ</string>
     <string name="attachment_drop_reject_many">ဤအရာများကို ပူးတွဲ၍ မရပါ</string>
     <plurals name="attachment_drop_attach_images_count">
         <item quantity="other">ပုံ %1$d ပုံ ပူးတွဲရန် ချလိုက်ပါ</item>
     </plurals>
     <plurals name="attachment_drop_attach_files_count">
-        <item quantity="other">ဖိုင် %1$d ဖိုင် ပူးတွဲရန် ချလိုက်ပါ</item>
+        <item quantity="other">ဖိုင် %1$d ခု ပူးတွဲရန် ချလိုက်ပါ</item>
     </plurals>
     <string name="attachment_drop_attach_images">ပုံများ ပူးတွဲရန် ချလိုက်ပါ</string>
     <string name="attachment_drop_attach_files">ဖိုင်များ ပူးတွဲရန် ချလိုက်ပါ</string>
@@ -546,7 +546,7 @@
     <string name="session_chat_activity_btw_ready">/btw အဖြေ အဆင်သင့်</string>
     <string name="session_chat_activity_btw_ready_count">/btw အဖြေ အဆင်သင့် ×%1$d</string>
     <plurals name="session_chat_activity_queued">
-        <item quantity="other">တန်းစီထားသည် %1$d</item>
+        <item quantity="other">%1$d ခု တန်းစီထားသည်</item>
     </plurals>
     <plurals name="session_chat_activity_queued_prompts">
         <item quantity="other">တန်းစီထားသော အချက်ပြချက် %1$d ခု</item>
@@ -581,18 +581,18 @@
     <string name="session_chat_activity_hide_more">%1$d ခု ဖျောက်ရန်</string>
     <string name="session_chat_navigation_scroll_to_end">အဆုံးသို့ ဆွဲရန်</string>
     <plurals name="session_chat_navigation_new_count">
-        <item quantity="other">အသစ် %1$d</item>
+        <item quantity="other">%1$d အသစ်</item>
     </plurals>
     <plurals name="session_chat_navigation_scroll_to_end_new_messages">
         <item quantity="other">အဆုံးသို့ ဆွဲရန်၊ မက်ဆေ့ချ်အသစ် %1$d ခု</item>
     </plurals>
-    <string name="home_error_reconnect_to_create">အပိုင်းတစ်ခု ဖန်တီးရန် ပြန်ချိတ်ဆက်ပါ</string>
-    <string name="timeline_state_creating_title">အပိုင်း စတင်နေသည်…</string>
+    <string name="home_error_reconnect_to_create">ဆက်ရှင်တစ်ခု ဖန်တီးရန် ပြန်ချိတ်ဆက်ပါ</string>
+    <string name="timeline_state_creating_title">ဆက်ရှင် စတင်နေသည်…</string>
     <string name="timeline_state_creating_subtitle">ဆာဗာတွင် ဖန်တီးနေသည်…</string>
-    <string name="new_session_title">စက်ရှင်အသစ်</string>
+    <string name="new_session_title">ဆက်ရှင်အသစ်</string>
     <string name="new_session_draft_subtitle">မူကြမ်း · ပို့သည့်အခါ ဖန်တီးမည်</string>
     <string name="new_session_discard_draft">မူကြမ်းကို ပယ်ပါ</string>
-    <string name="new_session_run_in_caption">အပိုင်းကို ဤနေရာတွင် လုပ်ဆောင်ရန်</string>
+    <string name="new_session_run_in_caption">ဆက်ရှင်ကို ဤနေရာတွင် လုပ်ဆောင်ရန်</string>
     <string name="new_session_project">ပရောဂျက်</string>
     <string name="new_session_worktree">Worktree</string>
     <string name="new_session_starts_from">စတင်ရာနေရာ</string>
@@ -608,10 +608,10 @@
     <string name="new_session_new_worktree_subtitle">သီးခြားမိတ္တူ၊ ပို့သည့်အခါ ဖန်တီးမည်</string>
     <string name="new_session_worktrees_section">Worktree များ</string>
     <string name="timeline_state_loading_title">မက်ဆေ့ချ်များ ဖွင့်နေသည်</string>
-    <string name="timeline_state_loading_subtitle">အချိန်ဇယား ရယူနေသည်…</string>
-    <string name="timeline_state_error_title">မက်ဆေ့ချ်များ ဖွင့်၍မရပါ</string>
-    <string name="timeline_state_error_fallback">အချိန်ဇယား မဖွင့်နိုင်ပါ။</string>
-    <string name="timeline_state_retry">ပြန်ကြိုးစားပါ။</string>
+    <string name="timeline_state_loading_subtitle">မက်ဆေ့ချ်များ ရယူနေသည်…</string>
+    <string name="timeline_state_error_title">မက်ဆေ့ချ်များ ဖွင့်၍ မရပါ</string>
+    <string name="timeline_state_error_fallback">မက်ဆေ့ချ်များ မဖွင့်နိုင်ပါ။</string>
+    <string name="timeline_state_retry">ပြန်ကြိုးစားပါ</string>
     <string name="timeline_state_empty">မက်ဆေ့ချ် မရှိသေးပါ။ စတင်ရန် အချက်ပြချက်တစ်ခု ပို့ပါ။</string>
     <string name="timeline_state_refreshing">မက်ဆေ့ချ်များ ပြန်လည်ရယူနေသည်</string>
     <string name="timeline_message_assistant">အကူအညီပေးသူ၏ မက်ဆေ့ချ်</string>
@@ -625,14 +625,14 @@
         <item quantity="other">subagent %1$d ခု</item>
     </plurals>
     <plurals name="timeline_background_work_shell_count">
-        <item quantity="other">ဘူးခွံ %1$d ခု</item>
+        <item quantity="other">shell %1$d ခု</item>
     </plurals>
     <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
     <string name="timeline_background_work_subagents_and_shells_spoken">%1$s နှင့် %2$s</string>
     <string name="timeline_background_work_running_spoken">%1$s လုပ်ဆောင်နေသည်</string>
-    <string name="timeline_background_work_agent_needs_input">%1$s အား အဖြေလိုအပ်သည်</string>
+    <string name="timeline_background_work_agent_needs_input">%1$s သည် သင့်အဖြေ လိုအပ်သည်</string>
     <plurals name="timeline_background_work_subagents_need_input">
-        <item quantity="other">subagent %1$d ခုအား အဖြေလိုအပ်သည်</item>
+        <item quantity="other">subagent %1$d ခုသည် သင့်အဖြေ လိုအပ်သည်</item>
     </plurals>
     <string name="timeline_background_work_needs_input_running">%1$s · %2$d လုပ်ဆောင်နေသည်</string>
     <string name="timeline_background_work_needs_input_running_spoken">%1$s၊ %2$s လုပ်ဆောင်နေသည်</string>
@@ -650,7 +650,7 @@
     <string name="tool_title_glob">Glob</string>
     <string name="tool_title_search">ရှာရန်</string>
     <string name="tool_title_fetch">ရယူရန်</string>
-    <string name="tool_title_shell">ဘူးခွံ</string>
+    <string name="tool_title_shell">Shell</string>
     <string name="tool_title_execute">လုပ်ဆောင်ရန်</string>
     <string name="tool_title_lsp">LSP</string>
     <string name="tool_title_plan">စီမံကိန်း</string>
@@ -682,7 +682,7 @@
         <item quantity="other">ရယူမှု %1$d ကြိမ်</item>
     </plurals>
     <plurals name="tool_count_shell">
-        <item quantity="other">ဘူးခွံ %1$d ခု</item>
+        <item quantity="other">shell %1$d ခု</item>
     </plurals>
     <plurals name="tool_count_execute">
         <item quantity="other">လုပ်ဆောင်မှု %1$d ကြိမ်</item>
@@ -740,18 +740,18 @@
     <string name="tool_subtitle_plan_ready">အကောင်အထည်ဖော်ရန် အဆင်သင့်ဖြစ်ပြီလား။</string>
     <string name="tool_unknown_title">မသိသော ကိရိယာ</string>
     <string name="tool_unknown_detail">ကိရိယာ မရနိုင်ပါ</string>
-    <string name="tool_result_pull_request_opened">Pull request ဖွင့်ပြီး</string>
+    <string name="tool_result_pull_request_opened">Pull request ဖွင့်လိုက်ပြီ</string>
     <string name="tool_result_file">ဖိုင်</string>
-    <string name="tool_result_lines_range">လိုင်း %1$d–%2$d</string>
+    <string name="tool_result_lines_range">စာကြောင်း %1$d–%2$d</string>
     <plurals name="tool_result_first_lines">
-        <item quantity="other">ပထမ လိုင်း %1$d ကြောင်း</item>
+        <item quantity="other">ပထမ စာကြောင်း %1$d ကြောင်း</item>
     </plurals>
     <string name="timeline_step_reading">ဖတ်နေသည်…</string>
     <string name="timeline_step_reading_named">%1$s ကို ဖတ်နေသည်</string>
     <string name="timeline_step_searching">ရှာနေသည်…</string>
     <string name="timeline_step_searching_named">%1$s ကို ရှာနေသည်</string>
-    <string name="timeline_step_listing">စာရင်းပြုစုနေသည်…</string>
-    <string name="timeline_step_listing_named">%1$s ကို စာရင်းပြုစုနေသည်</string>
+    <string name="timeline_step_listing">စာရင်းထုတ်နေသည်…</string>
+    <string name="timeline_step_listing_named">%1$s ကို စာရင်းထုတ်နေသည်</string>
     <string name="timeline_step_editing">ပြင်နေသည်…</string>
     <string name="timeline_step_editing_named">%1$s ကို ပြင်နေသည်</string>
     <string name="timeline_step_writing">ရေးနေသည်…</string>
@@ -797,30 +797,30 @@
     <string name="timeline_notice_switched_to">ပြောင်းလိုက်သည်</string>
     <string name="timeline_notice_variant_switched">Variant ကို ပြောင်းလိုက်သည်</string>
     <string name="timeline_notice_variant_default">Variant ကို မူလသို့ ပြောင်းလိုက်သည်</string>
-    <string name="timeline_notice_instructions_updated">ညွှန်ကြားချက်များ အပ်ဒိတ်လုပ်ပြီး</string>
+    <string name="timeline_notice_instructions_updated">ညွှန်ကြားချက်များ အပ်ဒိတ်လုပ်ပြီးပြီ</string>
     <string name="timeline_notice_restart">ပြန်စတင်ပြီးနောက် ဆက်လုပ်နေသည်</string>
     <string name="timeline_notice_accessibility">%1$s %2$s</string>
-    <string name="timeline_compaction_title">ဆက်စပ်အကြောင်းအရာကို ချုံ့ပြီး</string>
+    <string name="timeline_compaction_title">ဆက်စပ်အကြောင်းအရာကို ကျစ်လျစ်ပြီးပြီ</string>
     <string name="timeline_compaction_automatic">အလိုအလျောက်</string>
     <string name="timeline_syncing">စင့်ခ်လုပ်နေသည်…</string>
-    <string name="timeline_failure_session_work_failed">အပိုင်းအလုပ် မအောင်မြင်ပါ</string>
+    <string name="timeline_failure_session_work_failed">ဆက်ရှင်အလုပ် မအောင်မြင်ပါ</string>
     <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
     <string name="timeline_failure_pick_model">မော်ဒယ် ရွေးပါ</string>
-    <string name="timeline_failure_compact">ကျစ်လျစ်သော</string>
-    <string name="session_chat_compact_status">ချုံ့နေသည်…</string>
+    <string name="timeline_failure_compact">ကျစ်လျစ်ရန်</string>
+    <string name="session_chat_compact_status">ကျစ်လျစ်နေသည်…</string>
     <string name="session_chat_turn_sending">ပို့နေသည်…</string>
     <string name="session_chat_turn_sending_percent">ပို့နေသည် %1$d%%</string>
-    <string name="session_chat_compact_success">အပိုင်းကို ချုံ့ပြီးပါပြီ။</string>
-    <string name="session_chat_compact_success_usage">ဆက်စပ်အကြောင်းအရာ ချုံ့ပြီး · %1$d%% → %2$d%%</string>
-    <string name="session_chat_compact_failure">အပိုင်း၏ ဆက်စပ်အကြောင်းအရာကို မချုံ့နိုင်ပါ။</string>
-    <string name="session_chat_revert_undo_failed">နောက်ဆုံးမက်ဆေ့ချ်ကို မလုပ်တော့ဘဲ မထားနိုင်ပါ။</string>
-    <string name="session_chat_revert_failed">မက်ဆေ့ချ်ကို ပြန်လည်ပြောင်းလဲ၍ မရပါ။</string>
+    <string name="session_chat_compact_success">ဆက်ရှင်ကို ကျစ်လျစ်ပြီးပါပြီ။</string>
+    <string name="session_chat_compact_success_usage">ဆက်စပ်အကြောင်းအရာ ကျစ်လျစ်ပြီး · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">ဆက်ရှင်၏ ဆက်စပ်အကြောင်းအရာကို ကျစ်လျစ်၍ မရပါ။</string>
+    <string name="session_chat_revert_undo_failed">နောက်ဆုံးမက်ဆေ့ချ်ကို နောက်ပြန်ရုပ်သိမ်း၍ မရပါ။</string>
+    <string name="session_chat_revert_failed">မက်ဆေ့ချ်ကို မူလအတိုင်း ပြန်ထား၍ မရပါ။</string>
     <string name="session_chat_revert_redo_failed">ပြန်လုပ်၍ မရပါ။</string>
-    <string name="session_chat_revert_cancel_failed">ပြန်လည်ပြောင်းလဲမှုကို မလုပ်တော့၍ မရပါ။</string>
-    <string name="session_chat_revert_commit_failed">ပြန်လည်ပြောင်းလဲမှုကို အတည်ပြု၍ မရပါ။</string>
+    <string name="session_chat_revert_cancel_failed">ပြန်ထားမှုကို ပယ်ဖျက်၍ မရပါ။</string>
+    <string name="session_chat_revert_commit_failed">ပြန်ထားမှုကို အတည်ပြု၍ မရပါ။</string>
     <string name="session_chat_fork_rename_failed">Fork ဖန်တီးပြီးပါပြီ၊ သို့သော် အမည်ပြောင်း၍ မရပါ။</string>
     <string name="session_chat_pending_prompt_update_failed">စောင့်ဆိုင်းနေသော အချက်ပြချက်ကို အပ်ဒိတ်လုပ်၍ မရပါ</string>
-    <string name="session_chat_shell_stop_failed">ဘူးခွံကို ရပ်၍ မရပါ။ ထပ်ကြိုးစားပါ။</string>
+    <string name="session_chat_shell_stop_failed">shell ကို ရပ်၍ မရပါ။ ထပ်ကြိုးစားပါ။</string>
     <string name="session_chat_shell_status_running">လုပ်ဆောင်နေသည်</string>
     <string name="session_chat_shell_status_exited">ထွက်ပြီး</string>
     <string name="session_chat_shell_status_timed_out">အချိန်ကုန်သွားသည်</string>
@@ -833,7 +833,7 @@
     <string name="session_chat_sheet_copy">မိတ္တူ</string>
     <string name="session_chat_sheet_copy_output">ထွက်ရှိချက်ကို ကူးရန်</string>
     <string name="session_chat_sheet_message_actions_title">မက်ဆေ့ချ်</string>
-    <string name="session_chat_sheet_message_actions_revert">မက်ဆေ့ချ်ကို ပြန်လည်ပြောင်းလဲရန်</string>
+    <string name="session_chat_sheet_message_actions_revert">မက်ဆေ့ချ်ကို မူလအတိုင်း ပြန်ထားရန်</string>
     <string name="session_chat_sheet_message_actions_fork">ဤနေရာမှ Fork လုပ်ရန်</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">ကုဒ်ဘလောက်ကို ကူးရန်</string>
     <string name="session_chat_sheet_message_actions_copy_message">မက်ဆေ့ချ်ကို ကူးရန်</string>
@@ -868,7 +868,7 @@
     <string name="session_chat_sheet_pending_prompts_delete">ဖျက်ပါ</string>
     <string name="session_chat_sheet_side_question_done">ပြီးပြီ</string>
     <string name="session_chat_sheet_side_question_not_added">စကားဝိုင်းထဲသို့ မထည့်ထားပါ</string>
-    <string name="session_chat_sheet_todos_title">အပိုင်း၏ todo များ</string>
+    <string name="session_chat_sheet_todos_title">ဆက်ရှင်၏ todo များ</string>
     <string name="session_chat_sheet_todos_progress">%2$d ခုအနက် %1$d ခု ပြီးပြီ</string>
     <string name="session_chat_goal_pill">ပန်းတိုင်</string>
     <string name="session_chat_goal_pill_paused">ပန်းတိုင် ခဏရပ်ထားသည်</string>
@@ -894,7 +894,7 @@
         <item quantity="other">%1$d ကြိမ် တိုးတက်မှု မရှိပါ၊ %2$d ကြိမ်ပြီးလျှင် ခဏရပ်မည်</item>
     </plurals>
     <string name="session_chat_goal_waiting">စောင့်နေသည်</string>
-    <string name="session_chat_goal_waiting_shell">နောက်ခံ ဘူးခွံ ပြီးဆုံးရန် စောင့်နေသည်- %1$s။ %2$d မိနစ်ကြာ ဘာမျှမလုပ်ဆောင်ပါက ခဏရပ်မည်။</string>
+    <string name="session_chat_goal_waiting_shell">နောက်ခံ shell ပြီးဆုံးရန် စောင့်နေသည်- %1$s။ %2$d မိနစ်ကြာ ဘာမျှမလုပ်ဆောင်ပါက ခဏရပ်မည်။</string>
     <string name="session_chat_goal_waiting_subagent">subagent ပြီးဆုံးရန် စောင့်နေသည်။ %1$d မိနစ်ကြာ ဘာမျှမလုပ်ဆောင်ပါက ခဏရပ်မည်။</string>
     <string name="session_chat_goal_waiting_on_you">သင့်ကို စောင့်နေသည်</string>
     <string name="session_chat_goal_waiting_permission">ခွင့်ပြုချက်တောင်းဆိုမှု ဖွင့်ထားသည်။ သင်ဖြေပြီးလျှင် ပန်းတိုင် ဆက်လုပ်မည်။</string>
@@ -938,8 +938,8 @@
     <string name="session_chat_goal_resume_failed_reason">ပန်းတိုင်ကို ဆက်လုပ်၍ မရပါ- %1$s</string>
     <string name="session_chat_goal_clear_failed">ပန်းတိုင်ကို ရှင်း၍ မရပါ</string>
     <string name="session_chat_goal_clear_failed_reason">ပန်းတိုင်ကို ရှင်း၍ မရပါ- %1$s</string>
-    <string name="session_chat_timeline_style_notice">အချိန်ဇယား- %1$s။ ဆက်တင်များတွင် အချိန်မရွေး ပြောင်းနိုင်သည်။</string>
-    <string name="session_chat_branch_copied">ဘရန့်ချ်အမည်ကို ကူးယူထားသည်။</string>
+    <string name="session_chat_timeline_style_notice">Timeline- %1$s။ ဆက်တင်များတွင် အချိန်မရွေး ပြောင်းနိုင်သည်။</string>
+    <string name="session_chat_branch_copied">Branch အမည်ကို ကူးယူပြီးပြီ</string>
     <string name="session_chat_follow_up_switched_steer">လမ်းညွှန်ခြင်းသို့ ပြောင်းလိုက်သည်</string>
     <string name="session_chat_follow_up_switched_queue">တန်းစီခြင်းသို့ ပြောင်းလိုက်သည်</string>
     <string name="session_chat_failure_retry_after_seconds">%1$d စက္ကန့်အတွင်း ပြန်ကြိုးစားပါ</string>
@@ -966,7 +966,7 @@
     <string name="session_chat_mcp_load_failed">MCP ဆာဗာများကို မဖွင့်နိုင်ပါ။ ချိတ်ဆက်မှုကို စစ်ပြီး ထပ်ကြိုးစားပါ။</string>
     <string name="session_chat_create_failed">အပိုင်းကို မဖန်တီးနိုင်ပါ</string>
     <string name="session_chat_send_timed_out">မပို့နိုင်ပါ။ ထပ်ကြိုးစားပါ။</string>
-    <string name="session_chat_shell_cannot_queue">ဘူးခွံအမိန့်များကို တန်းစီ၍ မရပါ။ ယခုလုပ်ရန် လမ်းညွှန်ခြင်းသို့ ပြောင်းပါ။</string>
+    <string name="session_chat_shell_cannot_queue">Shell အမိန့်များကို တန်းစီ၍ မရပါ။ ယခုလုပ်ရန် လမ်းညွှန်ခြင်းသို့ ပြောင်းပါ။</string>
     <string name="session_chat_reply_error_permission">သင့်အဖြေကို မပို့နိုင်ပါ။ ထပ်ကြိုးစားပါ။</string>
     <string name="session_chat_reply_error_permission_reason">သင့်အဖြေကို မပို့နိုင်ပါ။ %1$s။</string>
     <string name="session_chat_reply_error_question">သင့်အဖြေကို မပို့နိုင်ပါ။ ထပ်ကြိုးစားပါ။</string>
@@ -977,9 +977,9 @@
     <string name="session_chat_question_unavailable">မေးခွန်းတောင်းဆိုမှုကို မရနိုင်တော့ပါ</string>
     <string name="session_chat_permission_tree_failed">ခွင့်ပြုချက် အပိုင်းအစုကို ပြန်လည်မရယူနိုင်ပါ</string>
     <string name="session_chat_question_tree_failed">မေးခွန်း အပိုင်းအစုကို ပြန်လည်မရယူနိုင်ပါ</string>
-    <string name="session_chat_sheet_timeline_style_picker_title">အသစ်- သင့်အချိန်ဇယားကို ရွေးပါ</string>
+    <string name="session_chat_sheet_timeline_style_picker_title">အသစ်- သင့်အချိန်ကြောင်းကို ရွေးပါ</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">ဤအပ်ဒိတ်တွင် အေးဂျင့်လုပ်ဆောင်နေသည်များကို ခြေရာခံရန် နည်းလမ်းအသစ်များ ပါဝင်သည်။</string>
-    <string name="session_chat_sheet_timeline_style_picker_footnote">ဆက်တင်များ → အချိန်ဇယားပုံစံတွင် အချိန်မရွေး ပြောင်းနိုင်သည်။</string>
+    <string name="session_chat_sheet_timeline_style_picker_footnote">ဆက်တင်များ → အချိန်ကြောင်းပုံစံတွင် အချိန်မရွေး ပြောင်းနိုင်သည်။</string>
     <string name="session_chat_sheet_timeline_style_picker_use">%1$s ကို သုံးရန်</string>
     <string name="session_chat_sheet_timeline_style_picker_recommended">အကြံပြုထားသည်</string>
     <string name="session_chat_sheet_timeline_style_picker_current">လက်ရှိ</string>
@@ -991,7 +991,7 @@
     <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">လုပ်ဆောင်နေသောအဆင့်များကို တိုက်ရိုက်ကတ်တစ်ခုတည်းတွင်ပြပြီး အနှစ်ချုပ်အဖြစ် ခေါက်သိမ်းသည်</string>
     <string name="session_chat_sheet_picker_model">မော်ဒယ်</string>
     <string name="session_chat_sheet_picker_agent_mode">အေးဂျင့်မုဒ်</string>
-    <string name="session_chat_sheet_picker_variant">Variant</string>
+    <string name="session_chat_sheet_picker_variant">မူကွဲ</string>
     <string name="session_chat_sheet_picker_back_to_providers">ဝန်ဆောင်မှုပေးသူများသို့ ပြန်သွားရန်</string>
     <string name="session_chat_sheet_picker_no_models_match">သင့်စစ်ထုတ်မှုနှင့် ကိုက်ညီသော မော်ဒယ် မရှိပါ</string>
     <string name="session_chat_sheet_picker_filter_models_hint">မော်ဒယ်များ စစ်ထုတ်ရန်...</string>
@@ -1010,15 +1010,15 @@
     <string name="session_chat_sheet_tool_result_copy_link">%1$s ကို ကူးရန်</string>
     <string name="session_chat_sheet_tool_result_copies_link_hint">လင့်ခ်ကို ကူးသည်</string>
     <string name="session_chat_sheet_tool_result_line_accessibility">လိုင်း %1$d၊ %2$s</string>
-    <string name="session_chat_sheet_shell_title">ဘူးခွံ</string>
+    <string name="session_chat_sheet_shell_title">Shell</string>
     <string name="session_chat_sheet_shell_command_accessibility">အမိန့်၊ %1$s</string>
     <string name="session_chat_sheet_shell_no_output">ထွက်ရှိချက် မရှိသေးပါ</string>
     <string name="session_chat_sheet_shell_truncated">နောက်ဆုံးထွက်ရှိချက်ကို ပြထားသည်</string>
-    <string name="session_chat_sheet_shell_stop">ဘူးခွံကို ရပ်ပါ</string>
+    <string name="session_chat_sheet_shell_stop">Shell ကို ရပ်ပါ</string>
     <string name="session_chat_sheet_shell_stopping">ရပ်နေသည်…</string>
     <string name="session_chat_sheet_background_work_title">နောက်ခံလုပ်ငန်း</string>
     <string name="session_chat_sheet_background_work_subagents">Subagent များ</string>
-    <string name="session_chat_sheet_background_work_shells">ဘူးခွံများ</string>
+    <string name="session_chat_sheet_background_work_shells">Shell များ</string>
     <string name="session_chat_sheet_background_work_tab_running">လုပ်ဆောင်နေသည်</string>
     <string name="session_chat_sheet_background_work_tab_done">ပြီးပြီ</string>
     <string name="session_chat_sheet_background_work_running_empty">လုပ်ဆောင်နေသည်များ မရှိပါ။ ပြီးသောအလုပ်များကို “ပြီးပြီ” တွင် ကြည့်ပါ။</string>
@@ -1047,7 +1047,7 @@
     <string name="session_context_load_failed_message">ဆက်စပ်အကြောင်းအရာ မဖွင့်နိုင်ပါ။</string>
     <string name="session_context_refresh_failed">အပိုင်း၏ ဆက်စပ်အကြောင်းအရာကို ပြန်လည်မရယူနိုင်ပါ</string>
     <string name="session_context_refreshing">အပိုင်း၏ ဆက်စပ်အကြောင်းအရာကို ပြန်လည်ရယူနေသည်</string>
-    <string name="session_context_retry">ပြန်ကြိုးစားပါ။</string>
+    <string name="session_context_retry">ပြန်ကြိုးစားပါ</string>
     <string name="session_context_stat_session">အပိုင်း</string>
     <string name="session_context_stat_messages">မက်ဆေ့ချ်များ</string>
     <string name="session_context_stat_provider">ပံ့ပိုးပေးသူ</string>
@@ -1099,7 +1099,7 @@
     </plurals>
     <string name="settings_collapse_tool_calls_title">ဆက်တိုက်ကိရိယာခေါ်ဆိုမှုများကို ခေါက်ရန်</string>
     <string name="settings_collapse_tool_calls_subtitle">ဆက်တိုက်ကိရိယာများကို အနှစ်ချုပ်ကတ်တစ်ခုတွင် စုစည်းသည်</string>
-    <string name="settings_timeline_style_title">အချိန်ဇယားပုံစံ</string>
+    <string name="settings_timeline_style_title">အချိန်ကြောင်းပုံစံ</string>
     <string name="settings_timeline_style_standard_title">စံ</string>
     <string name="settings_timeline_style_standard_subtitle">အေးဂျင့်၏ မက်ဆေ့ချ်များကြားရှိ ကိရိယာကတ်များနှင့် အုပ်စုများ</string>
     <string name="settings_timeline_style_step_rail_title">အဆင့်လမ်းကြောင်း</string>
@@ -1136,7 +1136,7 @@
     <string name="settings_analytics_title">ခွဲခြမ်းစိတ်ဖြာမှုနှင့် crash အစီရင်ခံစာများ</string>
     <string name="settings_analytics_subtitle">ရွေးချယ်နိုင်သော ထုတ်ကုန်အသုံးပြုမှုဖြစ်ရပ်များနှင့် crash အစီရင်ခံစာများကို ခွင့်ပြုပါ။ ပိတ်ထားလျှင် Firebase သို့ ဘာမျှမပို့ပါ။</string>
     <string name="settings_analytics_label">ထုတ်ကုန်ခွဲခြမ်းစိတ်ဖြာမှု</string>
-    <string name="settings_diagnostic_logs_subtitle">ထိန်းချုပ်ဖော်ပြထားသော runtime မှတ်တမ်းကာလကို မျှဝေရန်</string>
+    <string name="settings_diagnostic_logs_subtitle">ဖုံးကွယ်ထားသော runtime မှတ်တမ်း၏ လက်ရှိကာလကို မျှဝေရန်</string>
     <string name="settings_clear_all_data_title">ဒေတာအားလုံး ရှင်းရန်</string>
     <string name="settings_clear_all_data_subtitle">ချိတ်ဆက်မှုနှင့် cache ကို ဖယ်ရှားသည်</string>
     <string name="settings_clear_all_data_dialog_title">ဒေတာအားလုံး ရှင်းမလား။</string>
@@ -1149,8 +1149,8 @@
     <string name="settings_rate_app_subtitle">ပြန်လည်သုံးသပ်ချက်က အခြားသူများ အက်ပ်ကို ရှာတွေ့ရန် ကူညီသည်</string>
     <string name="settings_star_on_github_title">GitHub တွင် Star ပေးရန်</string>
     <string name="settings_follow_on_x_title">X တွင် Follow လုပ်ရန်</string>
-    <string name="diagnostics_title">ရောဂါရှာမှတ်တမ်းများ</string>
-    <string name="diagnostics_loading">ရောဂါရှာမှတ်တမ်းများကို ဖွင့်နေသည်</string>
+    <string name="diagnostics_title">Diagnostic မှတ်တမ်းများ</string>
+    <string name="diagnostics_loading">Diagnostic မှတ်တမ်းများကို ဖွင့်နေသည်</string>
     <string name="diagnostics_entries_title">ထည့်သွင်းချက်များ</string>
     <plurals name="diagnostics_entries_count">
         <item quantity="other">သိမ်းထားသောကာလတွင် ဖုံးကွယ်ထားသော လိုင်း %1$d ကြောင်း</item>
@@ -1161,7 +1161,7 @@
         <item quantity="other">နောက်ဆုံး %1$d မိနစ်</item>
     </plurals>
     <string name="diagnostics_export_title">ထုတ်ယူရန်</string>
-    <string name="diagnostics_soft_cap_title">အကန့်အသတ်အပျော့</string>
+    <string name="diagnostics_soft_cap_title">ပျော့ပျောင်းသော ကန့်သတ်ချက်</string>
     <string name="diagnostics_soft_cap_dropped">အများဆုံး %1$d · အဟောင်းဆုံး %2$d ခု ဖယ်ထုတ်ခဲ့သည်</string>
     <plurals name="diagnostics_soft_cap_none_dropped">
         <item quantity="other">အများဆုံး %1$d · ဖယ်ထုတ်ခြင်း မရှိပါ</item>
@@ -1170,18 +1170,18 @@
     <string name="diagnostics_format_value">JSONL · လျှို့ဝှက်ချက်များနှင့် မက်ဆေ့ချ်အကြောင်းအရာများကို ဖုံးကွယ်ထားသည်</string>
     <string name="diagnostics_range_title">အပိုင်းအခြား</string>
     <string name="diagnostics_range_value">%1$s → %2$s</string>
-    <string name="diagnostics_areas_title">အပိုင်းများ</string>
+    <string name="diagnostics_areas_title">နယ်ပယ်များ</string>
     <string name="diagnostics_clear">ရှင်းရန်</string>
     <string name="diagnostics_share">မျှဝေရန်</string>
     <string name="diagnostics_export_window_title">ထုတ်ယူမည့်ကာလ</string>
-    <string name="diagnostics_export_sheet_title">ရောဂါရှာမှတ်တမ်းများ ထုတ်ယူရန်</string>
+    <string name="diagnostics_export_sheet_title">Diagnostic မှတ်တမ်းများ ထုတ်ယူရန်</string>
     <string name="diagnostics_share_via_apps">အက်ပ်များဖြင့် မျှဝေရန်</string>
     <string name="diagnostics_save_to_files">ဖိုင်များထဲသို့ သိမ်းရန်</string>
-    <string name="diagnostics_clear_dialog_title">ရောဂါရှာမှတ်တမ်းများကို ရှင်းမလား။</string>
-    <string name="diagnostics_clear_dialog_message">သိမ်းထားသော ရောဂါရှာမှတ်တမ်းကို ဖယ်ရှားမည်။</string>
-    <string name="diagnostics_error_share">မျှဝေရန် ရောဂါရှာမှတ်တမ်းကို မပြင်ဆင်နိုင်ပါ။</string>
-    <string name="diagnostics_error_save">ရောဂါရှာမှတ်တမ်းကို မသိမ်းနိုင်ပါ။</string>
-    <string name="diagnostics_saved">ရောဂါရှာမှတ်တမ်းကို သိမ်းပြီးပါပြီ။</string>
+    <string name="diagnostics_clear_dialog_title">Diagnostic မှတ်တမ်းများကို ရှင်းမလား။</string>
+    <string name="diagnostics_clear_dialog_message">သိမ်းထားသော diagnostic မှတ်တမ်းကို ဖယ်ရှားမည်။</string>
+    <string name="diagnostics_error_share">မျှဝေရန် diagnostic မှတ်တမ်းကို မပြင်ဆင်နိုင်ပါ။</string>
+    <string name="diagnostics_error_save">Diagnostic မှတ်တမ်းကို မသိမ်းနိုင်ပါ။</string>
+    <string name="diagnostics_saved">Diagnostic မှတ်တမ်းကို သိမ်းပြီးပါပြီ။</string>
     <string name="appearance_title">အသွင်အပြင်</string>
     <string name="appearance_theme_title">အပြင်အဆင်</string>
     <string name="appearance_theme_subtitle">%1$s · %2$s</string>
@@ -1201,7 +1201,7 @@
     <string name="appearance_preview_dark">အမှောင်</string>
     <string name="appearance_preview_sample_message">တိုကင်သိုလှောင်ရာကို လျှောက်ကြည့်ပါ။</string>
     <string name="appearance_preview_sample_reply">တစ်ကြိမ်ပြန်လည်ရယူပြီး ထပ်ကြိုးစားမည်။</string>
-    <string name="appearance_more_options">ရွေးချယ်စရာ ပိုမို</string>
+    <string name="appearance_more_options">နောက်ထပ် ရွေးစရာများ</string>
     <string name="appearance_reset_text_sizes">စာလုံးအရွယ်အစားများကို ပြန်သတ်မှတ်ရန်</string>
     <string name="appearance_reset_all">အသွင်အပြင်အားလုံး ပြန်သတ်မှတ်ရန်</string>
     <string name="appearance_mode_title">မုဒ်</string>
@@ -1233,18 +1233,18 @@
     <string name="appearance_sample_tool_title">ပြင်ပြီး</string>
     <string name="feature_flags_title">Feature Flags</string>
     <string name="feature_flags_clear_overrides">override များကို ရှင်းရန်</string>
-    <string name="feature_flags_more_options">ရွေးချယ်စရာ ပိုမို</string>
+    <string name="feature_flags_more_options">နောက်ထပ် ရွေးစရာများ</string>
     <string name="feature_flags_intro">flag တစ်ခုကို ပြောင်းလိုက်ပါက အဝေးမှတန်ဖိုးထက် ဦးစားပေးသော စက်ပေါ်ရှိ override ကို သတ်မှတ်သည်။ အဝေးမှတန်ဖိုးများကို အက်ပ်ဖွင့်ချိန်တွင် ရယူပြီး နောက်တစ်ကြိမ်ဖွင့်ချိန်တွင် အသုံးပြုသည်။</string>
     <string name="feature_flags_section_flags">Flag များ</string>
     <string name="feedback_title_report">ပြဿနာ သတင်းပို့ရန်</string>
     <string name="feedback_title_hide_parts">အစိတ်အပိုင်းများ ဝှက်ရန်</string>
-    <string name="feedback_title_log_preview">ရောဂါရှာမှတ်တမ်း</string>
+    <string name="feedback_title_log_preview">Diagnostic မှတ်တမ်း</string>
     <string name="feedback_title_listening">နားထောင်နေသည်</string>
     <string name="feedback_kind_bug">ချို့ယွင်းချက်</string>
     <string name="feedback_kind_idea">အကြံဉာဏ်</string>
     <string name="feedback_placeholder_bug">ဘာဖြစ်ခဲ့သလဲ။ ဘာဖြစ်မည်ဟု မျှော်လင့်ခဲ့သလဲ။</string>
     <string name="feedback_placeholder_idea">OpenCode ကို သင့်အတွက် ပိုကောင်းစေမည့်အရာ ဘာလဲ။</string>
-    <string name="feedback_privacy_note">OpenCode Mobile အဖွဲ့ထံသာ ရောက်ပါမည်။ သင့်ဆာဗာလိပ်စာ၊ အသုံးပြုသူအမည် သို့မဟုတ် စကားဝှက်ကို ဘယ်တော့မှ မပါဝင်ပါ။ မှတ်တမ်းများကို ဤဖုန်းပေါ်တွင် ဖုံးကွယ်ထားသည်။</string>
+    <string name="feedback_privacy_note">OpenCode Mobile အဖွဲ့ထံသာ ရောက်ပါမည်။ သင့်ဆာဗာလိပ်စာ၊ အသုံးပြုသူအမည် သို့မဟုတ် စကားဝှက်ကို ဘယ်အခါမှ မထည့်သွင်းပါ။ မှတ်တမ်းများကို ဤဖုန်းပေါ်တွင် ဖုံးကွယ်ထားသည်။</string>
     <string name="feedback_error_offline">သင် အော့ဖ်လိုင်း ဖြစ်နေသည်။ သင့်အစီရင်ခံစာကို ဤနေရာတွင် သိမ်းထားသည် — ချိတ်ဆက်မိသည့်အခါ ထပ်ကြိုးစားပါ။</string>
     <plurals name="feedback_error_rate_limited">
         <item quantity="other">အစီရင်ခံစာ ယခုပင် ပို့ပြီးပြီ။ %1$d စက္ကန့်အတွင်း ထပ်ကြိုးစားပါ။</item>
@@ -1253,7 +1253,7 @@
     <string name="feedback_error_failed">အစီရင်ခံစာကို မပို့နိုင်ပါ။</string>
     <string name="feedback_action_try_again">ထပ်ကြိုးစားရန်</string>
     <string name="feedback_action_share_instead">အစား မျှဝေရန်</string>
-    <string name="feedback_undo">မလုပ်တော့ပါ။</string>
+    <string name="feedback_undo">မလုပ်တော့ပါ</string>
     <string name="feedback_done">ပြီးပြီ</string>
     <string name="feedback_add_attachment">ပူးတွဲဖိုင် ထည့်ရန်</string>
     <string name="feedback_dictate">အသံဖြင့်ရေးရန်</string>
@@ -1312,7 +1312,7 @@
     <string name="session_search_archived_tag">မှတ်တမ်းထဲ</string>
     <string name="session_search_scope_selected">%1$s၊ ရွေးထားသည်</string>
     <string name="keyboard_shortcuts_group_session">အပိုင်း</string>
-    <string name="keyboard_shortcuts_group_prompt">အချက်ပြချက်</string>
+    <string name="keyboard_shortcuts_group_prompt">Prompt</string>
     <string name="keyboard_shortcuts_group_go">သွားရန်</string>
     <string name="keyboard_shortcuts_new_session">စက်ရှင်အသစ်</string>
     <string name="keyboard_shortcuts_command_palette">အမိန့်ရွေးချယ်ခန်း</string>
@@ -1353,7 +1353,7 @@
     <string name="changes_loading_title">အပြောင်းအလဲများ ဖွင့်နေသည်</string>
     <string name="changes_loading_message">diff ကို ရယူနေသည်…</string>
     <string name="changes_no_turn_title">ပြီးစီးသော အကြိမ် မရှိပါ</string>
-    <string name="changes_no_turn_message">အချက်ပြပါ။ ပို့ပြီး ပြီးစီးသည်အထိ စောင့်ကာ ထပ်ကြိုးစားပါ။</string>
+    <string name="changes_no_turn_message">Prompt တစ်ခု ပို့ပြီး ပြီးစီးသည်အထိ စောင့်ကာ ထပ်ကြိုးစားပါ။</string>
     <string name="changes_error_title">အပြောင်းအလဲများ မဖွင့်နိုင်ပါ</string>
     <string name="changes_error_fallback">အပြောင်းအလဲများ မဖွင့်ခဲ့ပါ။</string>
     <string name="changes_error_request_failed">တောင်းဆိုမှု မအောင်မြင်ပါ</string>
@@ -1366,8 +1366,8 @@
     <string name="changes_no_matches_clear_filter">စစ်ထုတ်မှု ရှင်းရန်</string>
     <string name="changes_select_file_title">ဖိုင် ရွေးပါ</string>
     <string name="changes_select_file_message">diff ကြည့်ရန် ပြောင်းထားသော ဖိုင်ကို ရွေးပါ။</string>
-    <string name="changes_preview_unavailable_title">နမူနာကြည့်ရှုမှု မရနိုင်ပါ</string>
-    <string name="changes_preview_unavailable_message">ဤဖိုင်အတွက် စာသား နမူနာကြည့်ရှုမှု မရနိုင်ပါ။</string>
+    <string name="changes_preview_unavailable_title">ကြိုတင်ကြည့်ရှုမှု မရနိုင်ပါ</string>
+    <string name="changes_preview_unavailable_message">ဤဖိုင်အတွက် စာသား ကြိုတင်ကြည့်ရှုမှု မရနိုင်ပါ။</string>
     <string name="changes_file_viewer_truncated">ဤဖိုင်၏ အပြောင်းအလဲများ၏ ပထမ 1 MB ကို ပြထားသည်။</string>
     <plurals name="changes_summary_changed_files">
         <item quantity="other">ပြောင်းထားသော ဖိုင် %1$d ခု</item>
@@ -1405,7 +1405,7 @@
     <string name="component_reasoning_row_shows_thought_hint">စဉ်းစားမှုအပြည့်အစုံကို ပြသည်</string>
     <string name="component_unified_diff_row_kind_hunk">hunk</string>
     <string name="component_unified_diff_row_kind_metadata">မက်တာဒေတာ</string>
-    <string name="component_unified_diff_row_kind_context">ဆက်စပ်အကြောင်းအရာ</string>
+    <string name="component_unified_diff_row_kind_context">မပြောင်းသော လိုင်း</string>
     <string name="component_unified_diff_row_kind_addition">ထည့်သွင်းမှု</string>
     <string name="component_unified_diff_row_kind_deletion">ဖျက်မှု</string>
     <string name="component_unified_diff_old_line">အဟောင်း လိုင်း %1$d</string>
@@ -1423,21 +1423,21 @@
     <string name="component_timeline_notice_shows_one_line_hint">တစ်ကြောင်းတည်း ပြသည်</string>
     <string name="component_timeline_notice_shows_full_value_hint">တန်ဖိုးအပြည့်အစုံကို ပြသည်</string>
     <string name="component_attachment_accessibility_label">%1$s၊ %2$s</string>
-    <string name="component_subagent_state_waiting_for_input">ထည့်သွင်းမှု စောင့်နေသည်</string>
+    <string name="component_subagent_state_waiting_for_input">အဖြေကို စောင့်နေသည်</string>
     <string name="component_subagent_state_done">ပြီးပါပြီ</string>
     <string name="component_subagent_state_failed">မအောင်မြင်ပါ</string>
     <string name="component_subagent_state_stopped">ရပ်ထားသည်</string>
     <string name="component_filter_tabs_unseen">အသစ်</string>
     <string name="component_text_size_slider_sample_letter">က</string>
     <string name="component_message_time_yesterday">မနေ့က</string>
-    <string name="component_composer_reverting_title">ဤမက်ဆေ့ချ်ကို ပြန်ပြင်နေသည်</string>
+    <string name="component_composer_reverting_title">ဤမက်ဆေ့ချ်ကို နောက်ပြန်ပြောင်းနေသည်</string>
     <string name="session_new_title">စက်ရှင်အသစ်</string>
     <string name="session_list_dock_add_project">ပရောဂျက် ထည့်ရန်</string>
     <string name="theme_error_preset_not_found">အပြင်အဆင် ကြိုတင်သတ်မှတ်ချက် မတွေ့ပါ</string>
     <string name="component_composer_submit">တင်သွင်းရန်</string>
     <string name="component_composer_select_all_that_apply">သက်ဆိုင်သမျှ အားလုံး ရွေးပါ</string>
     <string name="component_unified_diff_summary_modified">ပြင်ထားသော ဖိုင် %1$s၊ %2$s၊ %3$s</string>
-    <string name="component_hunk_navigation_collapse_context">ဆက်စပ်အကြောင်းအရာ ခေါက်ရန်</string>
+    <string name="component_hunk_navigation_collapse_context">မပြောင်းသော လိုင်းများ ခေါက်ရန်</string>
     <string name="component_top_bar_project_subtitle">ပရောဂျက် %1$s %2$s</string>
     <string name="component_composer_dismiss">ပိတ်ရန်</string>
     <string name="dictation_model_downloading_detail">၎င်းမှာ စနစ်ဒေါင်းလုဒ် ဖြစ်သည်။ ဤကတ်ကို ပိတ်လည်း ဆက်လုပ်နေမည်။</string>
@@ -1465,11 +1465,11 @@
     <string name="session_list_worktree_empty_other_projects">အခြားပရောဂျက်များရှိ ဆက်ရှင်များကို ကြည့်ရန် စစ်ထုတ်မှုကို ရှင်းပါ။</string>
     <string name="component_attachment_uploading">အပ်လုဒ်လုပ်နေသည်…</string>
     <string name="component_composer_deny">ငြင်းဆို</string>
-    <string name="component_composer_deny_options">ငြင်းဆိုမှု ရွေးစရာများ ပိုမို</string>
+    <string name="component_composer_deny_options">ငြင်းဆိုရန် နောက်ထပ် ရွေးစရာများ</string>
     <string name="component_composer_deny_with_note_menu">မှတ်ချက်နှင့် ငြင်းဆိုရန်…</string>
-    <string name="component_composer_deny_with_note_menu_subtitle">အစားလုပ်ရန်ကို အေးဂျင့်အား ပြောပါ</string>
+    <string name="component_composer_deny_with_note_menu_subtitle">အစား ဘာလုပ်ရမည်ကို အေးဂျင့်အား ပြောပါ</string>
     <string name="component_composer_deny_with_note_title">မှတ်ချက်နှင့် ငြင်းဆိုရန်</string>
-    <string name="component_composer_deny_note_placeholder">မည်သို့ ကွဲပြားစွာ လုပ်ရမည်ကို OpenCode အား ပြောပါ</string>
+    <string name="component_composer_deny_note_placeholder">မတူညီသည့်နည်းဖြင့် လုပ်ရန် OpenCode အား ပြောပါ</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="other">စောင့်ဆိုင်းနေသော အခြားတောင်းဆိုမှု %1$d ခုကိုလည်း ငြင်းဆိုမည်။</item>
     </plurals>
@@ -1485,7 +1485,7 @@
     <string name="session_list_section_recent">မကြာသေးမီ</string>
     <string name="session_list_section_recent_hint">ကြည့်သင့်သည်</string>
     <string name="component_activity_status_completed">ပြီးစီးသည်</string>
-    <string name="share_diagnostics_chooser_title">ရောဂါရှာဖွေရေး မှတ်တမ်းများ မျှဝေရန်</string>
+    <string name="share_diagnostics_chooser_title">Diagnostic မှတ်တမ်းများ မျှဝေရန်</string>
     <string name="dictation_model_queued_title">%1$s က %2$s ကို နောက်မှ ဒေါင်းလုဒ်လုပ်မည်</string>
     <string name="session_list_dock_choose_project_or_worktree">ပရောဂျက် သို့မဟုတ် worktree ရွေးပါ</string>
     <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
@@ -1497,7 +1497,7 @@
     <string name="component_page_indicator_label">စာမျက်နှာ %2$d ခုအနက် %1$d</string>
     <string name="component_composer_next">ရှေ့ဆက်ရန်</string>
     <string name="component_message_image_label">ပုံ %1$s</string>
-    <string name="component_composer_leave_shell_mode">ဘူးခွံမုဒ်မှ ထွက်ရန်</string>
+    <string name="component_composer_leave_shell_mode">Shell မုဒ်မှ ထွက်ရန်</string>
     <string name="dictation_action_downloading">ဒေါင်းလုဒ်လုပ်နေသည်…</string>
     <string name="component_image_viewer_share">မျှဝေရန်</string>
     <string name="session_list_status_failed">မအောင်မြင်ပါ</string>
@@ -1512,20 +1512,20 @@
         <item quantity="other">%1$d ရက်က</item>
     </plurals>
     <string name="component_server_address_scheme_button_description">Scheme %1$s။ scheme ရွေးချယ်စရာကို ဖွင့်သည်</string>
-    <string name="share_diagnostics_subject">OpenCode ရောဂါရှာဖွေရေး မှတ်တမ်းများ</string>
+    <string name="share_diagnostics_subject">OpenCode diagnostic မှတ်တမ်းများ</string>
     <string name="component_reorderable_list_move_up">အပေါ်သို့ ရွှေ့ရန်</string>
     <string name="session_list_scope_load_failed_title">%1$s ကို မဖွင့်နိုင်ပါ</string>
     <string name="dictation_status_listening">နားထောင်နေသည်</string>
     <string name="dictation_downloading_model">အသံမော်ဒယ် ဒေါင်းလုဒ်လုပ်နေသည်</string>
     <string name="session_list_worktree_empty_every_worktree">worktree အားလုံးကို ကြည့်ရန် စစ်ထုတ်မှုကို ရှင်းပါ။</string>
-    <string name="component_overflow_menu_more_options">ရွေးစရာများ ပိုမို</string>
+    <string name="component_overflow_menu_more_options">နောက်ထပ် ရွေးစရာများ</string>
     <string name="session_list_status_retrying_attempt">ပြန်ကြိုးစားနေသည် · %1$d</string>
     <string name="live_updates_status_offline">အော့ဖ်လိုင်း</string>
     <string name="component_attachment_kind_text">စာသား</string>
     <string name="component_composer_next_question">နောက်မေးခွန်း</string>
     <string name="component_split_pane_show_sidebar">ဘေးဘား ပြရန်</string>
     <string name="component_composer_placeholder">ဘာမဆို မေးပါ...</string>
-    <string name="component_server_address_host">ဟိုစ့်</string>
+    <string name="component_server_address_host">Host</string>
     <plurals name="relative_time_hours_ago">
         <item quantity="other">%1$d နာရီက</item>
     </plurals>
@@ -1539,17 +1539,17 @@
     <string name="session_list_status_done">ပြီးပါပြီ</string>
     <string name="session_list_status_idle">အားနေသည်</string>
     <string name="component_attachment_kind_file">ဖိုင်</string>
-    <string name="component_composer_run_shell_command">ဘူးခွံ အမိန့် လုပ်ဆောင်ရန်</string>
+    <string name="component_composer_run_shell_command">Shell အမိန့် လုပ်ဆောင်ရန်</string>
     <string name="component_image_could_not_load">မဖွင့်နိုင်ပါ</string>
     <string name="component_outgoing_message_show_actions">မက်ဆေ့ချ် လုပ်ဆောင်ချက်များ ပြရန်</string>
     <string name="live_updates_accessibility_label">တိုက်ရိုက်အပ်ဒိတ်များ %1$s</string>
     <string name="component_composer_previous_question">ရှေ့မေးခွန်း</string>
     <string name="component_activity_card_agent">အေးဂျင့်</string>
     <string name="session_list_section_today">ယနေ့</string>
-    <string name="component_composer_child_lockout">ဒုတိယအဆင့် ဆက်ရှင်များသို့ အချက်ပြ၍ မရပါ။</string>
+    <string name="component_composer_child_lockout">ဒုတိယအဆင့် ဆက်ရှင်များသို့ Prompt ပို့၍ မရပါ။</string>
     <string name="component_attachment_uploading_percent">အပ်လုဒ်လုပ်နေသည် %1$d%%</string>
     <string name="component_composer_custom_answer_hint">ကိုယ်ပိုင်အဖြေ ထည့်ပါ</string>
-    <string name="component_composer_cancel_revert">ပြန်ပြင်ခြင်းကို မလုပ်တော့</string>
+    <string name="component_composer_cancel_revert">နောက်ပြန်ပြောင်းခြင်းကို မလုပ်တော့</string>
     <string name="session_list_scope_load_slow_caption">ဖွင့်နေဆဲ — ပရောဂျက်ကြီးများသည် အချိန်အနည်းငယ် ကြာနိုင်သည်</string>
     <string name="component_outgoing_message_label_with_actions">ပို့မည့်မက်ဆေ့ချ်။ မက်ဆေ့ချ် လုပ်ဆောင်ချက်များကို ပြသည်</string>
     <string name="session_list_scope_load_failed_subtitle">ဆက်ရှင်များ မဖွင့်နိုင်ပါ</string>
@@ -1587,12 +1587,12 @@
     <string name="live_updates_status_live">တိုက်ရိုက်</string>
     <string name="component_image_viewer_could_not_load_this">ဤပုံကို မဖွင့်နိုင်ပါ</string>
     <string name="component_image_viewer_could_not_load_full">ပုံအပြည့်အစုံကို မဖွင့်နိုင်ပါ</string>
-    <string name="component_image_viewer_retry">ပြန်ကြိုးစားပါ။</string>
+    <string name="component_image_viewer_retry">ပြန်ကြိုးစားပါ</string>
     <string name="component_image_viewer_loading_full">ပုံအပြည့်အစုံ ဖွင့်နေသည်</string>
     <string name="session_list_worktree_empty_action">စစ်ထုတ်မှု ရှင်းရန်</string>
     <string name="dictation_model_download_failed_detail">ဤစက်ရှိ ချိတ်ဆက်မှုနှင့် နေရာလွတ်ကို စစ်ပြီး ထပ်ကြိုးစားပါ။</string>
     <string name="component_composer_send_queue">တန်းစီအဖြစ် ပို့ရန်</string>
-    <string name="session_list_dock_new_session_hint">တခြားနေရာတွင် စတင်ရန် ပရောဂျက် သို့မဟုတ် worktree ရွေးပါကို သုံးပါ။</string>
+    <string name="session_list_dock_new_session_hint">တခြားနေရာတွင် စတင်ရန် “ပရောဂျက် သို့မဟုတ် worktree ရွေးပါ” ကို သုံးပါ။</string>
     <string name="session_list_section_yesterday">မနေ့က</string>
     <string name="component_code_file_line_label">လိုင်း %1$d၊ %2$s</string>
     <string name="share_feedback_subject_idea">OpenCode Mobile အကြံပြုချက် အစီရင်ခံစာ</string>
@@ -1600,7 +1600,7 @@
     <string name="session_list_section_week_of">%1$s – %2$s ရက်သတ္တပတ်</string>
     <string name="dictation_model_download_failed_title">%1$s က %2$s ကို ဒေါင်းလုဒ်မလုပ်နိုင်ပါ</string>
     <string name="component_activity_status_pending">စောင့်ဆိုင်းနေသည်</string>
-    <string name="component_composer_revert_tag">ပြန်ပြင်</string>
+    <string name="component_composer_revert_tag">နောက်ပြန်</string>
     <string name="component_composer_model">မော်ဒယ် %1$s</string>
     <plurals name="component_step_rail_earlier_steps">
         <item quantity="other">အရင်အဆင့် %1$d ဆင့်</item>
@@ -1616,14 +1616,14 @@
     <string name="session_list_status_stopped">ရပ်ထားသည်</string>
     <string name="component_attachment_cancel_upload">%1$s အပ်လုဒ်ကို မလုပ်တော့</string>
     <string name="dictation_cancel_description">အသံဖြင့်ရိုက်ခြင်းကို မလုပ်တော့</string>
-    <string name="component_composer_shell_mode">ဘူးခွံမုဒ်</string>
-    <string name="component_skeleton_illustration_connect">ချိတ်ဆက်ပါ။</string>
+    <string name="component_composer_shell_mode">Shell မုဒ်</string>
+    <string name="component_skeleton_illustration_connect">ချိတ်ဆက်ပါ</string>
     <string name="component_composer_not_selected">မရွေးထားပါ</string>
-    <string name="component_composer_shell_mode_description">ဘူးခွံမုဒ်။ ဘူးခွံမုဒ်မှ ထွက်ရန်</string>
+    <string name="component_composer_shell_mode_description">Shell မုဒ်။ Shell မုဒ်မှ ထွက်ရန်</string>
     <string name="component_branch_pill_based_on">%1$s ကို အခြေခံသည်</string>
     <string name="component_composer_add_attachment">ပူးတွဲဖိုင် ထည့်ရန်</string>
     <string name="dictation_microphone_off">မိုက်ခရိုဖုန်း ခွင့်ပြုချက် ပိတ်ထားသည်</string>
-    <string name="component_composer_shell">ဘူးခွံ</string>
+    <string name="component_composer_shell">Shell</string>
     <string name="live_updates_status_auth_failed">အထောက်အထားစိစစ်မှု မအောင်မြင်ပါ</string>
     <string name="component_branch_pill_view_all_changes">အပြောင်းအလဲအားလုံး ကြည့်ရန်</string>
     <string name="component_composer_send">ပို့ပါ</string>
@@ -1653,9 +1653,9 @@
     <string name="component_composer_permission_requested">ခွင့်ပြုချက် တောင်းဆိုထားသည်</string>
     <string name="component_thinking">စဉ်းစားနေသည်</string>
     <string name="dictation_model_downloading_title">%1$s က %2$s ကို ဒေါင်းလုဒ်လုပ်နေသည်</string>
-    <string name="component_hunk_navigation_expand_context">ဆက်စပ်အကြောင်းအရာ ဖြန့်ရန်</string>
+    <string name="component_hunk_navigation_expand_context">မပြောင်းသော လိုင်းများ ဖြန့်ရန်</string>
     <string name="dictation_listening_placeholder">နားထောင်နေသည်…</string>
-    <string name="component_skeleton_illustration_unofficial">တရားမဝင်</string>
+    <string name="component_skeleton_illustration_unofficial">တရားဝင်မဟုတ်</string>
     <string name="dictation_status_ready">ထည့်ရန် အဆင်သင့်</string>
     <string name="dictation_starting">စတင်နေသည်…</string>
     <string name="dictation_language_speech_model">%1$s အသံမော်ဒယ်</string>
@@ -1670,7 +1670,7 @@
     <string name="component_image_viewer_position">%2$d ခုအနက် %1$d</string>
     <string name="dictation_status_line_on_device">%1$s · %2$s · စက်ပေါ်တွင်</string>
     <string name="component_composer_select_at_least">အနည်းဆုံး %1$d ခု ရွေးပါ</string>
-    <string name="dictation_insert_description">စာသားလွှဲပြောင်းချက် ထည့်ရန်</string>
+    <string name="dictation_insert_description">ပြောင်းရေးထားသော စာသား ထည့်ရန်</string>
     <string name="worktrees_title">Worktree များ</string>
     <string name="worktrees_subtitle">%1$s · %2$s</string>
     <plurals name="worktrees_count">
@@ -1683,7 +1683,7 @@
     </plurals>
     <string name="worktrees_none_in_project">worktree မရှိပါ။ စက်ရှင်အသစ် → ပရောဂျက် သို့မဟုတ် worktree ရွေးပါ ဖြင့် တစ်ခု ဖန်တီးနိုင်သည်။</string>
     <string name="worktrees_footer">worktree ကို ဖယ်ရှားခြင်းသည် ဆာဗာပေါ်ရှိ ၎င်း၏ ဖိုလ်ဒါကို ဖျက်သည်။ ၎င်း၏ ဆက်ရှင်များ ကျန်ရစ်သော်လည်း ၎င်းထဲတွင် ထပ်မလုပ်ဆောင်နိုင်တော့ပါ။</string>
-    <string name="worktrees_more">%1$s အတွက် လုပ်ဆောင်ချက်များ ပိုမို</string>
+    <string name="worktrees_more">%1$s အတွက် နောက်ထပ် လုပ်ဆောင်ချက်များ</string>
     <string name="worktrees_removing">ဖယ်ရှားနေသည်…</string>
     <string name="worktrees_actions_show_on_home">ပင်မစာမျက်နှာတွင် ဆက်ရှင်များ ပြရန်</string>
     <string name="worktrees_actions_new_session">ဤနေရာတွင် စက်ရှင်အသစ်</string>
@@ -1715,7 +1715,7 @@
     <string name="whats_new_also_since">နောက်ဆုံးအပ်ဒိတ်နောက်ပိုင်း အသစ်များလည်း ရှိသည် · %1$s</string>
     <string name="whats_new_fixes">ပြင်ဆင်မှုများ</string>
     <string name="whats_new_done">ပြီးပါပြီ</string>
-    <string name="whats_new_find_again">ဆက်တင်များ → အသစ်များ တွင် ပြန်ရှာနိုင်သည်</string>
+    <string name="whats_new_find_again">ဆက်တင်များ → အသစ်များတွင် ပြန်ရှာနိုင်သည်</string>
     <string name="whats_new_installed">ထည့်သွင်းပြီး</string>
     <string name="whats_new_settings_subtitle">ဗားရှင်းတိုင်း၏ ထုတ်ဝေမှုမှတ်စုများ</string>
 </resources>

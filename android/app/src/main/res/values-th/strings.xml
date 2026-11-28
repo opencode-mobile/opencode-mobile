@@ -56,7 +56,7 @@
     <string name="connection_cleartext_message_one_host">%1$s ใช้ http ธรรมดานอกเครือข่ายภายในหรือ Tailscale รหัสผ่านเซิร์ฟเวอร์และทุกอย่างในเซสชันของคุณจะถูกส่งโดยไม่เข้ารหัส ควรใช้ https, VPN หรืออุโมงค์</string>
     <string name="connection_cleartext_message_hosts">%1$s ใช้ http ธรรมดานอกเครือข่ายภายในหรือ Tailscale รหัสผ่านเซิร์ฟเวอร์และทุกอย่างในเซสชันของคุณจะถูกส่งโดยไม่เข้ารหัส ควรใช้ https, VPN หรืออุโมงค์</string>
     <string name="connection_cleartext_message_this_address">ที่อยู่นี้ใช้ http ธรรมดานอกเครือข่ายภายในหรือ Tailscale รหัสผ่านเซิร์ฟเวอร์และทุกอย่างในเซสชันของคุณจะถูกส่งโดยไม่เข้ารหัส ควรใช้ https, VPN หรืออุโมงค์</string>
-    <string name="connection_cleartext_connect_anyway">เชื่อมต่อต่อไป</string>
+    <string name="connection_cleartext_connect_anyway">เชื่อมต่อเลย</string>
     <string name="connection_error_invalid_qr">นี่ไม่ใช่ QR จับคู่ของ OpenCode 2</string>
     <string name="connection_error_localhost_qr">QR นั้นมีเฉพาะที่อยู่ localhost</string>
     <string name="connection_error_camera_denied">อนุญาตการเข้าถึงกล้องเพื่อสแกน QR จับคู่</string>
@@ -70,7 +70,7 @@
     <string name="server_error_pairing_expired">การจับคู่หมดอายุ โปรดจับคู่อีกครั้ง</string>
     <string name="server_error_not_found">ไม่พบโฟลเดอร์หรือไฟล์</string>
     <string name="server_error_not_found_path">ไม่พบโฟลเดอร์หรือไฟล์ · %1$s</string>
-    <string name="server_error_session_busy">เซสชันกำลังไม่ว่าง</string>
+    <string name="server_error_session_busy">เซสชันไม่ว่าง</string>
     <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">การยืนยันตัวตนล้มเหลว</string>
     <string name="connection_error_unhealthy">เซิร์ฟเวอร์รายงานว่าไม่ปกติ</string>
@@ -98,14 +98,14 @@
     <string name="onboarding_features_permissions_detail">อนุมัติหรือปฏิเสธคำขอ (ยังไม่จดจำถาวร)</string>
     <string name="onboarding_features_changes_title">การเปลี่ยนแปลง</string>
     <string name="onboarding_features_changes_detail">ตรวจดู diff ของเซสชัน</string>
-    <string name="onboarding_features_live_title">สดขณะเปิดแอป</string>
+    <string name="onboarding_features_live_title">อัปเดตสดขณะเปิดแอป</string>
     <string name="onboarding_features_live_detail">สตรีมเหตุการณ์ขณะเปิดแอป รีเฟรชหลังเชื่อมต่อใหม่</string>
     <string name="onboarding_setup_title">ตั้งค่า opencode serve</string>
     <string name="onboarding_setup_intro">แอปสื่อสารกับเซิร์ฟเวอร์ opencode ที่คุณรันเอง ขั้นตอนแบบสั้นอยู่ด้านล่าง ดูรายละเอียดทั้งหมดได้ในเอกสารทางการ</string>
     <string name="onboarding_setup_step_number">ขั้นตอนที่ %1$d</string>
     <string name="onboarding_setup_step1_title">เริ่มเซิร์ฟเวอร์บนเครื่องของคุณ</string>
     <string name="onboarding_setup_step1_body">ในโปรเจกต์ของคุณ ให้รันเซิร์ฟเวอร์ opencode (headless) และเปิดทิ้งไว้ตลอดที่ใช้โทรศัพท์</string>
-    <string name="onboarding_setup_step2_title">ตั้งรหัสผ่านให้จำเป็น</string>
+    <string name="onboarding_setup_step2_title">กำหนดให้ต้องใช้รหัสผ่าน</string>
     <string name="onboarding_setup_step2_body">ตั้งค่า OPENCODE_SERVER_PASSWORD ชื่อผู้ใช้เริ่มต้นคือ opencode เว้นแต่คุณตั้งค่า OPENCODE_SERVER_USERNAME</string>
     <string name="onboarding_setup_step3_title">เข้าถึงจากโทรศัพท์ของคุณ</string>
     <string name="onboarding_setup_step3_body">แนะนำ: Tailscale ติดตั้ง Tailscale บนเครื่องและโทรศัพท์ แล้วใช้ IP Tailscale หรือชื่อ MagicDNS ของเครื่องเป็น URL ของเซิร์ฟเวอร์\n\nใช้ LAN เดียวกัน, VPN, HTTPS หรืออุโมงค์อื่นที่คุณดูแลเองก็ได้ แอปไม่ได้สร้างรีเลย์ให้</string>
@@ -190,7 +190,7 @@
     <string name="server_health_status_auth_failed">ยืนยันตัวตนไม่สำเร็จ</string>
     <string name="server_health_status_stopped">ไม่ได้วัด</string>
     <plurals name="server_health_quick_view_summary">
-        <item quantity="other">เวลาทำงาน %1$s · เชื่อมต่อใหม่ %2$d ครั้งวันนี้</item>
+        <item quantity="other">เวลาทำงาน %1$s · วันนี้เชื่อมต่อใหม่ %2$d ครั้ง</item>
     </plurals>
     <string name="server_health_quick_view_measuring">กำลังวัด…</string>
     <string name="server_health_details">รายละเอียด</string>
@@ -238,12 +238,12 @@
     <plurals name="home_project_count">
         <item quantity="other">%1$d โปรเจกต์</item>
     </plurals>
-    <string name="home_main_checkout">main checkout</string>
+    <string name="home_main_checkout">checkout หลัก</string>
     <plurals name="home_worktree_count">
         <item quantity="other">%1$d worktree</item>
     </plurals>
     <plurals name="home_all_worktrees">
-        <item quantity="other">ทั้งหมด %1$d worktree</item>
+        <item quantity="other">worktree ทั้งหมด %1$d รายการ</item>
     </plurals>
     <plurals name="home_running_count">
         <item quantity="other">กำลังทำงาน %1$d</item>
@@ -254,8 +254,8 @@
     <string name="home_show_fewer">แสดงน้อยลง</string>
     <string name="home_show_worktrees">แสดง worktree ของ %1$s</string>
     <string name="home_hide_worktrees">ซ่อน worktree ของ %1$s</string>
-    <string name="home_reorder_note">ลากเพื่อจัดลำดับใหม่ worktree จะอยู่กับโปรเจกต์ของมัน</string>
-    <string name="home_session_actions_title">การทำงานของเซสชัน</string>
+    <string name="home_reorder_note">ลากเพื่อจัดลำดับใหม่ โดย worktree จะอยู่กับโปรเจกต์เดิมเสมอ</string>
+    <string name="home_session_actions_title">การดำเนินการกับเซสชัน</string>
     <string name="home_session_actions_rename">เปลี่ยนชื่อเซสชัน</string>
     <string name="home_session_actions_fork">แยกเซสชัน</string>
     <string name="home_session_actions_archive">จัดเก็บ</string>
@@ -265,7 +265,7 @@
     <string name="home_fork_confirm">แยก</string>
     <string name="home_fork_result_title">แยกเซสชันแล้ว</string>
     <string name="home_fork_result_message">“%1$s” พร้อมแล้ว</string>
-    <string name="home_fork_result_stay">อยู่ที่นี่</string>
+    <string name="home_fork_result_stay">อยู่หน้านี้ต่อ</string>
     <string name="home_delete_title">ลบเซสชัน</string>
     <string name="home_delete_message">ลบเซสชัน “%1$s” หรือไม่</string>
     <string name="home_session_error_empty_title">ป้อนชื่อเซสชัน</string>
@@ -276,7 +276,7 @@
     <string name="home_session_error_unreadable_response">อ่านการตอบกลับของเซิร์ฟเวอร์ไม่ได้</string>
     <string name="home_session_error_generic">เกิดข้อผิดพลาดบางอย่าง</string>
     <string name="archived_sessions_title">เซสชันที่จัดเก็บ</string>
-    <string name="home_menu_archived_count">%1$d ใน %2$s</string>
+    <string name="home_menu_archived_count">%1$d รายการใน %2$s</string>
     <string name="archived_sessions_section_this_week">สัปดาห์นี้</string>
     <string name="archived_sessions_section_earlier">ก่อนหน้านี้</string>
     <string name="archived_sessions_unarchive">เลิกจัดเก็บ</string>
@@ -303,7 +303,7 @@
     <string name="add_project_list_error_message">ตรวจสอบพาธแล้วลองอีกครั้ง</string>
     <string name="add_project_no_other_projects">ไม่มีโปรเจกต์อื่นบนเซิร์ฟเวอร์นี้</string>
     <string name="add_project_folder_path">พาธโฟลเดอร์</string>
-    <string name="add_project_up_one_folder">ขึ้นหนึ่งโฟลเดอร์</string>
+    <string name="add_project_up_one_folder">ขึ้นไปหนึ่งระดับ</string>
     <string name="add_project_git_tag">git</string>
     <string name="add_project_pick_a_folder">เลือกโฟลเดอร์</string>
     <string name="add_project_already_on_home">อยู่ในหน้าหลักแล้ว</string>
@@ -376,7 +376,7 @@
     <string name="files_find_no_match">ไม่มีไฟล์ที่ตรงกับ “%1$s”</string>
     <string name="files_find_no_match_detail">การค้นหาบนเซิร์ฟเวอร์จะข้ามโฟลเดอร์ที่ถูกละเว้น</string>
     <string name="files_error_check_server_connection">ตรวจสอบการเชื่อมต่อกับเซิร์ฟเวอร์แล้วลองอีกครั้ง</string>
-    <string name="files_error_server_status">เซิร์ฟเวอร์ตอบกลับด้วย %1$d</string>
+    <string name="files_error_server_status">เซิร์ฟเวอร์ตอบกลับด้วยรหัส %1$d</string>
     <string name="files_no_file_title">เปิดไฟล์จากโครงสร้างไฟล์</string>
     <string name="files_no_file_message">ไฟล์ที่เปิดจะอยู่เป็นแท็บ</string>
     <string name="files_path_copied">คัดลอกพาธแล้ว</string>
@@ -422,7 +422,7 @@
     <string name="terminal_close">ปิด</string>
     <string name="terminal_close_dialog_title">ปิดเชลล์นี้หรือไม่</string>
     <string name="terminal_close_dialog_title_named">ปิด “%1$s” หรือไม่</string>
-    <string name="terminal_close_dialog_message">การทำเช่นนี้จะสิ้นสุดเชลล์บนเซิร์ฟเวอร์</string>
+    <string name="terminal_close_dialog_message">การดำเนินการนี้จะปิดเชลล์บนเซิร์ฟเวอร์</string>
     <string name="terminal_projects_empty_title">ยังไม่มีโปรเจกต์</string>
     <string name="terminal_projects_empty_message">เพิ่มโปรเจกต์ในหน้าหลัก แล้วเริ่มเชลล์ที่นี่</string>
     <string name="terminal_error_create">เริ่มเชลล์ไม่ได้</string>
@@ -506,7 +506,7 @@
     <string name="session_chat_model_chip_loading">กำลังโหลดโมเดล…</string>
     <string name="session_chat_model_notice_load_failed">โหลดโมเดลไม่ได้ แตะโมเดลเพื่อลองอีกครั้ง</string>
     <string name="session_chat_model_notice_none_usable">ไม่มีโมเดลที่ใช้งานได้ แตะโมเดลเพื่อลองอีกครั้ง</string>
-    <string name="session_chat_model_notice_variant_unavailable">ตัวแปรที่จำไว้ใช้ไม่ได้ จึงใช้ค่าเริ่มต้นแทน</string>
+    <string name="session_chat_model_notice_variant_unavailable">ระดับการให้เหตุผลที่จำไว้ใช้ไม่ได้ จึงใช้ค่าเริ่มต้นแทน</string>
     <string name="session_chat_model_notice_model_unavailable">โมเดลที่เลือกใช้ไม่ได้ จึงใช้ %1$s แทน</string>
     <string name="session_chat_side_question_unsupported">/btw ต้องใช้เซิร์ฟเวอร์ opencode v2 ที่ตอบคำถามแทรกได้ เซิร์ฟเวอร์นี้ตอบไม่ได้หากไม่เพิ่มลงในบทสนทนา</string>
     <string name="session_chat_side_question_unavailable">/btw ต้องใช้เซิร์ฟเวอร์ opencode ที่ใหม่กว่านี้</string>
@@ -765,7 +765,7 @@
     <string name="timeline_step_loading_skill">กำลังโหลดทักษะ…</string>
     <string name="timeline_step_loading_skill_named">กำลังโหลดทักษะ %1$s</string>
     <string name="timeline_step_skill_named">ทักษะ %1$s</string>
-    <string name="timeline_step_thought_duration">คิดอยู่ · %1$s</string>
+    <string name="timeline_step_thought_duration">คิดแล้ว · %1$s</string>
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <string name="timeline_explore_title">สำรวจแล้ว — %1$s</string>
     <string name="timeline_list_separator">%1$s · %2$s</string>
@@ -818,7 +818,7 @@
     <string name="session_chat_revert_redo_failed">ทำซ้ำไม่ได้</string>
     <string name="session_chat_revert_cancel_failed">ยกเลิกการย้อนไม่ได้</string>
     <string name="session_chat_revert_commit_failed">ยืนยันการย้อนไม่ได้</string>
-    <string name="session_chat_fork_rename_failed">สร้างการแตกสาขาแล้ว แต่เปลี่ยนชื่อไม่ได้</string>
+    <string name="session_chat_fork_rename_failed">แยกเซสชันแล้ว แต่เปลี่ยนชื่อไม่ได้</string>
     <string name="session_chat_pending_prompt_update_failed">อัปเดตพรอมต์ที่รออยู่ไม่ได้</string>
     <string name="session_chat_shell_stop_failed">หยุดเชลล์ไม่ได้ ลองอีกครั้ง</string>
     <string name="session_chat_shell_status_running">กำลังทำงาน</string>
@@ -834,7 +834,7 @@
     <string name="session_chat_sheet_copy_output">คัดลอกเอาต์พุต</string>
     <string name="session_chat_sheet_message_actions_title">ข้อความ</string>
     <string name="session_chat_sheet_message_actions_revert">ย้อนข้อความ</string>
-    <string name="session_chat_sheet_message_actions_fork">แตกสาขาจากตรงนี้</string>
+    <string name="session_chat_sheet_message_actions_fork">แยกจากตรงนี้</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">คัดลอกบล็อกโค้ด</string>
     <string name="session_chat_sheet_message_actions_copy_message">คัดลอกข้อความ</string>
     <string name="session_chat_sheet_message_actions_select_text">เลือกข้อความ</string>
@@ -955,8 +955,8 @@
     <plurals name="component_branch_pill_uncommitted_files">
         <item quantity="other">%1$d ไฟล์ที่ยังไม่ commit</item>
     </plurals>
-    <string name="component_branch_pill_a11y_branch">สาขา %1$s</string>
-    <string name="component_branch_pill_a11y_worktree_branch">สาขา worktree %1$s</string>
+    <string name="component_branch_pill_a11y_branch">branch %1$s</string>
+    <string name="component_branch_pill_a11y_worktree_branch">branch ของ worktree %1$s</string>
     <string name="component_branch_pill_a11y_no_changes">%1$s ไม่มีการเปลี่ยนแปลง</string>
     <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
     <string name="component_branch_pill_a11y_added">%1$s, เพิ่ม %2$d</string>
@@ -968,13 +968,13 @@
     <string name="session_chat_send_timed_out">ส่งไม่ได้ ลองอีกครั้ง</string>
     <string name="session_chat_shell_cannot_queue">คำสั่งเชลล์ไม่สามารถเข้าคิวได้ สลับเป็นชี้นำเพื่อรันทันที</string>
     <string name="session_chat_reply_error_permission">ส่งคำตอบของคุณไม่ได้ ลองอีกครั้ง</string>
-    <string name="session_chat_reply_error_permission_reason">ส่งคำตอบของคุณไม่ได้ %1$s.</string>
+    <string name="session_chat_reply_error_permission_reason">ส่งคำตอบของคุณไม่ได้: %1$s</string>
     <string name="session_chat_reply_error_question">ส่งคำตอบของคุณไม่ได้ ลองอีกครั้ง</string>
-    <string name="session_chat_reply_error_question_reason">ส่งคำตอบของคุณไม่ได้ %1$s.</string>
+    <string name="session_chat_reply_error_question_reason">ส่งคำตอบของคุณไม่ได้: %1$s</string>
     <string name="session_chat_reply_error_dismiss">ปิดคำถามไม่ได้ ลองอีกครั้ง</string>
-    <string name="session_chat_reply_error_dismiss_reason">ปิดคำถามไม่ได้ %1$s.</string>
-    <string name="session_chat_permission_unavailable">คำขอสิทธิ์ใช้งานไม่ได้แล้ว</string>
-    <string name="session_chat_question_unavailable">คำถามใช้งานไม่ได้แล้ว</string>
+    <string name="session_chat_reply_error_dismiss_reason">ปิดคำถามไม่ได้: %1$s</string>
+    <string name="session_chat_permission_unavailable">คำขอสิทธิ์นี้ไม่พร้อมใช้งานแล้ว</string>
+    <string name="session_chat_question_unavailable">คำถามนี้ไม่พร้อมใช้งานแล้ว</string>
     <string name="session_chat_permission_tree_failed">รีเฟรชโครงสร้างเซสชันของสิทธิ์ไม่ได้</string>
     <string name="session_chat_question_tree_failed">รีเฟรชโครงสร้างเซสชันของคำถามไม่ได้</string>
     <string name="session_chat_sheet_timeline_style_picker_title">ใหม่: เลือกไทม์ไลน์ของคุณ</string>
@@ -988,11 +988,11 @@
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Step Rail</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">หนึ่งบรรทัดต่อหนึ่งขั้นตอนบนราง อัปเดตสดขณะเอเจนต์ทำงาน</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Activity Card</string>
-    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">ขั้นตอนที่กำลังทำงานอยู่ในการ์ดสดใบเดียว แล้วพับเป็นสรุป</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">ขั้นตอนที่กำลังทำงานแสดงในการ์ดเดียวแบบเรียลไทม์ แล้วย่อเป็นสรุป</string>
     <string name="session_chat_sheet_picker_model">โมเดล</string>
     <string name="session_chat_sheet_picker_agent_mode">โหมดเอเจนต์</string>
     <string name="session_chat_sheet_picker_variant">Variant</string>
-    <string name="session_chat_sheet_picker_back_to_providers">กลับไปผู้ให้บริการ</string>
+    <string name="session_chat_sheet_picker_back_to_providers">กลับไปที่ผู้ให้บริการ</string>
     <string name="session_chat_sheet_picker_no_models_match">ไม่มีโมเดลที่ตรงกับตัวกรอง</string>
     <string name="session_chat_sheet_picker_filter_models_hint">กรองโมเดล...</string>
     <string name="session_chat_sheet_tool_detail_provider_response">การตอบกลับของผู้ให้บริการ</string>
@@ -1026,18 +1026,18 @@
     <string name="session_chat_sheet_background_work_waiting_for_input">รอข้อมูลจากคุณ</string>
     <string name="session_chat_sheet_background_work_stopped">หยุดแล้ว</string>
     <plurals name="session_chat_sheet_background_work_tool_count">
-        <item quantity="other">%1$d เครื่องมือ</item>
+        <item quantity="other">เครื่องมือ %1$d รายการ</item>
     </plurals>
     <plurals name="session_chat_sheet_activity_working">
-        <item quantity="other">กำลังทำงาน %1$d</item>
+        <item quantity="other">กำลังทำงาน %1$d ขั้นตอน</item>
     </plurals>
     <string name="session_chat_sheet_activity_back_to_steps">กลับไปที่ขั้นตอน</string>
     <string name="session_chat_sheet_activity_steps">ขั้นตอน</string>
     <plurals name="session_chat_sheet_activity_tools_so_far">
-        <item quantity="other">%1$d เครื่องมือแล้ว</item>
+        <item quantity="other">ใช้เครื่องมือไปแล้ว %1$d รายการ</item>
     </plurals>
     <plurals name="session_chat_sheet_activity_tools">
-        <item quantity="other">%1$d เครื่องมือ</item>
+        <item quantity="other">เครื่องมือ %1$d รายการ</item>
     </plurals>
     <string name="session_chat_sheet_activity_stopped">หยุดแล้ว</string>
     <string name="session_context_title">บริบทของเซสชัน</string>
@@ -1071,7 +1071,7 @@
     <string name="session_context_breakdown_tool_calls">การเรียกเครื่องมือ</string>
     <string name="session_context_breakdown_other">อื่น ๆ</string>
     <string name="session_context_breakdown_legend">%1$s %2$s</string>
-    <string name="session_context_breakdown_footnote">การแบ่งโทเค็นอินพุตโดยประมาณ อื่น ๆ รวมนิยามเครื่องมือและส่วนเสริม</string>
+    <string name="session_context_breakdown_footnote">การแบ่งโทเค็นอินพุตโดยประมาณ “อื่น ๆ” รวมถึงนิยามเครื่องมือและโอเวอร์เฮด</string>
     <string name="settings_title">การตั้งค่า</string>
     <string name="settings_section_server">เซิร์ฟเวอร์</string>
     <string name="settings_section_help_feedback">ความช่วยเหลือและความคิดเห็น</string>
@@ -1083,10 +1083,10 @@
     <string name="settings_section_about">เกี่ยวกับ</string>
     <string name="settings_servers_summary_none">ไม่มีเซิร์ฟเวอร์ที่บันทึกไว้</string>
     <plurals name="settings_servers_summary_saved">
-        <item quantity="other">บันทึกไว้ %1$d</item>
+        <item quantity="other">บันทึกไว้ %1$d รายการ</item>
     </plurals>
     <plurals name="settings_servers_summary_saved_active">
-        <item quantity="other">บันทึกไว้ %1$d · ใช้งานอยู่ %2$s</item>
+        <item quantity="other">บันทึกไว้ %1$d รายการ · ใช้งานอยู่: %2$s</item>
     </plurals>
     <string name="settings_send_feedback_title">ส่งความคิดเห็น</string>
     <string name="settings_send_feedback_subtitle">รายงานข้อบกพร่องหรือแชร์ไอเดีย</string>
@@ -1105,20 +1105,20 @@
     <string name="settings_timeline_style_step_rail_title">Step Rail</string>
     <string name="settings_timeline_style_step_rail_subtitle">หนึ่งบรรทัดต่อหนึ่งขั้นตอนบนราง อัปเดตสดขณะเอเจนต์ทำงาน</string>
     <string name="settings_timeline_style_activity_card_title">Activity Card</string>
-    <string name="settings_timeline_style_activity_card_subtitle">ขั้นตอนที่กำลังทำงานอยู่ในการ์ดสดใบเดียว แล้วพับเป็นสรุป</string>
+    <string name="settings_timeline_style_activity_card_subtitle">ขั้นตอนที่กำลังทำงานแสดงในการ์ดเดียวแบบเรียลไทม์ แล้วย่อเป็นสรุป</string>
     <string name="settings_follow_up_title">การส่งข้อความต่อเนื่อง</string>
     <string name="settings_follow_up_steer">ชี้นำ</string>
     <string name="settings_follow_up_queue">คิว</string>
-    <string name="settings_follow_up_subtitle_steer">ชี้นำ · เฉพาะเซิร์ฟเวอร์ V2 V1 ไม่รองรับ</string>
-    <string name="settings_follow_up_subtitle_queue">คิว · เฉพาะเซิร์ฟเวอร์ V2 V1 ไม่รองรับ</string>
+    <string name="settings_follow_up_subtitle_steer">ชี้นำ · เฉพาะเซิร์ฟเวอร์ V2 (V1 ไม่รองรับ)</string>
+    <string name="settings_follow_up_subtitle_queue">คิว · เฉพาะเซิร์ฟเวอร์ V2 (V1 ไม่รองรับ)</string>
     <string name="settings_follow_up_unsupported">V1 ไม่รองรับ เซิร์ฟเวอร์นี้จะส่งทันทีเสมอ</string>
     <string name="settings_worktrees_title">Worktree</string>
-    <string name="settings_worktrees_subtitle">แสดง worktree และสาขาของแต่ละโปรเจกต์บนหน้าแรก และให้เซสชันใหม่เลือก worktree ได้เมื่อกดค้าง</string>
+    <string name="settings_worktrees_subtitle">แสดง worktree และ branch ของแต่ละโปรเจกต์บนหน้าแรก และให้เซสชันใหม่เลือก worktree ได้เมื่อกดค้าง</string>
     <string name="settings_session_rows_title">แถวเซสชัน</string>
     <string name="settings_session_rows_compact_title">กะทัดรัด</string>
     <string name="settings_session_rows_compact_subtitle">สองบรรทัด: ชื่อและเวลา แล้วโปรเจกต์ / worktree</string>
     <string name="settings_session_rows_classic_title">คลาสสิก</string>
-    <string name="settings_session_rows_classic_subtitle">โปรเจกต์และ worktree แยกบรรทัดของตัวเอง</string>
+    <string name="settings_session_rows_classic_subtitle">แสดงโปรเจกต์และ worktree แยกบรรทัด</string>
     <string name="settings_session_cache_size">ขนาด</string>
     <string name="settings_session_cache_size_label">ขนาดแคชเซสชัน</string>
     <string name="settings_session_cache_empty">ว่างเปล่า</string>
@@ -1136,7 +1136,7 @@
     <string name="settings_analytics_title">การวิเคราะห์และรายงานข้อขัดข้อง</string>
     <string name="settings_analytics_subtitle">อนุญาตเหตุการณ์การใช้งานผลิตภัณฑ์และรายงานข้อขัดข้องแบบไม่บังคับ หากปิดจะไม่ส่งอะไรไปยัง Firebase</string>
     <string name="settings_analytics_label">การวิเคราะห์ผลิตภัณฑ์</string>
-    <string name="settings_diagnostic_logs_subtitle">แชร์หน้าต่างบันทึกรันไทม์ล่าสุดที่ปกปิดข้อมูลแล้ว</string>
+    <string name="settings_diagnostic_logs_subtitle">แชร์บันทึกรันไทม์ช่วงล่าสุดที่ปกปิดข้อมูลแล้ว</string>
     <string name="settings_clear_all_data_title">ล้างข้อมูลทั้งหมด</string>
     <string name="settings_clear_all_data_subtitle">ลบการเชื่อมต่อและแคช</string>
     <string name="settings_clear_all_data_dialog_title">ล้างข้อมูลทั้งหมด?</string>
@@ -1162,7 +1162,7 @@
     </plurals>
     <string name="diagnostics_export_title">ส่งออก</string>
     <string name="diagnostics_soft_cap_title">เพดานแบบยืดหยุ่น</string>
-    <string name="diagnostics_soft_cap_dropped">สูงสุด %1$d · ทิ้งรายการเก่าสุด %2$d</string>
+    <string name="diagnostics_soft_cap_dropped">สูงสุด %1$d · ทิ้งรายการเก่าสุดแล้ว %2$d รายการ</string>
     <plurals name="diagnostics_soft_cap_none_dropped">
         <item quantity="other">สูงสุด %1$d · ไม่มีรายการที่ถูกทิ้ง</item>
     </plurals>
@@ -1180,8 +1180,8 @@
     <string name="diagnostics_clear_dialog_title">ล้างบันทึกการวินิจฉัย?</string>
     <string name="diagnostics_clear_dialog_message">การดำเนินการนี้จะลบบันทึกการวินิจฉัยที่จัดเก็บไว้</string>
     <string name="diagnostics_error_share">เตรียมบันทึกการวินิจฉัยสำหรับแชร์ไม่ได้</string>
-    <string name="diagnostics_error_save">บันทึกบันทึกการวินิจฉัยไม่ได้</string>
-    <string name="diagnostics_saved">บันทึกบันทึกการวินิจฉัยแล้ว</string>
+    <string name="diagnostics_error_save">บันทึกไฟล์บันทึกการวินิจฉัยไม่ได้</string>
+    <string name="diagnostics_saved">บันทึกไฟล์บันทึกการวินิจฉัยแล้ว</string>
     <string name="appearance_title">รูปลักษณ์</string>
     <string name="appearance_theme_title">ธีม</string>
     <string name="appearance_theme_subtitle">%1$s · %2$s</string>
@@ -1231,7 +1231,7 @@
     <string name="appearance_sample_user_message">ทำไมเทสต์รีไดเรกต์หลังล็อกอินจึงล้มเหลวหนึ่งครั้งในห้ารอบ?</string>
     <string name="appearance_sample_assistant_message">เทสต์อ่านคุกกี้เซสชันทันทีหลัง `login()` เสร็จ แต่คุกกี้ถูกเขียนช้าไปหนึ่งจังหวะ</string>
     <string name="appearance_sample_tool_title">แก้ไขแล้ว</string>
-    <string name="feature_flags_title">Feature Flags</string>
+    <string name="feature_flags_title">แฟลกฟีเจอร์</string>
     <string name="feature_flags_clear_overrides">ล้างการแทนที่</string>
     <string name="feature_flags_more_options">ตัวเลือกเพิ่มเติม</string>
     <string name="feature_flags_intro">การสลับแฟลกจะตั้งค่าการแทนที่ในอุปกรณ์ ซึ่งมีผลเหนือค่าจากระยะไกล ค่าจากระยะไกลจะถูกดึงตอนเปิดแอปและมีผลในการเปิดครั้งถัดไป</string>
@@ -1277,7 +1277,7 @@
     </plurals>
     <string name="feedback_hide_parts_instructions">แตะพื้นที่เพื่อปิดทับ</string>
     <plurals name="feedback_hide_parts_image_hidden">
-        <item quantity="other">ภาพหน้าจอ ซ่อนไว้ %1$d พื้นที่</item>
+        <item quantity="other">ภาพหน้าจอ ซ่อนไว้ %1$d บริเวณ</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
         <item quantity="other">%1$d นาทีล่าสุด · บีบอัด gzip ตอนอัปโหลด ปกปิดข้อมูลบนโทรศัพท์เครื่องนี้</item>
@@ -1298,7 +1298,7 @@
     <string name="session_search_title">ค้นหาเซสชัน</string>
     <string name="session_search_clear">ล้างการค้นหา</string>
     <string name="session_search_placeholder">ค้นหาใน %1$s</string>
-    <string name="session_search_hint">ตรงกับชื่อเซสชันใน %1$s</string>
+    <string name="session_search_hint">ค้นหาจากชื่อเซสชันใน %1$s</string>
     <string name="session_search_searching">กำลังค้นหา…</string>
     <plurals name="session_search_results">
         <item quantity="other">%1$d ผลลัพธ์</item>
@@ -1455,27 +1455,27 @@
     <string name="component_outgoing_message_shows_actions_hint">แสดงการดำเนินการของข้อความ</string>
     <string name="component_activity_status_stopped">หยุดแล้ว</string>
     <string name="dictation_action_try_again">ลองอีกครั้ง</string>
-    <string name="component_composer_model_effort">โมเดล %1$s, ระดับความพยายาม %2$s</string>
+    <string name="component_composer_model_effort">โมเดล %1$s, ระดับการคิด %2$s</string>
     <string name="component_activity_card_working">กำลังทำงาน</string>
     <string name="component_activity_card_opens_activity">%1$s, เปิดกิจกรรม</string>
     <string name="component_image_loading_label">%1$s, กำลังโหลด</string>
     <string name="session_list_dock_new_session">เซสชันใหม่</string>
     <string name="component_composer_always_allows">อนุญาตเสมอ: %1$s</string>
-    <string name="component_composer_leave_side_question_mode">ออกจากโหมดคำถามข้างเคียง</string>
+    <string name="component_composer_leave_side_question_mode">ออกจากโหมดถามแยก</string>
     <string name="session_list_worktree_empty_other_projects">ล้างตัวกรองเพื่อดูเซสชันในโปรเจกต์อื่น</string>
     <string name="component_attachment_uploading">กำลังอัปโหลด…</string>
     <string name="component_composer_deny">ปฏิเสธ</string>
     <string name="component_composer_deny_options">ตัวเลือกการปฏิเสธเพิ่มเติม</string>
-    <string name="component_composer_deny_with_note_menu">ปฏิเสธพร้อมหมายเหตุ…</string>
+    <string name="component_composer_deny_with_note_menu">ปฏิเสธพร้อมโน้ต…</string>
     <string name="component_composer_deny_with_note_menu_subtitle">บอกเอเจนต์ว่าควรทำอะไรแทน</string>
-    <string name="component_composer_deny_with_note_title">ปฏิเสธพร้อมหมายเหตุ</string>
+    <string name="component_composer_deny_with_note_title">ปฏิเสธพร้อมโน้ต</string>
     <string name="component_composer_deny_note_placeholder">บอก OpenCode ว่าควรทำต่างไปอย่างไร</string>
     <plurals name="component_composer_deny_note_also_denies">
         <item quantity="other">จะปฏิเสธคำขอที่รออยู่อีก %1$d รายการด้วย</item>
     </plurals>
     <string name="dictation_stopped">หยุดการถอดเสียงพูดแล้ว</string>
     <string name="dictation_microphone_failed">ใช้ไมโครโฟนไม่ได้</string>
-    <string name="dictation_busy">การถอดเสียงพูดไม่ว่าง</string>
+    <string name="dictation_busy">ตัวถอดเสียงกำลังใช้งานอยู่</string>
     <string name="component_composer_question_position">%1$d จาก %2$d</string>
     <string name="session_list_status_ready">พร้อม</string>
     <string name="session_list_dock_hint_swipe">เปิดตัวกรองโปรเจกต์ ปัดเพื่อสลับโปรเจกต์</string>
@@ -1483,7 +1483,7 @@
     <string name="component_session_list_skeleton_row">กำลังโหลดเซสชัน</string>
     <string name="component_split_pane_resize_sidebar">ปรับขนาดแถบด้านข้าง</string>
     <string name="session_list_section_recent">ล่าสุด</string>
-    <string name="session_list_section_recent_hint">ควรดูสักครู่</string>
+    <string name="session_list_section_recent_hint">ควรดูคร่าว ๆ</string>
     <string name="component_activity_status_completed">เสร็จสมบูรณ์</string>
     <string name="share_diagnostics_chooser_title">แชร์บันทึกการวินิจฉัย</string>
     <string name="dictation_model_queued_title">%1$s จะดาวน์โหลด %2$s ภายหลัง</string>
@@ -1493,7 +1493,7 @@
     <string name="component_composer_question">คำถาม</string>
     <string name="component_worktree">Worktree</string>
     <string name="session_list_worktree_empty_other_worktrees">ล้างตัวกรองเพื่อดูเซสชันใน worktree อื่น</string>
-    <string name="component_composer_side_question_mode">โหมดคำถามข้างเคียง</string>
+    <string name="component_composer_side_question_mode">โหมดคำถามแยก</string>
     <string name="component_page_indicator_label">หน้า %1$d จาก %2$d</string>
     <string name="component_composer_next">ถัดไป</string>
     <string name="component_message_image_label">รูปภาพ %1$s</string>
@@ -1503,7 +1503,7 @@
     <string name="session_list_status_failed">ล้มเหลว</string>
     <string name="component_composer_custom_answer_title">พิมพ์คำตอบของคุณเอง</string>
     <string name="component_composer_always">เสมอ</string>
-    <string name="component_composer_send_side_question">ถามคำถามข้างเคียง</string>
+    <string name="component_composer_send_side_question">ถามคำถามแยก</string>
     <string name="component_composer_select_exactly">เลือก %1$d</string>
     <string name="dictation_action_open_settings">เปิดการตั้งค่า</string>
     <string name="component_composer_open_commands">เปิดคำสั่ง</string>
@@ -1580,7 +1580,7 @@
         <item quantity="other">%1$d นาทีที่แล้ว</item>
     </plurals>
     <string name="component_composer_request_position">%1$d จาก %2$d</string>
-    <string name="component_composer_side_question_placeholder">คำถามข้างเคียง ไม่เพิ่มลงในแชท</string>
+    <string name="component_composer_side_question_placeholder">คำถามแยก ไม่เพิ่มลงในแชต</string>
     <string name="session_list_worktree_empty_every_project">ล้างตัวกรองเพื่อดูทุกโปรเจกต์</string>
     <string name="component_image_viewer_could_not_load_named">โหลด %1$s ไม่ได้</string>
     <string name="component_composer_select_up_to">เลือกได้สูงสุด %1$d</string>
@@ -1592,7 +1592,7 @@
     <string name="session_list_worktree_empty_action">ล้างตัวกรอง</string>
     <string name="dictation_model_download_failed_detail">ตรวจสอบการเชื่อมต่อและพื้นที่ว่างบนอุปกรณ์นี้ แล้วลองอีกครั้ง</string>
     <string name="component_composer_send_queue">ส่งเข้าคิว</string>
-    <string name="session_list_dock_new_session_hint">ใช้ เลือกโปรเจกต์หรือ worktree เพื่อเริ่มที่อื่น</string>
+    <string name="session_list_dock_new_session_hint">ใช้ “เลือกโปรเจกต์หรือ worktree” เพื่อเริ่มที่อื่น</string>
     <string name="session_list_section_yesterday">เมื่อวาน</string>
     <string name="component_code_file_line_label">บรรทัด %1$d, %2$s</string>
     <string name="share_feedback_subject_idea">รายงานไอเดียสำหรับ OpenCode Mobile</string>
@@ -1632,7 +1632,7 @@
     <string name="relative_time_now">ตอนนี้</string>
     <string name="component_composer_previous_permission">คำขอสิทธิ์ก่อนหน้า</string>
     <string name="component_composer_dictate">พูดเพื่อพิมพ์</string>
-    <string name="component_composer_side_question_mode_description">โหมดคำถามข้างเคียง ออกจากโหมดคำถามข้างเคียง</string>
+    <string name="component_composer_side_question_mode_description">โหมดคำถามแยก ออกจากโหมดคำถามแยก</string>
     <string name="component_composer_abort">หยุดงานที่กำลังทำ</string>
     <string name="component_server_address_scheme_button">สคีม %1$s</string>
     <string name="component_composer_open_subagent_session">เปิดเซสชันซับเอเจนต์</string>
@@ -1679,10 +1679,10 @@
     <string name="worktrees_main_checkout">เช็กเอาต์หลัก</string>
     <string name="worktrees_cannot_remove">ลบไม่ได้</string>
     <plurals name="worktrees_changed">
-        <item quantity="other">เปลี่ยนแปลง %1$d</item>
+        <item quantity="other">%1$d รายการที่เปลี่ยนแปลง</item>
     </plurals>
     <string name="worktrees_none_in_project">ไม่มี worktree เซสชันใหม่ → เลือกโปรเจกต์หรือ worktree เพื่อสร้าง</string>
-    <string name="worktrees_footer">การลบ worktree จะลบโฟลเดอร์ของมันบนเซิร์ฟเวอร์ เซสชันของมันจะยังอยู่ แต่รันในนั้นอีกไม่ได้</string>
+    <string name="worktrees_footer">การลบ worktree จะลบโฟลเดอร์ของ worktree นั้นบนเซิร์ฟเวอร์ เซสชันที่เกี่ยวข้องจะยังอยู่ แต่จะรันใน worktree นั้นอีกไม่ได้</string>
     <string name="worktrees_more">การดำเนินการเพิ่มเติมสำหรับ %1$s</string>
     <string name="worktrees_removing">กำลังลบ…</string>
     <string name="worktrees_actions_show_on_home">แสดงเซสชันในหน้าหลัก</string>
@@ -1713,7 +1713,7 @@
     <string name="whats_new_skipped_many">คุณข้ามไป %1$d การอัปเดต จึงรวมไว้ด้านล่างแล้ว</string>
     <string name="whats_new_in_version">ใน %1$s</string>
     <string name="whats_new_also_since">ใหม่ตั้งแต่การอัปเดตครั้งล่าสุดของคุณ · %1$s</string>
-    <string name="whats_new_fixes">การแก้ไข</string>
+    <string name="whats_new_fixes">การแก้ไขบั๊ก</string>
     <string name="whats_new_done">เสร็จสิ้น</string>
     <string name="whats_new_find_again">ดูอีกครั้งได้ที่ การตั้งค่า → มีอะไรใหม่</string>
     <string name="whats_new_installed">ติดตั้งแล้ว</string>
