@@ -697,6 +697,29 @@ public nonisolated struct V2SwitchAgentRequestDTO: Codable, Sendable {
     }
 }
 
+/// The part of a v2 `Session` a send needs: the agent and model the session runs now.
+public nonisolated struct V2SessionSelectionDTO: Decodable, Sendable, Equatable {
+    public let agent: String?
+    public let model: V2PromptModelRefDTO?
+
+    public init(agent: String?, model: V2PromptModelRefDTO?) {
+        self.agent = agent
+        self.model = model
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case agent
+        case model
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        agent = try container.decodeIfPresent(String.self, forKey: .agent)
+        // A partial or unknown model shape is "no model": the send then posts its pick.
+        model = try? container.decodeIfPresent(V2PromptModelRefDTO.self, forKey: .model)
+    }
+}
+
 public nonisolated struct V2SwitchModelRequestDTO: Codable, Sendable {
     public let model: V2PromptModelRefDTO
 

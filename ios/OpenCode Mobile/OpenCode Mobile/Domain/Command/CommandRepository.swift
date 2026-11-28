@@ -39,11 +39,13 @@ struct DefaultCommandRepository: CommandRepository, Sendable {
     func runCommand(sessionID: String, options: CommandRunOptions, directory: String?) async throws {
         do {
             if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
-                if let agent = options.mode, !agent.isEmpty {
-                    try await messages?.switchSessionAgent(sessionID: sessionID, agent: agent, directory: directory)
-                }
-                if let model = adapter.v2SwitchModelRequest(options) {
-                    try await messages?.switchSessionModel(sessionID: sessionID, body: model, directory: directory)
+                if let messages {
+                    try await V2SessionSelectionApplier(api: messages).apply(
+                        sessionID: sessionID,
+                        agent: options.mode,
+                        model: adapter.v2SwitchModelRequest(options),
+                        directory: directory
+                    )
                 }
                 try await api.runCommandV2(
                     sessionID: sessionID,

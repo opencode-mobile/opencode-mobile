@@ -133,7 +133,11 @@ class MessageProtocolRepositoryTest {
             val client =
                 testClient { request ->
                     requests += request
-                    respond("", HttpStatusCode.OK)
+                    if (request.method == HttpMethod.Get) {
+                        respondJson(v2Session(agent = "plan", model = """{"id":"gpt-4","providerID":"openai"}"""))
+                    } else {
+                        respond("", HttpStatusCode.OK)
+                    }
                 }
             val router = router(client, ServerProtocol.V2)
 
@@ -159,17 +163,153 @@ class MessageProtocolRepositoryTest {
                 "/repo",
             )
 
-            assertEquals(3, requests.size)
-            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_2/agent"))
-            assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_2/model"))
-            assertTrue(requests[2].url.encodedPath.endsWith("/api/session/ses_2/prompt"))
-            val promptBody = (requests[2].body as io.ktor.http.content.TextContent).text
+            assertEquals(4, requests.size)
+            assertEquals(HttpMethod.Get, requests[0].method)
+            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_2"))
+            assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_2/agent"))
+            assertTrue(requests[2].url.encodedPath.endsWith("/api/session/ses_2/model"))
+            assertTrue(requests[3].url.encodedPath.endsWith("/api/session/ses_2/prompt"))
+            val promptBody = (requests[3].body as io.ktor.http.content.TextContent).text
             assertTrue(promptBody.contains("\"text\":\"Hello\""))
             assertTrue(promptBody.contains("data:text/plain;base64,SGk="))
             assertTrue(promptBody.contains("steer"))
             assertTrue(!promptBody.contains("\"mime\""))
             assertTrue(!promptBody.contains("\"parts\""))
             assertTrue(!promptBody.contains("\"prompt\""))
+        }
+
+    @Test
+    fun v2SendPrompt_sessionAlreadyOnAgentAndModel_postsOnlyPrompt() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    if (request.method == HttpMethod.Get) {
+                        respondJson(
+                            v2Session(agent = "build", model = """{"id":"gpt-5","providerID":"openai","variant":"high"}"""),
+                        )
+                    } else {
+                        respond("", HttpStatusCode.OK)
+                    }
+                }
+            val router = router(client, ServerProtocol.V2)
+            val options =
+                PromptSendOptions(
+                    text = "Hello",
+                    model = PromptModelSelection(providerId = "openai", modelId = "gpt-5"),
+                    variant = "high",
+                    mode = "build",
+                )
+
+            router.sendPromptAsync("ses_2", options, "/repo")
+            router.sendPromptAsync("ses_2", options.copy(text = "Again"), "/repo")
+
+            assertEquals(
+                listOf(
+                    "GET /api/session/ses_2",
+                    "POST /api/session/ses_2/prompt",
+                    "GET /api/session/ses_2",
+                    "POST /api/session/ses_2/prompt",
+                ),
+                requests.map { "${it.method.value} ${it.url.encodedPath}" },
+            )
+        }
+
+    @Test
+    fun v2SendPrompt_changedAgentOnly_postsAgentNotModel() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    if (request.method == HttpMethod.Get) {
+                        respondJson(v2Session(agent = "build", model = """{"id":"gpt-5","providerID":"openai"}"""))
+                    } else {
+                        respond("", HttpStatusCode.OK)
+                    }
+                }
+
+            router(client, ServerProtocol.V2).sendPromptAsync(
+                "ses_2",
+                PromptSendOptions(
+                    text = "Hello",
+                    model = PromptModelSelection(providerId = "openai", modelId = "gpt-5"),
+                    mode = "plan",
+                ),
+                "/repo",
+            )
+
+            assertEquals(
+                listOf("GET /api/session/ses_2", "POST /api/session/ses_2/agent", "POST /api/session/ses_2/prompt"),
+                requests.map { "${it.method.value} ${it.url.encodedPath}" },
+            )
+            assertTrue((requests[1].body as io.ktor.http.content.TextContent).text.contains("\"agent\":\"plan\""))
+        }
+
+    @Test
+    fun v2SendPrompt_sessionReadFails_postsEveryPick() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    if (request.method == HttpMethod.Get) {
+                        respond("boom", HttpStatusCode.InternalServerError)
+                    } else {
+                        respond("", HttpStatusCode.OK)
+                    }
+                }
+
+            router(client, ServerProtocol.V2).sendPromptAsync(
+                "ses_2",
+                PromptSendOptions(
+                    text = "Hello",
+                    model = PromptModelSelection(providerId = "openai", modelId = "gpt-5"),
+                    mode = "build",
+                ),
+                "/repo",
+            )
+
+            assertEquals(
+                listOf(
+                    "GET /api/session/ses_2",
+                    "POST /api/session/ses_2/agent",
+                    "POST /api/session/ses_2/model",
+                    "POST /api/session/ses_2/prompt",
+                ),
+                requests.map { "${it.method.value} ${it.url.encodedPath}" },
+            )
+        }
+
+    @Test
+    fun v2SendPrompt_failedAgentSwitch_failsSendWithoutPrompt() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    when {
+                        request.method == HttpMethod.Get -> respondJson(v2Session(agent = "build", model = null))
+                        request.url.encodedPath.endsWith("/agent") -> respond("unknown agent", HttpStatusCode.BadRequest)
+                        else -> respond("", HttpStatusCode.OK)
+                    }
+                }
+
+            val result =
+                runCatching {
+                    router(client, ServerProtocol.V2).sendPromptAsync(
+                        "ses_2",
+                        PromptSendOptions(text = "Hello", mode = "missing"),
+                        "/repo",
+                    )
+                }
+
+            assertTrue(result.isFailure)
+            assertEquals(
+                listOf("GET /api/session/ses_2", "POST /api/session/ses_2/agent"),
+                requests.map { "${it.method.value} ${it.url.encodedPath}" },
+            )
         }
 
     @Test
@@ -642,6 +782,20 @@ class MessageProtocolRepositoryTest {
             "data:image/png;base64," +
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
     }
+}
+
+private fun v2Session(
+    agent: String?,
+    model: String?,
+): String {
+    val fields =
+        listOfNotNull(
+            "\"id\":\"ses_2\"",
+            "\"title\":\"t\"",
+            agent?.let { "\"agent\":\"$it\"" },
+            model?.let { "\"model\":$it" },
+        )
+    return "{\"data\":{${fields.joinToString(",")}}}"
 }
 
 private fun MockRequestHandleScope.respondJson(content: String) =

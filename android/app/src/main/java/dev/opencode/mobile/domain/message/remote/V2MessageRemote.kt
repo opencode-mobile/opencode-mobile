@@ -10,6 +10,8 @@ internal class V2MessageRemote(
     private val sessionsApi: SessionsApi,
     private val adapter: MessageDomainAdapter,
 ) : MessageRemote {
+    private val selection = V2SessionSelectionApplier(api, sessionsApi)
+
     override suspend fun listMessages(
         sessionId: String,
         directory: String?,
@@ -57,12 +59,7 @@ internal class V2MessageRemote(
         options: PromptSendOptions,
         directory: String?,
     ) {
-        options.mode?.takeIf { it.isNotBlank() }?.let { agent ->
-            api.switchSessionAgent(sessionId, agent, directory)
-        }
-        adapter.toV2SwitchModelRequest(options)?.let { model ->
-            api.switchSessionModel(sessionId, model, directory)
-        }
+        selection.apply(sessionId, options.mode, adapter.toV2SwitchModelRequest(options), directory)
         api.sendPromptV2(sessionId, adapter.toV2PromptRequest(options), directory, options.attachments.inlineAttachments())
     }
 
