@@ -114,7 +114,9 @@ sealed interface ArtifactEvent {
             when (type) {
                 "session.execution.started" -> RunStarted(session)
                 "session.execution.succeeded" -> RunEnded(session)
-                "session.execution.interrupted" -> RunEnded(session, interrupted = true)
+                // `superseded`: a steer replaced the active step and the next one starts at once, so the run goes on.
+                "session.execution.interrupted" ->
+                    if (data.str("reason") == "superseded") null else RunEnded(session, interrupted = true)
                 "session.execution.failed" -> {
                     val error = data["error"] as? JsonObject
                     RunEnded(

@@ -125,6 +125,17 @@ struct LiveSessionStateTests {
         #expect(apply([EventLines.interrupted("ses_a")], to: &state) == [.runEnded])
     }
 
+    @Test func aSupersededInterruptIsNoRunEnd() {
+        let superseded = EventLines.line(
+            "session.execution.interrupted",
+            #"{"sessionID":"ses_a","reason":"superseded"}"#
+        )
+        #expect(SessionEvent.decode(superseded) == nil)
+        var state = LiveSessionState(rootID: "ses_a")
+        _ = apply([EventLines.started("ses_a", created: 1_000_000), superseded], to: &state)
+        #expect(state.busySince == Date(timeIntervalSince1970: 1000))
+    }
+
     @Test func aSubagentsApprovalCountsOnceItIsKnown() {
         var state = LiveSessionState(rootID: "ses_a")
         _ = apply([EventLines.permission("ses_c", id: "per_early")], to: &state)

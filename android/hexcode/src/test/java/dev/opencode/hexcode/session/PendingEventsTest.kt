@@ -84,6 +84,19 @@ class PendingEventsTest {
     }
 
     @Test
+    fun aSupersededInterruptIsNoRunEnd() {
+        assertNull(
+            SessionEvent.decode(frame("session.execution.interrupted", """{"sessionID":"$root","reason":"superseded"}""")),
+        )
+        for (reason in listOf("user", "shutdown", "inactivity")) {
+            assertEquals(
+                SessionEvent.ExecutionEnded(root),
+                SessionEvent.decode(frame("session.execution.interrupted", """{"sessionID":"$root","reason":"$reason"}""")),
+            )
+        }
+    }
+
+    @Test
     fun aSubagentsRunEndingDropsOnlyItsOwnPending() {
         val state =
             LiveSessionState(root, children = setOf(child)).after(

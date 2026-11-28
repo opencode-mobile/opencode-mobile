@@ -852,6 +852,32 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_projectsLiveExecutionInterruptedIntoIdle() {
+        for (reason in listOf("user", "shutdown", "inactivity")) {
+            val event =
+                adapter.parseEvent(
+                    """{"type":"session.execution.interrupted","data":{"sessionID":"ses-1","reason":"$reason"}}""",
+                )
+
+            assertEquals(reason, "session.idle", event?.type)
+            assertEquals(reason, "ses-1", event?.sessionId)
+        }
+        val noReason = adapter.parseEvent("""{"type":"session.execution.interrupted","data":{"sessionID":"ses-1"}}""")
+        assertEquals("session.idle", noReason?.type)
+    }
+
+    @Test
+    fun parseEvents_dropsSupersededInterruptBecauseTheRunGoesOn() {
+        val line = """{"type":"session.execution.interrupted","data":{"sessionID":"ses-1","reason":"superseded"}}"""
+
+        assertTrue(adapter.parseEvents(line).isEmpty())
+        assertEquals(
+            EventParseOutcome.Dropped("session.execution.interrupted"),
+            adapter.parse(line),
+        )
+    }
+
+    @Test
     fun parseEvents_projectsReasoningStartedIntoAssistantAndReasoningPart() {
         val events =
             adapter.parseEvents(

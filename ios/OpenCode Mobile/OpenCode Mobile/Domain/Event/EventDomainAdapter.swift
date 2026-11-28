@@ -186,9 +186,14 @@ nonisolated struct EventDomainAdapter: Sendable {
             [statusEvent(properties, statusType: "busy")]
         case "session.next.step.ended", "session.step.ended":
             [assistantMessageUpdated(properties, finish: string(in: properties, key: "finish"))].compactMap { $0 }
-        case "session.execution.succeeded",
-             "session.execution.interrupted":
+        case "session.execution.succeeded":
             [event(type: "session.idle", properties: properties)]
+        case "session.execution.interrupted":
+            // A steer interrupts the active step with `reason: "superseded"` and starts the next
+            // one at once: the session hasn't settled, so this is no run end.
+            string(in: properties, key: "reason") == "superseded"
+                ? []
+                : [event(type: "session.idle", properties: properties)]
         case "session.next.step.failed", "session.execution.failed":
             failedStepEvents(properties, idle: true)
         case "session.step.failed":
