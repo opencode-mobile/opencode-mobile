@@ -40,6 +40,8 @@ jobs:
           PATTERNS: |
             android/hexcode/**
             android/opencode-kit/**
+            # Unit-test isolation guard every Hex Code unit test runs under.
+            android/test-guard/**
             shared/voice-engine/**
             # The iOS speech engine (VoiceEngineKit) is not part of the Gradle build.
             !shared/voice-engine/adapter/ios/**

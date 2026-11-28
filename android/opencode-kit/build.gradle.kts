@@ -57,6 +57,10 @@ dependencies {
     implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
+    testImplementation(project(":test-guard"))
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.ktor.client.mock)
 }
+
+// Every unit test runs under the network block and isolation guard (android/test-guard).
+apply(from = rootProject.file("gradle/test-guard.gradle.kts"))
