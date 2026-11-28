@@ -70,12 +70,29 @@ pauses new requests while free memory is under 30% or more than 12 local agent p
 `--jobs` (default 3) sets how many requests run at once. Keep emulators, simulators and Gradle
 builds closed during a full run.
 
-### Handing requests to other agents
+### Handing the work to agents
 
-`--handoff <dir>` writes the requests as prompt files instead of calling a model, and
-`--answers <dir>` checks and applies the answers. Give each agent one prompt file. An agent
-keeps every file it reads in its context and sends all of it again on each turn, so one agent
-working through a list of files costs many times what the files themselves do.
+`--handoff <dir>` writes the requests as agent tasks instead of calling a model, and
+`--answers <dir>` checks and applies the answers. This script stays the only thing that writes
+the string files.
+
+A task holds what most strings need: each string with its notes, and each language's form of
+address and words for the terms it uses. The agent pulls more only for strings that need it:
+
+- `node scripts/l10n/lookup.mjs <id> <language>` shows where a string is used in code, the
+  strings next to it on the same screen with their translations, and the language's words for
+  its terms.
+- `node scripts/l10n/lookup.mjs --find "<English words>" <language>` shows how the app already
+  translates a word or phrase.
+
+The agent then runs `node scripts/l10n/check-answer.mjs <task>.answer.json` on its answer and
+fixes what it reports before handing back. Errors are what CI would reject: a missing string, a
+broken placeholder or plural. Hints are worth a second look, such as a translation that doesn't
+use the language's word for a term.
+
+Give each agent one task file. An agent keeps every file it reads in its context and sends all
+of it again on each turn, so one agent working through a list of files costs many times what
+the files themselves do.
 
 ## Fixing a translation by hand
 

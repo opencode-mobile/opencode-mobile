@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { languageByCode } from "./languages.mjs";
 import { problemsOf } from "./rules.mjs";
+import { answerFor, normalizeAnswer } from "./answers.mjs";
 import { loadUnits, parseAndroid, readCatalog, setIosTranslation, readIosRaw } from "./strings.mjs";
 
 const de = languageByCode("de");
@@ -55,4 +56,29 @@ test("text left in English or in the wrong script is a warning", () => {
   assert.match(problemsOf("Settings", "Settings", de, false).warnings[0], /still in English/);
   assert.match(problemsOf("Settings", "Setting-u", ja, false).warnings[0], /script/);
   assert.deepEqual(problemsOf("Settings", "設定", ja, false).warnings, []);
+});
+
+test("a sentence comment describes one string; a heading stays with its own keys", () => {
+  const entries = parseAndroid(`<resources>
+    <!-- Privacy cover -->
+    <string name="privacy_cover_title">A</string>
+    <string name="privacy_cover_unlock">B</string>
+    <!-- Badge on a new feature. -->
+    <string name="privacy_cover_new">C</string>
+    <string name="privacy_cover_open">D</string>
+    <string name="session_title">E</string>
+  </resources>`);
+  const notes = Object.fromEntries(entries.map((e) => [e.name, e.notes]));
+  assert.deepEqual(notes.privacy_cover_title, ["Privacy cover"]);
+  assert.deepEqual(notes.privacy_cover_new, ["Privacy cover", "Badge on a new feature."]);
+  assert.deepEqual(notes.privacy_cover_open, ["Privacy cover"]);
+  assert.deepEqual(notes.session_title, []);
+});
+
+test("answers are read per language, flat only for a one-language task", () => {
+  const nested = { translations: { de: { a: "x" } } };
+  assert.deepEqual(answerFor(nested, "translations", de, false), { a: "x" });
+  assert.deepEqual(answerFor({ translations: { a: "x" } }, "translations", de, true), { a: "x" });
+  assert.deepEqual(answerFor({ translations: { a: "x" } }, "translations", de, false), {});
+  assert.deepEqual(normalizeAnswer("x", ru, true), { one: "x", few: "x", many: "x", other: "x" });
 });

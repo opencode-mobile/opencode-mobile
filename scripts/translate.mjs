@@ -11,8 +11,8 @@
 //   node scripts/translate.mjs all --review-all     a second model checks every translation (a big run)
 //   node scripts/translate.mjs de --dry-run         print the first prompt and what the run would send, call no model
 //   node scripts/translate.mjs all --server <url>   send every call to one opencode server
-//   node scripts/translate.mjs all --handoff <dir>  write the requests as files for other agents
-//   node scripts/translate.mjs all --answers <dir>  read those agents' answers instead of calling a model
+//   node scripts/translate.mjs all --handoff <dir>  write the requests as agent tasks (see Hand-off below)
+//   node scripts/translate.mjs all --answers <dir>  check and apply those agents' answers instead of calling a model
 //
 // Each key is translated once and written to both apps when their English matches:
 // android/app/src/main/res/values-<code>/strings.xml and the iOS Localizable.xcstrings.
@@ -60,6 +60,9 @@ import {
   infoPlistHash,
 } from "./l10n/strings.mjs";
 import { problemsOf } from "./l10n/rules.mjs";
+import { usageIndex } from "./l10n/usage.mjs";
+import { englishText, formOfAddress, glossary, glossaryFor, termsFor } from "./l10n/terms.mjs";
+import { answerFor, normalizeAnswer, parseAnswerText } from "./l10n/answers.mjs";
 
 // claude-agent/* runs a local `claude` process per session that stays alive after the call, so
 // runs use a private server that is restarted every RESTART_EVERY requests (see PrivateServer).
@@ -102,52 +105,6 @@ function parseArgs(argv) {
 // ---------------------------------------------------------------------------------------------
 // Context
 
-// Where each key is used in code: the first file and line found, trimmed. Sent with every
-// request, so one short line.
-function usageIndex(units) {
-  const androidNames = new Map(units.filter((u) => u.android).map((u) => [u.android.name, u.key]));
-  const iosKeys = new Set(units.filter((u) => u.ios).map((u) => u.key));
-  const index = new Map();
-  const add = (key, file, line) => {
-    if (!index.has(key)) index.set(key, `${file}: ${line.trim().slice(0, 140)}`);
-  };
-  const walk = (dir, ext, visit) => {
-    for (const name of readdirSync(dir)) {
-      if (name === "build" || name.startsWith(".")) continue;
-      const path = join(dir, name);
-      if (statSync(path).isDirectory()) walk(path, ext, visit);
-      else if (name.endsWith(ext)) visit(path);
-    }
-  };
-  walk(join(ROOT, "android/app/src/main/java"), ".kt", (path) => {
-    const file = path.split("/").pop();
-    for (const line of readFileSync(path, "utf8").split("\n")) {
-      for (const m of line.matchAll(/R\.(?:string|plurals)\.(\w+)/g)) {
-        const key = androidNames.get(m[1]);
-        if (key) add(key, file, line);
-      }
-    }
-  });
-  for (const dir of ["ios/OpenCode Mobile/OpenCode Mobile", "ios/OpenCodeKit"]) {
-    walk(join(ROOT, dir), ".swift", (path) => {
-      const file = path.split("/").pop();
-      for (const line of readFileSync(path, "utf8").split("\n")) {
-        for (const m of line.matchAll(/"([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)"/g)) {
-          if (iosKeys.has(m[1])) add(m[1], file, line);
-        }
-      }
-    });
-  }
-  return index;
-}
-
-const glossary = JSON.parse(readFileSync(join(ROOT, "l10n/glossary.json"), "utf8"));
-const desktopTerms = JSON.parse(readFileSync(join(ROOT, "l10n/desktop-terms.json"), "utf8")).languages;
-// The word each language chose for each product term, and its form of address
-// (scripts/l10n/consistency.mjs --save). Requests carry these rather than sample translations.
-const chosenTerms = readJsonOr(join(ROOT, "l10n/terms.json"), { languages: {} }).languages;
-const ADDRESS = "form of address";
-
 function readJsonOr(path, fallback) {
   try {
     return JSON.parse(readFileSync(path, "utf8"));
@@ -155,35 +112,6 @@ function readJsonOr(path, fallback) {
     if (e.code === "ENOENT") return fallback;
     throw e;
   }
-}
-
-function englishText(english) {
-  return typeof english === "string" ? english : Object.values(english).join(" ");
-}
-
-function escapeRegExp(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Whether English text uses a term, plural and verb forms included.
-function mentions(text, term) {
-  return new RegExp(`\\b${escapeRegExp(term).replace(/ /g, "\\s+")}(e?s|ed|ing)?\\b`, "i").test(text);
-}
-
-function glossaryFor(text) {
-  const lower = text.toLowerCase();
-  return Object.entries(glossary.terms).filter(([term]) =>
-    term.split(/\s*\/\s*/).some((t) => lower.includes(t.toLowerCase().split(" ")[0])),
-  );
-}
-
-// A language's words for the terms some English text uses: its chosen words first, then the
-// desktop app's words for terms it hasn't chosen one for.
-function termsFor(language, text) {
-  const chosen = Object.entries(chosenTerms[language.ios] ?? {}).filter(([term]) => term !== ADDRESS && mentions(text, term));
-  const covered = new Set(chosen.map(([term]) => term.toLowerCase()));
-  const desktop = Object.entries(desktopTerms[language.ios] ?? {}).filter(([term]) => !covered.has(term.toLowerCase()) && mentions(text, term));
-  return { chosen, desktop, address: chosenTerms[language.ios]?.[ADDRESS] };
 }
 
 function area(key) {
@@ -233,7 +161,7 @@ function itemFor(unit, text, usage) {
   if (unit.plural) item.plural = true;
   if (text.platform !== "both") item.platform = text.platform === "ios" ? "iPhone app only" : "Android app only";
   if (unit.notes.length) item.note = [...new Set(unit.notes)].join(" / ");
-  const use = usage.get(unit.key);
+  const use = usage?.get(unit.key)?.[0];
   if (use) item.used_in = use;
   return item;
 }
@@ -253,7 +181,8 @@ function requestPrompt(rules, items, sections) {
 
 function languageSection({ language, ids, existing, current }, english, plural) {
   const text = (ids ?? [...english.keys()]).map((id) => english.get(id)).join("\n");
-  const { chosen, desktop, address } = termsFor(language, text);
+  const { chosen, desktop } = termsFor(language, text);
+  const address = formOfAddress(language);
   const pairs = (list) => list.map(([a, b]) => `${a} → ${b}`).join("; ");
   const lines = [`### ${language.name} (${language.ios})`];
   if (plural) lines.push(`Plural forms: ${language.plurals.join(", ")}`);
@@ -638,15 +567,18 @@ async function pool(tasks, jobs) {
   await Promise.all(Array.from({ length: Math.min(jobs, tasks.length) }, worker));
 }
 
-function translateRequest(sections, usage, states) {
+// The strings and per-language sections of a translate request. One language: some of its
+// translations from the same screens set the tone. Many languages, or an agent task (usage
+// null; the agent looks context up): the chosen words do that job at a fraction of the size.
+function translateSpec(sections, usage, states) {
   const items = itemsOf(sections, usage);
-  // One language: show some of its translations from the same screens for tone. Many
-  // languages: their chosen words do that job at a fraction of the size.
-  return requestPrompt(
-    TRANSLATE_RULES,
-    items,
-    sections.map((s) => ({ language: s.language, ids: idsOf(s, items), existing: sections.length === 1 ? existingSample(states.get(s.language.ios), s.work) : [] })),
-  );
+  const sample = usage && sections.length === 1;
+  return { items, specs: sections.map((s) => ({ language: s.language, ids: idsOf(s, items), existing: sample ? existingSample(states.get(s.language.ios), s.work) : [] })) };
+}
+
+function translateRequest(sections, usage, states) {
+  const { items, specs } = translateSpec(sections, usage, states);
+  return requestPrompt(TRANSLATE_RULES, items, specs);
 }
 
 // Returns the keys it translated.
@@ -700,7 +632,7 @@ async function translate(args, languages, units, catalog, lock) {
 
   const progress = { done: 0, total };
   const tasks = requests.map((sections) => async () => {
-    if (args.handoff) return writeHandoff(args.handoff, sections, "translate", translateRequest(sections, usage, states));
+    if (args.handoff) return writeHandoff(args.handoff, "translate", TRANSLATE_RULES, translateSpec(sections, null, states));
     let pending = sections;
     for (let attempt = 1; attempt <= (args.answers ? 1 : 3) && pending.length; attempt++) {
       let answer = null;
@@ -760,47 +692,62 @@ async function translate(args, languages, units, catalog, lock) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Hand-off: another agent answers the requests.
+// Hand-off: agents answer the requests.
 //
-//   --handoff <dir>  writes each request as <dir>/<ios code>/<kind>-NNN.prompt.md (one language)
-//                    or <dir>/multi/<kind>-NNN.prompt.md (many), with the path its answer goes
-//                    to (<kind>-NNN.answer.json), and calls no model
+//   --handoff <dir>  writes each request as an agent task, <dir>/<ios code>/<kind>-NNN.prompt.md
+//                    (one language) or <dir>/multi/<kind>-NNN.prompt.md (many), with
+//                    <kind>-NNN.task.json for scripts/l10n/check-answer.mjs, and calls no model
 //   --answers <dir>  reads every *.answer.json in <dir> instead of calling a model, checks each
 //                    answer like a model's and writes the ones that pass
 //
-// Subagents can then do the model work in parallel while this script alone writes the string
-// files. Give each subagent one prompt file: an agent keeps every file it reads in its context
-// and sends all of it again on each turn, so a list of files costs far more than the files.
-// Strings whose answer is missing or fails a check stay listed; export again for them.
+// A task lists each string with its notes and each language's words for the terms it uses,
+// nothing more. The agent pulls further context with scripts/l10n/lookup.mjs only for strings
+// that need it, and checks its own answer with check-answer.mjs until it has no errors. This
+// script stays the only thing that writes the string files.
+//
+// Give each agent one task file: an agent keeps every file it reads in its context and sends
+// all of it again on each turn, so a list of files costs far more than the files.
 
 const handoffCounts = new Map();
+const TOOLS = join(ROOT, "scripts/l10n");
 
-function writeHandoff(dir, sections, kind, prompt) {
-  const folderName = sections.length === 1 ? sections[0].language.ios : "multi";
+function writeHandoff(dir, kind, rules, { items, specs }) {
+  const folderName = specs.length === 1 ? specs[0].language.ios : "multi";
   const n = (handoffCounts.get(`${folderName}/${kind}`) ?? 0) + 1;
   handoffCounts.set(`${folderName}/${kind}`, n);
   const folder = join(dir, folderName);
   mkdirSync(folder, { recursive: true });
   const base = join(folder, `${kind}-${String(n).padStart(3, "0")}`);
-  writeFileSync(
-    `${base}.prompt.md`,
-    `${prompt}\n\nWrite only the JSON object to ${base}.answer.json (UTF-8, no code fences). Make sure it parses as JSON: escape double quotes and backslashes inside strings, and write line breaks as \\n.\n`,
-  );
+  const task = {
+    kind,
+    strings: Object.fromEntries(items.map((i) => [i.id, { english: i.english, plural: !!i.plural }])),
+    languages: Object.fromEntries(specs.map((s) => [s.language.ios, s.ids ?? items.map((i) => i.id)])),
+  };
+  writeFileSync(`${base}.task.json`, `${JSON.stringify(task)}\n`);
+  writeFileSync(`${base}.prompt.md`, `${agentTask(rules, items, specs, base)}\n`);
+}
+
+function agentTask(rules, items, specs, base) {
+  return `${requestPrompt(rules, items, specs)}
+
+## How to work
+
+This task holds what most strings need. When a string is unclear (a single word that could be a verb or a noun, a placeholder whose value you can't tell, a term you don't know how this app says), look it up instead of guessing:
+
+- \`node ${TOOLS}/lookup.mjs <id> <language code>\`: where the string is used in code, the strings next to it on the same screen with their translations, and the language's words for its terms.
+- \`node ${TOOLS}/lookup.mjs --find "<English words>" <language code>\`: how the app already translates a word or phrase.
+
+Most strings need no lookup; don't look up every one.
+
+1. Write the JSON answer to ${base}.answer.json.
+2. Run \`node ${TOOLS}/check-answer.mjs ${base}.answer.json\`. Fix every error and run it again until it reports none. Read each hint and change the string only where the hint points at a real problem.
+3. Change no other file. Reply with one line: done, and any string you were unsure about.`;
 }
 
 function handoffSummary(dir) {
   let files = 0;
   for (const n of handoffCounts.values()) files += n;
-  console.log(`Wrote ${files} requests to ${dir}. Give each agent one prompt file, not a list.`);
-}
-
-// A request's answer for one language: {"<field>": {"<ios code>": {"<id>": …}}}. An answer to a
-// one-language request may leave out the language level.
-function answerFor(answer, field, language, single) {
-  const all = answer?.[field] ?? {};
-  const own = all[language.ios];
-  if (own && typeof own === "object" && !Array.isArray(own)) return own;
-  return single ? all : {};
+  console.log(`Wrote ${files} agent tasks to ${dir}. Give each agent one task file, not a list.`);
 }
 
 let answerFiles = null;
@@ -812,7 +759,7 @@ function loadAnswerFiles(dir) {
     for (const name of readdirSync(join(dir, folder)).filter((n) => n.endsWith(".answer.json")).sort()) {
       try {
         const text = readFileSync(join(dir, folder, name), "utf8");
-        answerFiles.push({ folder, json: JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) });
+        answerFiles.push({ folder, json: parseAnswerText(text) });
       } catch (e) {
         log(`${folder}/${name} isn't valid JSON (${e.message.slice(0, 80)}); skipped`);
       }
@@ -833,32 +780,17 @@ function readAnswers(dir, language, field) {
   return merged;
 }
 
-function normalizeAnswer(value, language, plural) {
-  if (value === undefined || value === null) return null;
-  if (plural) {
-    if (typeof value === "string") {
-      const forms = {};
-      for (const q of language.plurals) forms[q] = value;
-      return forms;
-    }
-    if (typeof value !== "object") return null;
-    const forms = {};
-    for (const q of language.plurals) if (typeof value[q] === "string") forms[q] = value[q];
-    return forms;
-  }
-  return typeof value === "string" ? value : null;
-}
-
 // ---------------------------------------------------------------------------------------------
 // Review
 
-function reviewRequest(sections, usage) {
+function reviewSpec(sections, usage) {
   const items = itemsOf(sections, usage);
-  return requestPrompt(
-    REVIEW_RULES,
-    items,
-    sections.map((s) => ({ language: s.language, ids: idsOf(s, items), current: Object.fromEntries(s.work.map((w) => [w.text.id, w.value])) })),
-  );
+  return { items, specs: sections.map((s) => ({ language: s.language, ids: idsOf(s, items), current: Object.fromEntries(s.work.map((w) => [w.text.id, w.value])) })) };
+}
+
+function reviewRequest(sections, usage) {
+  const { items, specs } = reviewSpec(sections, usage);
+  return requestPrompt(REVIEW_RULES, items, specs);
 }
 
 // Reviews the translations of `keys` (every key when null). recordStatus: a full review, noted
@@ -893,7 +825,7 @@ async function review(args, languages, units, catalog, keys, recordStatus) {
   }
   const fixesLog = [];
   const tasks = requests.map((sections) => async () => {
-    if (args.handoff) return writeHandoff(args.handoff, sections, "review", reviewRequest(sections, usage));
+    if (args.handoff) return writeHandoff(args.handoff, "review", REVIEW_RULES, reviewSpec(sections, null));
     let answer = null;
     if (!args.answers) {
       for (let attempt = 1; attempt <= 3 && !answer; attempt++) {
@@ -1037,7 +969,7 @@ async function infoPlist(args, languages, lock, reviewing) {
   const groups = [];
   for (let i = 0; i < sections.length; i += per) groups.push(sections.slice(i, i + per));
   const tasks = groups.map((group) => async () => {
-    if (args.handoff) return writeHandoff(args.handoff, group, reviewing ? "infoplist-review" : "infoplist", requestPrompt(rules, items, group));
+    if (args.handoff) return writeHandoff(args.handoff, reviewing ? "infoplist-review" : "infoplist", rules, { items, specs: group });
     let pending = group;
     for (let attempt = 1; attempt <= (args.answers ? 1 : 3) && pending.length; attempt++) {
       let answer = null;
