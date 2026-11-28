@@ -236,6 +236,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
+    testImplementation(project(":test-guard"))
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.ktor.client.mock)
 
@@ -280,3 +281,6 @@ dependencies {
     releaseImplementation(libs.firebase.config)
     releaseImplementation(libs.firebase.appcheck.playintegrity)
 }
+
+// Every unit test runs under the network block and isolation guard (android/test-guard).
+apply(from = rootProject.file("gradle/test-guard.gradle.kts"))

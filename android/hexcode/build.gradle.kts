@@ -165,8 +165,12 @@ dependencies {
     implementation(libs.androidx.camera.view)
 
     testImplementation(libs.junit)
+    testImplementation(project(":test-guard"))
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.ktor.client.mock)
     testImplementation(libs.ktor.client.content.negotiation)
     testImplementation(libs.ktor.serialization.kotlinx.json)
 }
+
+// Every unit test runs under the network block and isolation guard (android/test-guard).
+apply(from = rootProject.file("gradle/test-guard.gradle.kts"))

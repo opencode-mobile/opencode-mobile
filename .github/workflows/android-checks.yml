@@ -91,7 +91,7 @@ jobs:
 
       - name: Run unit tests
         run: >-
-          ./gradlew testDebugUnitTest --stacktrace
+          ./gradlew testDebugUnitTest :test-guard:test --stacktrace
           -x :hexcode:testDebugUnitTest -x :voice-engine:testDebugUnitTest
 
       # Paparazzi 2 needs a Java 21 Gradle JVM; compile :screenshot so the
